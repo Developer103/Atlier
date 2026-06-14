@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "malware-gen-framework"
+version = "0.1.0"
+description = "Malware-on-demand framework — generate undetectable malware for target environments"
+requires-python = ">=3.10"
+
+[[project.authors]]
+name = ""
+
+[tool.setuptools]
+package-dir = {"malware_gen_framework" = "."}
