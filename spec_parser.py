@@ -124,10 +124,20 @@ def _auto_complete(data: dict[str, Any]) -> None:
                 except Exception:
                     data["os_version"] = f"host-{_host}"
         else:
-            raise ValueError(
-                f"Cannot infer OS platform from '{data.get('os_version')}'. "
-                "Set 'os_platform' explicitly or use a version string like 'ubuntu-24.04'"
-            )
+            # Unrecognised os_version — fall back to host OS detection, same as empty case.
+            _host = _platform.system().lower()
+            if "linux" in _host:
+                data["os_platform"] = "linux"
+                data["os_version"] = _platform.platform(terse=True) or f"host-{_host}"
+            elif "darwin" in _host:
+                data["os_platform"] = "macos"
+                data["os_version"] = _platform.mac_ver()[0] or ""
+            else:
+                data["os_platform"] = "linux"
+                try:
+                    data["os_version"] = _platform.platform(terse=True) or f"host-{_host}"
+                except Exception:
+                    data["os_version"] = f"host-{_host}"
 
     # -- Fill in missing os_version when platform is explicit ------------------
     if data.get("os_platform") and not data.get("os_version"):

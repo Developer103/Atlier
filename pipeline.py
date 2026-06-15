@@ -147,6 +147,30 @@ class MalwarePipeline:
 
         # -- Stage 2: Provision VM (optional) --------------------------------
         vm_instance = None
+        if self._provision_vm and vm_config is None:
+            # Auto-build a VMProvisionConfig from the parsed target spec so the
+            # caller doesn't have to construct one manually.
+            _os_map = {
+                ("linux", "ubuntu-24.04"): TargetOS.UBUNTU_24_04,
+                ("linux", "ubuntu-22.04"): TargetOS.UBUNTU_22_04,
+                ("linux", "debian-bookworm"): TargetOS.DEBIAN_BOOKWORM,
+                ("windows", "windows-11"): TargetOS.WINDOWS_11,
+                ("windows", "windows-10"): TargetOS.WINDOWS_10,
+            }
+            _platform = target_spec.os_platform.value
+            _version = target_spec.os_version.lower()
+            _os_type = _os_map.get((_platform, _version))
+            if _os_type is None:
+                # Fallback: pick the most common OS for that platform
+                _os_type = TargetOS.UBUNTU_24_04 if _platform == "linux" else TargetOS.WINDOWS_11
+                logger.warning(
+                    "Could not map os_version %r to a known TargetOS; defaulting to %s",
+                    target_spec.os_version, _os_type.value,
+                )
+            vm_config = VMProvisionConfig(os_type=_os_type)
+            vm_config.compute_paths()
+            logger.info("Auto-built VMProvisionConfig for %s", _os_type.value)
+
         if self._provision_vm and vm_config:
             logger.info("Provisioning VM...")
             try:

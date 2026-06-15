@@ -280,6 +280,23 @@ class ProvisionEngine:
     ) -> VMInstance:
         """Run the full provisioning pipeline and return a ready VMInstance."""
 
+        # Resolve all computed paths (base_img, cow_img, qmp_socket, etc.) if not
+        # already done by the caller.
+        if config.base_img is None:
+            config.compute_paths()
+
+        # Flatten nested config fields into local variables so the rest of this
+        # method doesn't need to know about the nesting.
+        _username = "vmuser"
+        _password = "vmuser123"
+        _ssh_key: Optional[str] = None
+        _enable_ssh = True
+        _skip_tpm = True
+        _cpu_cores = config.resources.CPU_cores
+        _ram_mb = config.resources.RAM_GB * 1024
+        _ssh_port = config.network.port_fwd_ssh
+        _vm_name = f"vm-{config.os_type.value}"
+
         # 1. Ensure base OS image
         if config.os_type in (TargetOS.UBUNTU_24_04, TargetOS.UBUNTU_22_04):
             config.base_img = await ensure_linux_image(config.os_type, config.base_img)
@@ -307,31 +324,31 @@ class ProvisionEngine:
         iso_path: Optional[Path] = None
         if config.os_type in (TargetOS.UBUNTU_24_04, TargetOS.UBUNTU_22_04):
             cloud_yaml = generate_cloud_init_yaml(
-                username=config.username,
-                password=config.password,
-                ssh_key=config.ssh_key,
+                username=_username,
+                password=_password,
+                ssh_key=_ssh_key,
             )
             iso_path = create_cloud_init_iso(cloud_yaml, Path("/tmp/cloud-init.iso"))
         elif config.os_type in (TargetOS.WINDOWS_11, TargetOS.WINDOWS_10):
             xml_root = generate_autounattend_xml(
-                username=config.username,
-                password=config.password,
-                enable_ssh=config.enable_ssh,
-                skip_tpm=config.skip_tpm,
+                username=_username,
+                password=_password,
+                enable_ssh=_enable_ssh,
+                skip_tpm=_skip_tpm,
             )
             iso_path = create_autounattend_iso(xml_root, Path("/tmp/autounattend.iso"))
 
         # 4. Build QEMU process  + VMInstance
         qemu = QEMUProcess(
-            vm_name=config.vm_name,
+            vm_name=_vm_name,
             qmp_socket=config.qmp_socket,
             disk_img=config.cow_img,
-            cpu_cores=config.cpu_cores,
-            ram_mb=config.ram_mb,
+            cpu_cores=_cpu_cores,
+            ram_mb=_ram_mb,
             iso_path=iso_path,
         )
-        vm = VMInstance(qemu, vm_user=config.username, vm_pass=config.password,
-                        ssh_port=config.ssh_port)
+        vm = VMInstance(qemu, vm_user=_username, vm_pass=_password,
+                        ssh_port=_ssh_port)
 
         # 5. Start VM
         await vm.start(background)

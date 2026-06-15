@@ -308,7 +308,7 @@ class GenerationEngine:
             max_cti=5,
         )
         if self._debug and self._debug.enabled:
-            self._debug.step("step_2_context", f"Context built — {len(context.evasion_techniques)} techniques, {len(context.poc_findings)} PoCs")
+            self._debug.step("step_2_context", f"Context built — {len(context.techniques)} techniques, {len(context.pocs)} PoCs")
 
         # -- Step 3: Evasion & exploit selection (for context enrichment) ----
         evasions = self.evasion_selector.select_evasions(target_spec, max_techniques=8)

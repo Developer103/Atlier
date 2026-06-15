@@ -144,6 +144,7 @@ class LoopController:
                 failure_mode=failure_mode,
                 detection_score=result.get("detection_score", "unknown"),
                 alerts_count=result.get("alerts_count", -1),
+                build_time_sec=0.0,
                 execution_exit_code=result.get("execution_exit_code", -1),
             )
             history.append(record)
@@ -189,6 +190,8 @@ class LoopController:
                 consecutive_same_hash = 0
             prev_context_hash = record.context_hash
 
+        success = any(r.detection_score == "none" for r in history)
+
         if self._debug and self._debug.enabled:
             self._debug.ok(f"Loop complete — {len(history)} iterations, success={success}")
             for r in history:
@@ -200,7 +203,7 @@ class LoopController:
             iterations=history,
             best_result=self._find_best(history),
             total_iterations=len(history),
-            success=any(r.detection_score == "none" for r in history),
+            success=success,
         )
 
     # ------------------------------------------------------------------
@@ -237,8 +240,10 @@ class LoopController:
         """Find the best iteration result."""
         best = None
         for r in records:
-            if best is None or self._better(r, best):
+            if best is None or LoopController._better(r, best):
                 best = r
+        if best is None:
+            return None
         return {
             "iteration": best.iteration,
             "detection_score": best.detection_score,

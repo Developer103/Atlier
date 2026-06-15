@@ -60,32 +60,26 @@ async def cmd_generate(args) -> int:
 
 
 async def cmd_verify(args) -> int:
-    """Verify generated malware source against a running VM."""
+    """Verify already-generated source against a provisioned VM."""
     debug = DebugLogger(enabled=getattr(args, "debug", False))
-    from .verifier import Verifier
-    from .provision_engine import ProvisionEngine
-    from .config_models import VMProvisionConfig, TargetOS
 
-    engine = ProvisionEngine()
-    config = VMProvisionConfig(
-        os_type=TargetOS.UBUNTU_24_04 if args.os == "linux" else TargetOS.WINDOWS_11,
+    pipeline = MalwarePipeline(
+        generate=False,
+        provision_vm=True,
+        verify=True,
+        retry_loop=bool(getattr(args, "loop", False)),
+        max_iterations=getattr(args, "max_iters", 5),
+        debug=debug,
     )
-    vm = await engine.provision(config)
-    verifier = Verifier(vm_instance=vm, debug=debug)
 
     source_path = Path(args.source or "/tmp/malware_source.c")
-    with open(source_path) as f:
-        source_code = f.read()
+    if not source_path.exists():
+        print(f"Error: source file not found: {source_path}")
+        return 1
 
     result = await pipeline.run(
         spec_path=args.spec,
-        generate=False,
-        verify=True,
-        provision_vm=True,
-        retry_loop=args.loop,
-        max_iterations=getattr(args, "max_iters", 5),
-        vm_config=config,
-        debug=debug,
+        output_dir=getattr(args, "output", None),
     )
 
     print(result.print_summary())
