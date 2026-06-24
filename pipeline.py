@@ -59,6 +59,7 @@ class MalwarePipeline:
         existing_vm_port: int = 10022,
         existing_vm_user: str = "vmuser",
         existing_vm_pass: str = "vmuser123",
+        run_mode: str = "local-run",  # "local-run" | "cloud-run"
     ):
         self._generate = generate
         self._provision_vm = provision_vm
@@ -75,7 +76,10 @@ class MalwarePipeline:
             db_engine = DBQueryEngine()
 
         # Stages that are always enabled
-        self.engine = GenerationEngine(db_engine=db_engine, debug=debug) if generate else None
+        self.engine = (
+            GenerationEngine(db_engine=db_engine, debug=debug, run_mode=run_mode)
+            if generate else None
+        )
 
         # Loop controller (Phase 5b)
         self.loop_ctrl = LoopController(

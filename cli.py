@@ -65,6 +65,7 @@ async def cmd_generate(args) -> int:
     debug = DebugLogger(enabled=getattr(args, "debug", False))
     pipeline = MalwarePipeline(
         generate=True, provision_vm=False, verify=False, retry_loop=False, debug=debug,
+        run_mode=getattr(args, "mode", "local-run"),
     )
 
     overrides = {}
@@ -178,6 +179,7 @@ async def cmd_verify(args) -> int:
         existing_vm_port=getattr(args, "vm_port", 10022),
         existing_vm_user=getattr(args, "vm_user", "vmuser"),
         existing_vm_pass=getattr(args, "vm_pass", "vmuser123"),
+        run_mode=getattr(args, "mode", "local-run"),
     )
 
     source_path = Path(args.source or "/tmp/malware_source.c")
@@ -249,6 +251,7 @@ async def cmd_run(args) -> int:
         existing_vm_port=getattr(args, "vm_port", 10022),
         existing_vm_user=getattr(args, "vm_user", "vmuser"),
         existing_vm_pass=getattr(args, "vm_pass", "vmuser123"),
+        run_mode=getattr(args, "mode", "local-run"),
     )
 
     overrides = {}
@@ -400,6 +403,12 @@ def build_parser() -> argparse.ArgumentParser:
              "(e.g. \"keylogger that sends all keystrokes to 10.0.0.5:9001 over AES-256 TCP, "
              "persists via HKCU Run key\"); overrides spec.yaml if set",
     )
+    gen_parser.add_argument(
+        "--mode",
+        choices=["local-run", "cloud-run"],
+        default="local-run",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY); orchestration (planning, review, analysis) stays local. Falls back to local on refusal or error.",
+    )
 
     # -- provision ----------------------------------------------------------
     prov_parser = subparsers.add_parser(
@@ -434,6 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
     ver_parser.add_argument("--source", "-s", help="Path to source code file (default: /tmp/malware_source.c)")
     ver_parser.add_argument("--os", choices=["linux", "windows"], default="linux")
     ver_parser.add_argument("--loop", action="store_true", help="Enable retry loop after first verification")
+    ver_parser.add_argument(
+        "--mode", choices=["local-run", "cloud-run"], default="local-run",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY).",
+    )
     ver_parser.add_argument("--use-existing-vm", action="store_true",
         help="Skip provisioning and use an already-running VM")
     ver_parser.add_argument("--vm-port", type=int, default=10022,
@@ -473,6 +486,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Detailed behavioral requirements passed verbatim to the LLM "
              "(e.g. \"keylogger that sends all keystrokes to 10.0.0.5:9001 over AES-256 TCP, "
              "persists via HKCU Run key\"); overrides spec.yaml if set",
+    )
+    run_parser.add_argument(
+        "--mode",
+        choices=["local-run", "cloud-run"],
+        default="local-run",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY); orchestration stays local. Falls back to local on refusal or error.",
     )
     run_parser.add_argument("--max-iters", type=int, default=5)
     run_parser.add_argument("--min-iters", type=int, default=1)
@@ -525,6 +544,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="SPEC",
         help="Detailed behavioral requirements passed verbatim to the LLM; overrides spec.yaml if set",
+    )
+    ana_parser.add_argument(
+        "--mode", choices=["local-run", "cloud-run"], default="local-run",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY).",
     )
 
     return parser

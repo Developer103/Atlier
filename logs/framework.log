@@ -114,3 +114,257 @@ malware_gen_framework.pipeline.PipelineError: Failed to load target spec: mappin
 2026-06-25 01:13:59 [INFO] Planning malware structure (prompt: 2540 chars)...
 2026-06-25 01:15:05 [INFO] Plan parsed (cycle=0, attempt=1/3) — 32 components: ['patch_scan_buffer', 'enumerate_processes', 'resolve_api_address', 'get_module_handle', 'encrypt_file_content', 'create_file_mapping', 'copy_registry_value', 'launch_shell_command', 'connect_http_endpoint', 'internet_open', 'get_system_directory', 'create_process_handle', 'delete_file_remotely', 'query_physical_memory', 'inject_code_to_process', 'main', 'patch_scan_buffer', 'enumerate_processes', 'resolve_api_address', 'get_module_handle', 'encrypt_file_content', 'create_file_mapping', 'copy_registry_value', 'launch_shell_command', 'connect_http_endpoint', 'internet_open', 'get_system_directory', 'create_process_handle', 'delete_file_remotely', 'query_physical_memory', 'inject_code_to_process', 'main']
 2026-06-25 01:15:30 [INFO] Plan review: APPROVED (cycle=0)
+2026-06-25 01:32:41 [INFO] Chunked generation complete — 16 functions, 11732 chars
+2026-06-25 01:32:41 [INFO] Source written to results/malware_source.c
+2026-06-25 01:33:00 [INFO] Behavioral validation plan: 1 checks generated
+2026-06-25 01:33:00 [INFO] Behavioral validation plan ready — 1 checks
+2026-06-25 01:33:00 [INFO] Using pre-existing VM at localhost:10022 (user=vmuser)
+2026-06-25 01:33:00 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 01:33:00 [WARNING] Compilation failed:
+/tmp/tmpwc17j9na/malware_src.c:6:10: fatal error: thelp32.h: そのようなファイルやディレクトリはありません
+    6 | #include <thelp32.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+
+2026-06-25 01:35:31 [INFO] Compile-fix via local LLM (5316 chars)
+2026-06-25 01:35:31 [INFO] Compile-fix (local) produced 5316 chars
+2026-06-25 01:35:31 [INFO] Compile error auto-fixed (5316 chars)
+2026-06-25 01:35:31 [INFO] Using compiler-fixed source directly (no re-generation)
+2026-06-25 01:35:32 [WARNING] Compilation failed:
+/tmp/tmp8nyrjq1d/malware_src.c:24:1: error: unknown type name ‘HINTERNET’; did you mean ‘LPIINTERNET’?
+   24 | HINTERNET connect_http_endpoint(LPCWSTR lpszServerName, INTERNET_PORT nPort, LPCWSTR lpszObjectName);
+      | ^~~~~~~~~
+      | LPIINTERNET
+/tmp/tmp8nyrjq1d/malware_src.c:24:57: error: unknown type name ‘INTERNET_PORT’
+   24 | HINTERNET connect_http_endpoint(LPCWSTR lpszServerName, INTERNET_PORT nPort, LPCWSTR lpszObjectName);
+      |                                                         ^~~~~~~~~~~~~
+/tmp/tmp8nyrjq1d/malware_src.c:25:1: error: unknown type name ‘HINTERNET’; did you mean ‘LPIINTERNET’?
+   25 | HINTERNET internet_open(LPCTSTR lpszAgent, DWORD dwAccessType);
+      | ^~~~~~~~~
+      | LPIINTERNET
+/tmp/tmp8nyrjq1d/malware_src.c:41:1: error: unknown type name ‘HINTERNET’; did you mean ‘LPIINTERNET’?
+   41 | HINTERNET connect_http_endpoint(LPCWSTR lpszServerName, INTERNET_PORT nPort, LPCWSTR lpszObjectName);
+      | ^~~~~~~~~
+      | LPIINTERNET
+/tmp/tmp8nyrjq1d/malware_src.c:41:57: error: unknown type name ‘INTERNET_PORT’
+   41 | HINTERNET connect_http_endpoint(LPCWSTR lpszServerName, INTERNET_PORT nPort, LPCWSTR lpszObjectName);
+      |                                                         ^~~~~~~~~~~~~
+/tmp/tmp8nyrjq1d/malware_src.c:42:1: error: unknown type name ‘HINTERNET’; did you mean ‘LPIINTERNET’?
+   42 | HINTERNET internet_open(LPCTSTR lpszAgent, DWORD dwAccessType);
+      | ^~~~~~~~~
+      | LPIINTERNET
+/tmp/tmp8nyrjq1d/malware_src.c:111:16: error: initializer element is not constant
+  111 | HANDLE hFile = create_file_mapping(lpFileName, FILE_MAP_READ | FILE_MAP_WRITE);
+      |                ^~~~~~~~~~~~~~~~~~~
+/tmp/tmp8nyrjq1d/malware_src.c:112:24: error: initializer element is not constant
+  112 |         DWORD dwSize = GetFileSize(hFile, NULL);
+      |                        ^~~~~~~~~~~
+/tmp/tmp8nyrjq1d/malware_src.c:113:26: error: initializer element is not constant
+  113 |         LPVOID pBuffer = VirtualAlloc(NULL, dwSize, MEM_COMMIT, PAGE_READWRITE);
+      |                          ^~~~~~~~~~~~
+/tmp/tmp8nyrjq1d/malware_src.c:114:41: error: expected ‘)’ before ‘&’ token
+  114 |         ReadFile(hFile, pBuffer, dwSize, &dwBytesRead, NULL);
+      |                                         ^~
+      |                                         )
+/tmp/tmp8nyrjq1d/malware_src.c:116:42: error: expected ‘)’ before ‘&’ token
+  116 |         WriteFile(hFile, pBuffer, dwSize, &dwBytesWritten, NULL);
+      |                                          ^~
+      |                                          )
+
+2026-06-25 01:37:15 [INFO] Compile-fix via local LLM (5348 chars)
+2026-06-25 01:37:15 [INFO] Compile-fix (local) produced 5348 chars
+2026-06-25 01:37:15 [INFO] Compile error auto-fixed (5348 chars)
+2026-06-25 01:37:15 [INFO] Using compiler-fixed source directly (no re-generation)
+2026-06-25 01:37:16 [WARNING] Compilation failed:
+/tmp/tmpkshq8wiz/malware_src.c:112:16: error: initializer element is not constant
+  112 | HANDLE hFile = create_file_mapping(lpFileName, FILE_MAP_READ | FILE_MAP_WRITE);
+      |                ^~~~~~~~~~~~~~~~~~~
+/tmp/tmpkshq8wiz/malware_src.c:113:16: error: initializer element is not constant
+  113 | DWORD dwSize = GetFileSize(hFile, NULL);
+      |                ^~~~~~~~~~~
+/tmp/tmpkshq8wiz/malware_src.c:114:18: error: initializer element is not constant
+  114 | LPVOID pBuffer = VirtualAlloc(NULL, dwSize, MEM_COMMIT, PAGE_READWRITE);
+      |                  ^~~~~~~~~~~~
+/tmp/tmpkshq8wiz/malware_src.c:115:33: error: expected ‘)’ before ‘&’ token
+  115 | ReadFile(hFile, pBuffer, dwSize, &dwBytesRead, NULL);
+      |                                 ^~
+      |                                 )
+/tmp/tmpkshq8wiz/malware_src.c:116:34: error: expected ‘)’ before ‘&’ token
+  116 | WriteFile(hFile, pBuffer, dwSize, &dwBytesWritten, NULL);
+      |                                  ^~
+      |                                  )
+
+2026-06-25 01:39:40 [INFO] Compile-fix via local LLM (5281 chars)
+2026-06-25 01:39:40 [INFO] Compile-fix (local) produced 5281 chars
+2026-06-25 01:39:40 [INFO] Compile error auto-fixed (5281 chars)
+2026-06-25 01:39:40 [INFO] Using compiler-fixed source directly (no re-generation)
+2026-06-25 01:39:40 [WARNING] Compilation failed:
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccwIFO7p.o:malware_src.c:(.rdata$.refptr.lpFileName[.refptr.lpFileName]+0x0): undefined reference to `lpFileName'
+collect2: error: ld returned 1 exit status
+
+2026-06-25 01:41:55 [INFO] Compile-fix via local LLM (5075 chars)
+2026-06-25 01:41:55 [INFO] Compile-fix (local) produced 5075 chars
+2026-06-25 01:41:55 [INFO] Compile error auto-fixed (5075 chars)
+2026-06-25 01:41:55 [INFO] Using compiler-fixed source directly (no re-generation)
+2026-06-25 01:41:56 [INFO] Host canonicalization disabled
+2026-06-25 01:41:56 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:56 [INFO] [conn=0] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:56 [INFO] [conn=0]   Local address: 127.0.0.1, port 56994
+2026-06-25 01:41:56 [INFO] [conn=0]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:41:56 [INFO] [conn=0] Beginning auth for user vmuser
+2026-06-25 01:41:56 [INFO] [conn=0] Auth for user vmuser succeeded
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Requesting new SSH session
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0]   Subsystem: sftp
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Starting SFTP client
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Starting SFTP put of /tmp/tmpa1tp31j6/malware_test.exe to C:\Users\vmuser\malware_test.exe
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0]   Copying file /tmp/tmpa1tp31j6/malware_test.exe to C:\Users\vmuser\malware_test.exe
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] SFTP client exited
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Closing channel
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Received exit status 0
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Received channel close
+2026-06-25 01:41:56 [INFO] [conn=0, chan=0] Channel closed
+2026-06-25 01:41:56 [INFO] [conn=0] Closing connection
+2026-06-25 01:41:56 [INFO] [conn=0] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:41:56 [INFO] [conn=0] Connection closed
+2026-06-25 01:41:56 [INFO] Host canonicalization disabled
+2026-06-25 01:41:56 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:56 [INFO] [conn=1] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:56 [INFO] [conn=1]   Local address: 127.0.0.1, port 57002
+2026-06-25 01:41:56 [INFO] [conn=1]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:41:56 [INFO] [conn=1] Beginning auth for user vmuser
+2026-06-25 01:41:56 [INFO] [conn=1] Auth for user vmuser succeeded
+2026-06-25 01:41:56 [INFO] [conn=1, chan=0] Requesting new SSH session
+2026-06-25 01:41:56 [INFO] [conn=1, chan=0]   Command: start /B "" "C:\Users\vmuser\malware_test.exe" & timeout /t 3 /nobreak >NUL & echo LAUNCHED
+2026-06-25 01:41:57 [INFO] [conn=1, chan=0] Received exit status 0
+2026-06-25 01:41:57 [INFO] [conn=1, chan=0] Received channel close
+2026-06-25 01:41:57 [INFO] [conn=1, chan=0] Channel closed
+2026-06-25 01:41:57 [INFO] [conn=1] Closing connection
+2026-06-25 01:41:57 [INFO] [conn=1] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:41:57 [INFO] [conn=1] Connection closed
+2026-06-25 01:41:57 [INFO] Host canonicalization disabled
+2026-06-25 01:41:57 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:57 [INFO] [conn=2] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:57 [INFO] [conn=2]   Local address: 127.0.0.1, port 57010
+2026-06-25 01:41:57 [INFO] [conn=2]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:41:57 [INFO] [conn=2] Beginning auth for user vmuser
+2026-06-25 01:41:57 [INFO] [conn=2] Auth for user vmuser succeeded
+2026-06-25 01:41:57 [INFO] [conn=2, chan=0] Requesting new SSH session
+2026-06-25 01:41:57 [INFO] [conn=2, chan=0]   Command: powershell -NoProfile -Command "Get-WinEvent -LogName Microsoft-Windows-Windows-Defender/Operational -MaxEvents 20 -ErrorAction SilentlyContinue | Where-Object { $_.Id -in 1116,1117,1006,1007 } | Select-Object -ExpandProperty Message"
+2026-06-25 01:41:59 [INFO] [conn=2, chan=0] Received exit status 1
+2026-06-25 01:41:59 [INFO] [conn=2, chan=0] Received channel close
+2026-06-25 01:41:59 [INFO] [conn=2, chan=0] Channel closed
+2026-06-25 01:41:59 [INFO] [conn=2] Closing connection
+2026-06-25 01:41:59 [INFO] [conn=2] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:41:59 [INFO] [conn=2] Connection closed
+2026-06-25 01:41:59 [WARNING] EDR alert check failed: Process exited with non-zero exit status 1
+2026-06-25 01:41:59 [INFO] Host canonicalization disabled
+2026-06-25 01:41:59 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=3] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=3]   Local address: 127.0.0.1, port 58022
+2026-06-25 01:41:59 [INFO] [conn=3]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:41:59 [INFO] [conn=3] Beginning auth for user vmuser
+2026-06-25 01:41:59 [INFO] [conn=3] Auth for user vmuser succeeded
+2026-06-25 01:41:59 [INFO] [conn=3, chan=0] Requesting new SSH session
+2026-06-25 01:41:59 [INFO] [conn=3, chan=0]   Command: if exist "C:\Users\vmuser\malware_test.exe" (echo exists) else (echo missing)
+2026-06-25 01:41:59 [INFO] [conn=3, chan=0] Received exit status 0
+2026-06-25 01:41:59 [INFO] [conn=3, chan=0] Received channel close
+2026-06-25 01:41:59 [INFO] [conn=3, chan=0] Channel closed
+2026-06-25 01:41:59 [INFO] [conn=3] Closing connection
+2026-06-25 01:41:59 [INFO] [conn=3] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:41:59 [INFO] [conn=3] Connection closed
+2026-06-25 01:41:59 [INFO] Host canonicalization disabled
+2026-06-25 01:41:59 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=4] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=4]   Local address: 127.0.0.1, port 58032
+2026-06-25 01:41:59 [INFO] [conn=4]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:41:59 [INFO] [conn=4] Beginning auth for user vmuser
+2026-06-25 01:41:59 [INFO] [conn=4] Auth for user vmuser succeeded
+2026-06-25 01:41:59 [INFO] [conn=4, chan=0] Requesting new SSH session
+2026-06-25 01:41:59 [INFO] [conn=4, chan=0]   Command: netstat -ano | findstr ESTABLISHED
+2026-06-25 01:41:59 [INFO] [conn=4, chan=0] Received exit status 0
+2026-06-25 01:41:59 [INFO] [conn=4, chan=0] Received channel close
+2026-06-25 01:41:59 [INFO] [conn=4, chan=0] Channel closed
+2026-06-25 01:41:59 [INFO] [conn=4] Closing connection
+2026-06-25 01:41:59 [INFO] [conn=4] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:41:59 [INFO] [conn=4] Connection closed
+2026-06-25 01:41:59 [INFO] Host canonicalization disabled
+2026-06-25 01:41:59 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=5] Connected to SSH server at localhost, port 10022
+2026-06-25 01:41:59 [INFO] [conn=5]   Local address: 127.0.0.1, port 58034
+2026-06-25 01:41:59 [INFO] [conn=5]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:42:00 [INFO] [conn=5] Beginning auth for user vmuser
+2026-06-25 01:42:00 [INFO] [conn=5] Auth for user vmuser succeeded
+2026-06-25 01:42:00 [INFO] [conn=5, chan=0] Requesting new SSH session
+2026-06-25 01:42:00 [INFO] [conn=5, chan=0]   Command: powershell -NoProfile -Command "(Get-WmiObject Win32_ComputerSystem).NumberOfLogicalProcessors"
+2026-06-25 01:42:01 [INFO] [conn=5, chan=0] Received exit status 0
+2026-06-25 01:42:01 [INFO] [conn=5, chan=0] Received channel close
+2026-06-25 01:42:01 [INFO] [conn=5, chan=0] Channel closed
+2026-06-25 01:42:01 [INFO] [conn=5] Closing connection
+2026-06-25 01:42:01 [INFO] [conn=5] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:42:01 [INFO] [conn=5] Connection closed
+2026-06-25 01:42:01 [INFO] Host canonicalization disabled
+2026-06-25 01:42:01 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:42:01 [INFO] [conn=6] Connected to SSH server at localhost, port 10022
+2026-06-25 01:42:01 [INFO] [conn=6]   Local address: 127.0.0.1, port 58046
+2026-06-25 01:42:01 [INFO] [conn=6]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:42:01 [INFO] [conn=6] Beginning auth for user vmuser
+2026-06-25 01:42:01 [INFO] [conn=6] Auth for user vmuser succeeded
+2026-06-25 01:42:01 [INFO] [conn=6, chan=0] Requesting new SSH session
+2026-06-25 01:42:01 [INFO] [conn=6, chan=0]   Command: powershell -NoProfile -Command "[math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1MB)"
+2026-06-25 01:42:02 [INFO] [conn=6, chan=0] Received exit status 0
+2026-06-25 01:42:02 [INFO] [conn=6, chan=0] Received channel close
+2026-06-25 01:42:02 [INFO] [conn=6, chan=0] Channel closed
+2026-06-25 01:42:02 [INFO] [conn=6] Closing connection
+2026-06-25 01:42:02 [INFO] [conn=6] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:42:02 [INFO] [conn=6] Connection closed
+2026-06-25 01:42:02 [INFO] Host canonicalization disabled
+2026-06-25 01:42:02 [INFO] Opening SSH connection to localhost, port 10022
+2026-06-25 01:42:02 [INFO] [conn=7] Connected to SSH server at localhost, port 10022
+2026-06-25 01:42:02 [INFO] [conn=7]   Local address: 127.0.0.1, port 58060
+2026-06-25 01:42:02 [INFO] [conn=7]   Peer address: 127.0.0.1, port 10022
+2026-06-25 01:42:02 [INFO] [conn=7] Beginning auth for user vmuser
+2026-06-25 01:42:02 [INFO] [conn=7] Auth for user vmuser succeeded
+2026-06-25 01:42:02 [INFO] [conn=7, chan=0] Requesting new SSH session
+2026-06-25 01:42:02 [INFO] [conn=7, chan=0]   Command: <exact shell command>
+2026-06-25 01:42:02 [INFO] [conn=7, chan=0] Received exit status 1
+2026-06-25 01:42:02 [INFO] [conn=7, chan=0] Received channel close
+2026-06-25 01:42:02 [INFO] [conn=7, chan=0] Channel closed
+2026-06-25 01:42:02 [INFO] [conn=7] Closing connection
+2026-06-25 01:42:02 [INFO] [conn=7] Sending disconnect: Disconnected by application (11)
+2026-06-25 01:42:02 [INFO] [conn=7] Connection closed
+2026-06-25 01:42:02 [WARNING] Validation check '<one-line description>' error: Process exited with non-zero exit status 1
+2026-06-25 01:42:02 [INFO] Behavioral validation: 0/1 checks passed (threshold 1) — FAIL
+2026-06-25 01:42:02 [WARNING] Behavioral validation FAILED — malware ran but produced no observable effect
+2026-06-25 01:42:13 [INFO] Failure analysis via local LLM (2360 chars)
+2026-06-25 01:42:13 [INFO] Functional failure analysis: full rewrite with behavioral context
+2026-06-25 01:42:13 [INFO] DONE command=run exit_code=0
+2026-06-25 02:02:07 [INFO] START command=analyze args={'verbose': False, 'debug': False, 'command': 'analyze', 'spec': '/tmp/t.yaml', 'db_n': 10, 'malware_type': None, 'behavior': None, 'mode': 'cloud-run'}
+2026-06-25 02:02:10 [INFO] DONE command=analyze exit_code=0
+2026-06-25 02:02:10 [INFO] START command=verify args={'verbose': False, 'debug': False, 'command': 'verify', 'spec': '/tmp/t.yaml', 'source': None, 'os': 'linux', 'loop': False, 'mode': 'cloud-run', 'use_existing_vm': False, 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 02:02:10 [INFO] DONE command=verify exit_code=1
+2026-06-25 02:02:11 [INFO] START command=generate args={'verbose': False, 'debug': False, 'command': 'generate', 'spec': '/tmp/t.yaml', 'output': None, 'malware_type': None, 'behavior': None, 'mode': 'cloud-run'}
+2026-06-25 02:02:11 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 02:02:11 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 02:02:11 [INFO] Using local LLM for generation
+2026-06-25 02:02:11 [WARNING] cloud-run mode: FUGU_API_KEY is not set — chunk generation will always fall back to local LLM. Set FUGU_API_KEY=<key> to enable Fugu chunk delegation.
+2026-06-25 02:02:11 [INFO] cloud-run mode: chunk generation → Fugu (fallback: local LLM)
+2026-06-25 02:02:11 [INFO] Loading target spec from /tmp/t.yaml
+2026-06-25 02:02:11 [INFO] Target spec loaded: linux (Linux-6.17.0-35-generic-x86_64-with-glibc2.39)
+2026-06-25 02:02:11 [INFO] Generating malware...
+2026-06-25 02:03:26 [INFO] Planning malware structure (prompt: 2562 chars)...
+2026-06-25 02:04:10 [INFO] Plan parsed (cycle=0, attempt=1/3) — 18 components: ['elf_bug_detect', 'elfbug_api_init', 'process_arch_get', 'linux_arch_resolve', 'elfbug_api_parse', 'thread_create_snapshot', 'thread_attach_resume', 'debugger_read_memory', 'main', 'elf_bug_detect', 'elfbug_api_init', 'process_arch_get', 'linux_arch_resolve', 'elfbug_api_parse', 'thread_create_snapshot', 'thread_attach_resume', 'debugger_read_memory', 'main']
+2026-06-25 02:04:12 [INFO] START command=analyze args={'verbose': False, 'debug': False, 'command': 'analyze', 'spec': '/tmp/t.yaml', 'db_n': 10, 'malware_type': None, 'behavior': None, 'mode': 'cloud-run'}
+2026-06-25 02:04:15 [INFO] DONE command=analyze exit_code=0
+2026-06-25 02:04:15 [INFO] START command=verify args={'verbose': False, 'debug': False, 'command': 'verify', 'spec': '/tmp/t.yaml', 'source': None, 'os': 'linux', 'loop': False, 'mode': 'cloud-run', 'use_existing_vm': False, 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 02:04:15 [INFO] DONE command=verify exit_code=1
+2026-06-25 02:04:27 [INFO] Plan review: APPROVED (cycle=0)
+2026-06-25 02:04:27 [ERROR] Cloud LLM HTTP 401: {"error":{"message":"Missing API key","type":"authentication_error","param":null,"code":null}}
+2026-06-25 02:04:27 [INFO] Chunk elf_bug_detect (attempt 1/3): Fugu guardrail refusal — falling back to local LLM
+2026-06-25 02:05:12 [INFO] START command=run args={'verbose': False, 'debug': False, 'command': 'run', 'spec': 'spec.yaml', 'output': './results', 'malware_type': 'ransomware', 'behavior': None, 'mode': 'cloud-run', 'max_iters': 5, 'min_iters': 1, 'exhaustive': False, 'loop': True, 'use_existing_vm': True, 'boot_existing': False, 'os': 'windows-11', 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 02:05:12 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 02:05:12 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 02:05:12 [INFO] Using local LLM for generation
+2026-06-25 02:05:12 [INFO] cloud-run mode: chunk generation → Fugu (fallback: local LLM)
+2026-06-25 02:05:12 [INFO] Loading target spec from spec.yaml
+2026-06-25 02:05:12 [INFO] Target spec loaded: windows (windows-11)
+2026-06-25 02:05:12 [INFO] Generating malware...

@@ -606,6 +606,47 @@ Output ONLY the complete fixed C source code. No explanation, no markdown fences
 # C source utilities
 # ---------------------------------------------------------------------------
 
+def _is_guardrail_refusal(text: str) -> bool:
+    """Return True if an LLM response is a guardrail refusal rather than code.
+
+    Called on raw Fugu output before cleaning.  Detects two cases:
+      1. Response has no code structure at all (no braces / parentheses).
+      2. First 400 chars contain refusal language AND no C code markers appear
+         in the opening 200 chars (avoids false-positives on valid code that
+         happens to use a word like "illegal" in a comment).
+    """
+    if not text:
+        return True
+    stripped = text.strip()
+    if len(stripped) < 30:
+        return True
+    if "{" not in stripped and "(" not in stripped:
+        return True
+
+    # If the response opens with recognisable C tokens, accept it regardless
+    # of whatever natural-language noise follows.
+    _c_openers = (
+        "#include", "void ", "int ", "BOOL ", "HANDLE ", "DWORD ",
+        "static ", "LRESULT", "HRESULT", "char ", "unsigned ",
+    )
+    if any(stripped[:200].startswith(tok) or f"\n{tok}" in stripped[:200] for tok in _c_openers):
+        return False
+
+    _refusal_phrases = (
+        "i cannot", "i can't", "i'm not able", "i am not able",
+        "i don't assist", "i do not assist", "i won't help", "i will not help",
+        "i apologize", "i'm sorry, but", "i am sorry, but",
+        "i'm unable", "i am unable",
+        "cannot assist", "cannot help", "not able to assist",
+        "against my guidelines", "my ethical guidelines",
+        "harmful content", "illegal activity", "malicious software",
+        "i must decline", "i need to decline",
+        "as an ai", "as a language model",
+    )
+    head = stripped[:400].lower()
+    return any(phrase in head for phrase in _refusal_phrases)
+
+
 def _strip_thinking(text: str) -> str:
     """Remove <think>...</think> blocks from an LLM response."""
     if not text:
@@ -1031,6 +1072,7 @@ class GenerationEngine:
         max_tokens: int = 32768,
         temperature: float = 0.7,
         debug: Optional[_DebugLogger] = None,
+        run_mode: str = "local-run",  # "local-run" | "cloud-run"
     ):
         self._db = db_engine or DBQueryEngine()
         if llm_client is not None:
@@ -1039,6 +1081,21 @@ class GenerationEngine:
             self._llm_client = SubprocessLLMClient(max_tokens=max_tokens, temperature=temperature)
             logger.info("Using local LLM for generation")
         self._debug = debug
+        self._run_mode = run_mode
+
+        # cloud-run: Fugu client used for individual chunk generation only.
+        # All orchestration (planning, review, validation plan, analysis) stays local.
+        self._chunk_cloud_client: Optional[CloudLLMClient] = None
+        if run_mode == "cloud-run":
+            _api_key = os.environ.get("FUGU_API_KEY", "")
+            if not _api_key:
+                logger.warning(
+                    "cloud-run mode: FUGU_API_KEY is not set — "
+                    "chunk generation will always fall back to local LLM. "
+                    "Set FUGU_API_KEY=<key> to enable Fugu chunk delegation."
+                )
+            self._chunk_cloud_client = CloudLLMClient()
+            logger.info("cloud-run mode: chunk generation → Fugu (fallback: local LLM)")
 
         # Sub-engines
         self.context_builder = ContextBuilder()
@@ -1390,14 +1447,70 @@ class GenerationEngine:
                 relevant_techniques=relevant,
             )
             if self._debug and self._debug.enabled:
-                self._debug.step(f"chunk_{comp.name}", f"Generating {comp.name}()...")
-            try:
-                raw = await self._llm_client.generate(prompt, max_tokens=4096)
-                cleaned = _clean_c_source(raw)
-                chunks[comp.name] = cleaned if cleaned else f"/* {comp.name}: empty response */"
-            except Exception as exc:
-                logger.warning("Chunk generation failed for %s: %s", comp.name, exc)
-                chunks[comp.name] = f"/* {comp.name}: generation failed */"
+                self._debug.step(
+                    f"chunk_{comp.name}",
+                    f"Generating {comp.name}() "
+                    f"[{'Fugu→local' if self._run_mode == 'cloud-run' else 'local'}]...",
+                )
+
+            _CLOUD_RETRIES = 3
+            chunk_code: Optional[str] = None
+
+            # -- cloud-run: try Fugu first ----------------------------------------
+            if self._run_mode == "cloud-run" and self._chunk_cloud_client is not None:
+                for _attempt in range(_CLOUD_RETRIES):
+                    try:
+                        raw = await self._chunk_cloud_client.generate(prompt, max_tokens=4096)
+                        if _is_guardrail_refusal(raw):
+                            logger.info(
+                                "Chunk %s (attempt %d/%d): Fugu guardrail refusal — "
+                                "falling back to local LLM",
+                                comp.name, _attempt + 1, _CLOUD_RETRIES,
+                            )
+                            break  # refusals won't change on retry — go straight to local
+                        cleaned = _clean_c_source(raw)
+                        if cleaned and len(cleaned.strip()) > 30:
+                            chunk_code = cleaned
+                            logger.debug(
+                                "Chunk %s: generated via Fugu (attempt %d/%d, %d chars)",
+                                comp.name, _attempt + 1, _CLOUD_RETRIES, len(cleaned),
+                            )
+                            break
+                        else:
+                            logger.warning(
+                                "Chunk %s (attempt %d/%d): Fugu returned empty/short response",
+                                comp.name, _attempt + 1, _CLOUD_RETRIES,
+                            )
+                    except ContextTooLongError:
+                        logger.warning(
+                            "Chunk %s: Fugu context too long — falling back to local LLM",
+                            comp.name,
+                        )
+                        break
+                    except Exception as exc:
+                        if _attempt < _CLOUD_RETRIES - 1:
+                            logger.warning(
+                                "Chunk %s (attempt %d/%d): Fugu error: %s — retrying",
+                                comp.name, _attempt + 1, _CLOUD_RETRIES, exc,
+                            )
+                        else:
+                            logger.warning(
+                                "Chunk %s: Fugu failed after %d attempts (%s) — "
+                                "falling back to local LLM",
+                                comp.name, _CLOUD_RETRIES, exc,
+                            )
+
+            # -- local-run or Fugu failed / refused: use local LLM ----------------
+            if chunk_code is None:
+                try:
+                    raw = await self._llm_client.generate(prompt, max_tokens=4096)
+                    cleaned = _clean_c_source(raw)
+                    chunk_code = cleaned if cleaned else f"/* {comp.name}: empty response */"
+                except Exception as exc:
+                    logger.warning("Chunk %s: local LLM failed: %s", comp.name, exc)
+                    chunk_code = f"/* {comp.name}: generation failed */"
+
+            chunks[comp.name] = chunk_code
 
         return chunks
 
