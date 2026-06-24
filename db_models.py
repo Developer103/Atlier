@@ -15,7 +15,7 @@ class MalwareTechnique:
     category: str
     os_type: str
     edr_detection: Optional[str] = None
-    detection_rating: Optional[int] = None  # 1-5 rating
+    detection_rating: Optional[float] = None  # 0.0–1.0 similarity-derived score
     references: List[str] = None
     
     def __post_init__(self):

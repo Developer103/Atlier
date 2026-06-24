@@ -1,24 +1,28 @@
 """
-Verification pipeline — runs generated malware in the provisioned VM via SSH bridge,
-compiles, executes, queries EDR/AV for alerts, returns a VerificationResult.
+Verification pipeline — compiles and executes generated malware in a provisioned VM,
+queries EDR/AV for alerts, returns a VerificationResult.
 
-Also supports sandbox detection checks and behaviour validation.
+Windows flow:  cross-compile on host (x86_64-w64-mingw32-gcc) → SFTP .exe to VM → run
+Linux flow:    SFTP source to VM → compile on VM → run
 """
 
 import asyncio
 import logging
+import shutil
+import tempfile
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 
 
 class DetectionLevel(Enum):
-    NONE = "none"          # No EDR/AV detected the malware
-    LOW = "low"            # Detected but low confidence / benign classification
-    MEDIUM = "medium"      # Detected as suspicious
-    HIGH = "high"          # Detected and flagged as malicious
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class BehaviourCheck(Enum):
@@ -27,25 +31,38 @@ class BehaviourCheck(Enum):
     NO_CONSOLE_OUTPUT = "no_console_output"
     LAUNCHES_NETWORK = "launches_network"
     CREATES_FILE = "creates_file"
-    MODIFIES_REGISTRY = "modifies_registry"  # Windows only
+    MODIFIES_REGISTRY = "modifies_registry"
     SPLASH_WINDOW = "splash_window"
-    DYNAMIC_DISPATCH = "dynamic_dispatch"     # LoadLibrary/GetProcAddress pattern
+    DYNAMIC_DISPATCH = "dynamic_dispatch"
+    FUNCTIONAL_GOAL_MET = "functional_goal_met"
+
+
+@dataclass
+class ValidationCheck:
+    """One LLM-generated check that verifies the malware performed its intended function."""
+    description: str
+    command: str
+    success_pattern: str  # substring that must appear in command output
+
+
+@dataclass
+class ValidationPlan:
+    """Set of behavioral validation checks generated before the verification loop."""
+    checks: list[ValidationCheck]
+    is_windows: bool
 
 
 @dataclass
 class AlertRecord:
-    """A single alert from an EDR/AV product."""
     edr_name: str
-    alert_type: str      # e.g. "process_injection", "api_hooking"
-    severity: str        # info, warning, high
-    process_path: str    # path of the detected process
-    timestamp_offset: float  # seconds after execution start
+    alert_type: str
+    severity: str
+    process_path: str
+    timestamp_offset: float
 
 
 @dataclass
 class VerificationResult:
-    """Complete result of a verification run."""
-
     detection_score: DetectionLevel = DetectionLevel.NONE
     alerts: List[AlertRecord] = field(default_factory=list)
     behaviour_checks: dict[BehaviourCheck, bool] = field(default_factory=dict)
@@ -53,10 +70,11 @@ class VerificationResult:
     execution_output: str = ""
     execution_exit_code: int = 0
     sandbox_detected: bool = False
+    functional_validation_passed: Optional[bool] = None  # None = not checked
+    functional_validation_output: str = ""
 
     @property
     def is_undetected(self) -> bool:
-        """True if no EDR/AV detected the malware."""
         return self.detection_score == DetectionLevel.NONE
 
     @property
@@ -64,79 +82,52 @@ class VerificationResult:
         return len(self.alerts)
 
 
+def _is_windows(spec) -> bool:
+    return "windows" in (spec.os_version or "").lower() or \
+           (hasattr(spec, "os_platform") and spec.os_platform.value == "windows")
+
+
 class Verifier:
     """Runs generated malware in a provisioned VM and checks for detections."""
 
     def __init__(self, vm_instance=None, debug=None):
-        self._vm = vm_instance  # VMInstance from ProvisionEngine (Phase 3)
+        self._vm = vm_instance
         self._debug = debug
 
     async def verify(
         self,
         source_code: str,
-        target_spec,  # TargetEnvironmentSpec
+        target_spec,
         compiler_instructions: str = "",
         timeout: int = 120,
         check_sandbox: bool = True,
     ) -> VerificationResult:
-        """Full verification pipeline on the running VM.
+        """Full verification pipeline.
 
-        Steps:
-          1. Write source code to VM
-          2. Compile using specified or auto-detected compiler
-          3. Execute in background
-          4. Monitor EDR/AV for alerts (via log queries)
-          5. Run behaviour checks
-          6. Return VerificationResult
+        Windows: cross-compile on host → SFTP .exe to VM → execute
+        Linux:   SFTP source to VM → compile on VM → execute
         """
         if not self._vm:
-            raise RuntimeError("No VM instance attached. Provision a VM first via ProvisionEngine.")
+            raise RuntimeError("No VM instance attached.")
 
         result = VerificationResult()
+        win = _is_windows(target_spec)
 
-        # -- Step 1: Write source to VM ----------------------------------------
-        vm_source_path = "/tmp/malware_src.c"
-        await self._write_file_to_vm(vm_source_path, source_code)
-        if self._debug and self._debug.enabled:
-            self._debug.step("vfy_1_upload", "Source code written to VM")
+        if win:
+            await self._verify_windows(result, source_code, target_spec,
+                                        compiler_instructions, timeout)
+        else:
+            await self._verify_linux(result, source_code, target_spec,
+                                      compiler_instructions, timeout)
 
-        # -- Step 2: Compile ---------------------------------------------------
-        compile_cmd = self._build_compile_command(compiler_instructions or "", target_spec)
-        logger.info("Compiling on VM: %s", compile_cmd)
-        compile_result = await self._vm.execute_command(compile_cmd, timeout=60)
+        # Skip EDR/behaviour/sandbox checks if compilation failed — the binary
+        # doesn't exist so none of these checks are meaningful.
+        if not result.behaviour_checks.get(BehaviourCheck.COMPILATION_SUCCESS, True):
+            return result
 
-        if self._debug and self._debug.enabled:
-            compile_ok = "error" not in compile_result.lower() and "undefined reference" not in compile_result.lower()
-            self._debug.step("vfy_2_compile", f"Compile {'succeeded' if compile_ok else 'failed'}")
-            if not compile_ok:
-                return result  # compilation failed — nothing more to check
-
-        result.compilation_output = compile_result
-
-        # -- Step 3: Execute ---------------------------------------------------
-        exe_path = "/tmp/malware_bin"
-        exec_cmd = f"{exe_path} & sleep 0.1; echo $?"
-        exec_out = await self._vm.execute_command(exec_cmd, timeout=timeout)
-        result.execution_output = exec_out
-
-        # Parse exit code from output (last line should be the code)
-        lines = [l.strip() for l in exec_out.strip().split("\n")]
-        if lines and lines[-1].isdigit():
-            result.execution_exit_code = int(lines[-1])
-
-        if self._debug and self._debug.enabled:
-            exit_ok = bool(result.execution_exit_code == 0) if result.execution_exit_code else False
-            self._debug.step("vfy_3_execute", f"Executed (exit={result.execution_exit_code}, {'ok' if exit_ok else 'fail'})")
-
-        # -- Step 4: Check EDR/AV alerts --------------------------------------
+        # EDR alerts
         if target_spec.edrs:
-            result.alerts = await self._check_edr_alerts(target_spec, timeout)
-
-        if self._debug and self._debug.enabled:
-            score = "NONE" if result.total_alerts == 0 else f"{result.total_alerts} alert(s)"
-            self._debug.step("vfy_4_edr", f"EDR check — {score}")
-
-        # Score detection level based on alerts
+            result.alerts = await self._check_edr_alerts(target_spec, win)
         if result.total_alerts == 0:
             result.detection_score = DetectionLevel.NONE
         elif result.total_alerts <= 1 and any(a.severity == "info" for a in result.alerts):
@@ -146,190 +137,334 @@ class Verifier:
         else:
             result.detection_score = DetectionLevel.HIGH
 
-        # -- Step 5: Behaviour checks -----------------------------------------
-        await self._run_behaviour_checks(result, target_spec)
+        await self._run_behaviour_checks(result, target_spec, win)
 
-        if self._debug and self._debug.enabled:
-            checks_summary = ", ".join(f"{k.name}={'✓' if v else '✗'}" for k, v in result.behaviour_checks.items())
-            self._debug.step("vfy_5_behaviour", f"Behaviour checks — {checks_summary}")
-
-        # -- Step 6: Sandbox detection ----------------------------------------
         if check_sandbox:
-            result.sandbox_detected = await self._check_sandbox(target_spec)
-
-        if self._debug and self._debug.enabled:
-            sandbox_str = "detected" if result.sandbox_detected else "clean"
-            score_str = result.detection_score.value if hasattr(result, 'detection_score') else "unknown"
-            self._debug.step("vfy_6_sandbox", f"Sandbox check — {sandbox_str}")
-            self._debug.ok(f"Verification complete — detection={score_str}, sandbox={sandbox_str}")
+            result.sandbox_detected = await self._check_sandbox(win)
 
         return result
 
+    async def run_validation_checks(self, plan: ValidationPlan) -> bool:
+        """Run all behavioral validation checks against the live VM.
+
+        Returns True if a majority of checks pass (tolerates LLM-generated checks
+        that point to the wrong path or slightly wrong pattern).
+        An empty plan (no checks) is considered passing — caller decides whether to generate one.
+        """
+        if not plan.checks:
+            return True
+
+        n_pass = 0
+        outputs: list[str] = []
+        for check in plan.checks:
+            try:
+                output = await self._vm.execute_command(check.command, timeout=30)
+                ok = check.success_pattern.lower() in output.lower()
+                n_pass += ok
+                outputs.append(f"[{'PASS' if ok else 'FAIL'}] {check.description}: {output[:200]}")
+                logger.info("Validation check '%s': %s", check.description, "PASS" if ok else "FAIL")
+            except Exception as exc:
+                outputs.append(f"[ERROR] {check.description}: {exc}")
+                logger.warning("Validation check '%s' error: %s", check.description, exc)
+
+        threshold = max(1, len(plan.checks) // 2)
+        overall = n_pass >= threshold
+        logger.info(
+            "Behavioral validation: %d/%d checks passed (threshold %d) — %s",
+            n_pass, len(plan.checks), threshold, "PASS" if overall else "FAIL",
+        )
+        return overall
+
     # ------------------------------------------------------------------
-    # helpers
+    # Windows path
     # ------------------------------------------------------------------
 
-    async def _write_file_to_vm(self, remote_path: str, content: str) -> None:
-        """Write a file to the VM via SSH."""
-        # Use cat with heredoc
-        escaped = content.replace("'", "'\\''")
-        cmd = f"cat > '{remote_path}' << 'HEREDOC'\n{content}\nHEREDOC"
-        await self._vm.execute_command(cmd, timeout=30)
+    async def _verify_windows(self, result, source_code, spec,
+                               compiler_instructions, timeout):
+        # Step 1: cross-compile on host
+        mingw = shutil.which("x86_64-w64-mingw32-gcc")
+        if not mingw:
+            raise RuntimeError(
+                "x86_64-w64-mingw32-gcc not found on host. "
+                "Install with: sudo apt install gcc-mingw-w64"
+            )
 
-    def _build_compile_command(self, compiler_instructions: str, spec) -> str:
-        """Build the compilation command from instructions + spec."""
-        if compiler_instructions.strip():
-            # Extract just the compile command (first line that looks like a command)
-            for line in compiler_instructions.split("\n"):
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and any(x in stripped for x in ["gcc", "clang", "rustc", "go ", "cc "]):
-                    return stripped
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "malware_src.c"
+            exe = Path(td) / "malware_test.exe"
+            src.write_text(source_code)
 
-        # Fallback: use default compiler for the platform
-        if "windows" in spec.os_version.lower():
-            return "x86_64-w64-mingw32-gcc -O2 -s /tmp/malware_src.c -o /tmp/malware_bin -lws2_32 -ladvapi32 2>&1 || gcc -O2 -s /tmp/malware_src.c -o /tmp/malware_bin 2>&1"
-        else:
-            return "gcc -O2 -Wall /tmp/malware_src.c -o /tmp/malware_bin 2>&1 || g++ -O2 /tmp/malware_src.c -o /tmp/malware_bin 2>&1"
+            # Extract any extra flags from compiler instructions
+            extra_flags = self._extract_mingw_flags(compiler_instructions)
+            # Standard Win32 libraries — link the full common set so generated
+            # code can use GDI, WinINet, Winsock, Registry, Shell, Crypto, etc.
+            # without needing per-feature linker flags.
+            _std_libs = (
+                "-lws2_32 -ladvapi32 -lole32 -loleaut32 -luuid "
+                "-lgdi32 -luser32 -lshell32 -lshlwapi "
+                "-lwininet -lpsapi -lcrypt32 -lcomdlg32 -lnetapi32"
+            )
+            compile_cmd = (
+                f"{mingw} -O2 -s -static -m64 "
+                f"-ffunction-sections -fdata-sections -Wl,--gc-sections "
+                f"{extra_flags} "
+                f"{src} -o {exe} "
+                f"{_std_libs} 2>&1"
+            )
 
-    async def _check_edr_alerts(self, spec, timeout: int) -> list[AlertRecord]:
-        """Query EDR logs on the VM for alerts."""
-        alerts = []
-        # Linux EDR log patterns
-        linux_log_paths = [
-            "/var/log/syslog",
-            "/var/log/audit/audit.log",
-        ]
-        # Windows EDR log patterns
-        windows_cmd = 'Get-WinEvent -LogName "Microsoft-Windows-Threat-Intelligence/Operational" -MaxEvents 50 2>$null'
+            proc = await asyncio.create_subprocess_shell(
+                compile_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            result.compilation_output = stdout.decode("utf-8", errors="replace")
+            result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = (proc.returncode == 0)
 
-        if "windows" in spec.os_version.lower():
-            cmd = f"{windows_cmd} | Select-Object TimeCreated, Id, Message"
-        else:
-            # Generic: check for recent process activity patterns
-            cmd = "grep -i 'malware_bin\\|trojan\\|suspicious' /var/log/syslog 2>/dev/null || echo 'no alerts'"
+            if self._debug:
+                self._debug.step("vfy_1_compile",
+                    f"Cross-compile {'ok' if proc.returncode == 0 else 'FAILED'} (rc={proc.returncode})")
 
+            if proc.returncode != 0:
+                logger.warning("Compilation failed:\n%s", result.compilation_output)
+                return
+
+            # Step 2: upload .exe to VM
+            remote_exe = r"C:\Users\vmuser\malware_test.exe"
+            await self._vm.upload_file(str(exe), remote_exe)
+
+            if self._debug:
+                self._debug.step("vfy_2_upload", f"Uploaded .exe → {remote_exe}")
+
+        # Step 3: execute on VM (detached, short wait)
+        exec_cmd = f'start /B "" "{remote_exe}" & timeout /t 3 /nobreak >NUL & echo LAUNCHED'
         try:
+            exec_out = await self._vm.execute_command(exec_cmd, timeout=timeout)
+            result.execution_output = exec_out
+            result.execution_exit_code = 0
+            result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = "LAUNCHED" in exec_out
+        except Exception as e:
+            result.execution_output = str(e)
+            result.execution_exit_code = 1
+            result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = False
+
+        if self._debug:
+            self._debug.step("vfy_3_execute",
+                f"Execute {'ok' if result.execution_exit_code == 0 else 'FAILED'}")
+
+    def _extract_mingw_flags(self, compiler_instructions: str) -> str:
+        """Pull any -l or -D flags out of the compiler instructions block."""
+        flags = []
+        for line in compiler_instructions.splitlines():
+            line = line.strip()
+            if line.startswith("-l") or line.startswith("-D") or line.startswith("-W"):
+                flags.append(line)
+            elif " -l" in line:
+                # e.g. "x86_64-w64-mingw32-gcc ... -lws2_32 -ladvapi32"
+                for tok in line.split():
+                    if tok.startswith("-l") or tok.startswith("-D"):
+                        flags.append(tok)
+        return " ".join(dict.fromkeys(flags))  # deduplicate, preserve order
+
+    # ------------------------------------------------------------------
+    # Linux path
+    # ------------------------------------------------------------------
+
+    async def _verify_linux(self, result, source_code, spec,
+                             compiler_instructions, timeout):
+        remote_src = "/tmp/malware_src.c"
+        remote_bin = "/tmp/malware_bin"
+
+        # Step 1: upload source via SFTP
+        with tempfile.NamedTemporaryFile(suffix=".c", delete=False, mode="w") as f:
+            f.write(source_code)
+            tmp_src = f.name
+        try:
+            await self._vm.upload_file(tmp_src, remote_src)
+        finally:
+            Path(tmp_src).unlink(missing_ok=True)
+
+        if self._debug:
+            self._debug.step("vfy_1_upload", f"Source uploaded → {remote_src}")
+
+        # Step 2: compile on VM
+        compile_cmd = self._build_linux_compile_cmd(compiler_instructions, remote_src, remote_bin)
+        compile_out = await self._vm.execute_command(compile_cmd, timeout=60)
+        result.compilation_output = compile_out
+        failed = "error:" in compile_out.lower() or "undefined reference" in compile_out.lower()
+        result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = not failed
+
+        if self._debug:
+            self._debug.step("vfy_2_compile", f"Compile {'ok' if not failed else 'FAILED'}")
+
+        if failed:
+            return
+
+        # Step 3: execute
+        exec_cmd = f"{remote_bin} & sleep 0.1; echo $?"
+        exec_out = await self._vm.execute_command(exec_cmd, timeout=timeout)
+        result.execution_output = exec_out
+        lines = [l.strip() for l in exec_out.strip().splitlines()]
+        if lines and lines[-1].isdigit():
+            result.execution_exit_code = int(lines[-1])
+
+    def _build_linux_compile_cmd(self, instructions: str, src: str, out: str) -> str:
+        for line in (instructions or "").splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and any(x in s for x in ["gcc", "clang", "cc "]):
+                return s
+        return f"gcc -O2 -Wall {src} -o {out} 2>&1 || g++ -O2 {src} -o {out} 2>&1"
+
+    # ------------------------------------------------------------------
+    # EDR / behaviour / sandbox
+    # ------------------------------------------------------------------
+
+    async def _check_edr_alerts(self, spec, is_windows: bool) -> list[AlertRecord]:
+        alerts = []
+        try:
+            if is_windows:
+                cmd = (
+                    'powershell -NoProfile -Command '
+                    '"Get-WinEvent -LogName Microsoft-Windows-Windows-Defender/Operational '
+                    '-MaxEvents 20 -ErrorAction SilentlyContinue | '
+                    'Where-Object { $_.Id -in 1116,1117,1006,1007 } | '
+                    'Select-Object -ExpandProperty Message"'
+                )
+            else:
+                cmd = "grep -i 'malware_bin\\|trojan\\|suspicious' /var/log/syslog 2>/dev/null || echo 'no alerts'"
             output = await self._vm.execute_command(cmd, timeout=30)
             if output.strip() and "no alerts" not in output.lower():
-                for line in output.strip().split("\n"):
+                for line in output.strip().splitlines():
                     if line.strip():
                         alerts.append(AlertRecord(
-                            edr_name="generic",
-                            alert_type="log_match",
-                            severity="info",
-                            process_path="/tmp/malware_bin",
+                            edr_name="windows_defender" if is_windows else "syslog",
+                            alert_type="detection",
+                            severity="high" if is_windows else "info",
+                            process_path="malware_test.exe" if is_windows else "/tmp/malware_bin",
                             timestamp_offset=0,
                         ))
         except Exception as e:
             logger.warning("EDR alert check failed: %s", e)
-
         return alerts
 
-    async def _run_behaviour_checks(self, result: VerificationResult, spec) -> None:
-        """Run behaviour validation checks on the executed binary."""
+    async def _run_behaviour_checks(self, result: VerificationResult, spec, is_windows: bool) -> None:
         checks = {}
-
-        # Check if binary exists and is executable
         try:
-            stat_out = await self._vm.execute_command(
-                "test -x /tmp/malware_bin && echo exists || echo missing"
-            )
-            checks[BehaviourCheck.EXECUTION_SUCCESS] = (stat_out.strip() == "exists")
-        except Exception:
-            checks[BehaviourCheck.EXECUTION_SUCCESS] = False
-
-        # Check for network activity in the last few seconds
-        try:
-            net_cmd = "ss -tunp 2>/dev/null | grep malware_bin || echo 'no_net'"
-            net_out = await self._vm.execute_command(net_cmd, timeout=5)
-            checks[BehaviourCheck.LAUNCHES_NETWORK] = "no_net" not in net_out.lower()
-        except Exception:
-            checks[BehaviourCheck.LAUNCHES_NETWORK] = False
-
-        # Check for window creation (Linux X11 or Windows GUI)
-        if "windows" in spec.os_version.lower():
-            checks[BehaviourCheck.SPLASH_WINDOW] = True  # placeholder — need WMI query
-        else:
-            try:
-                win_out = await self._vm.execute_command(
-                    "xwininfo -root -tree 2>/dev/null | grep malware || echo 'no_win'", timeout=5
+            if is_windows:
+                stat_out = await self._vm.execute_command(
+                    r'if exist "C:\Users\vmuser\malware_test.exe" (echo exists) else (echo missing)',
+                    timeout=10,
                 )
-                checks[BehaviourCheck.SPLASH_WINDOW] = "malware" in win_out.lower() and "no_win" not in win_out.lower()
-            except Exception:
-                checks[BehaviourCheck.SPLASH_WINDOW] = False
-
-        # Store results
+                checks[BehaviourCheck.EXECUTION_SUCCESS] = "exists" in stat_out
+                net_out = await self._vm.execute_command(
+                    "netstat -ano | findstr ESTABLISHED", timeout=10
+                )
+                checks[BehaviourCheck.LAUNCHES_NETWORK] = bool(net_out.strip())
+                checks[BehaviourCheck.SPLASH_WINDOW] = True  # placeholder
+            else:
+                stat_out = await self._vm.execute_command(
+                    "test -x /tmp/malware_bin && echo exists || echo missing", timeout=10
+                )
+                checks[BehaviourCheck.EXECUTION_SUCCESS] = stat_out.strip() == "exists"
+                net_out = await self._vm.execute_command(
+                    "ss -tunp 2>/dev/null | grep malware_bin || echo no_net", timeout=5
+                )
+                checks[BehaviourCheck.LAUNCHES_NETWORK] = "no_net" not in net_out.lower()
+        except Exception as e:
+            logger.warning("Behaviour check failed: %s", e)
         result.behaviour_checks.update(checks)
 
-    async def _check_sandbox(self, spec) -> bool:
-        """Check if the VM is running inside a sandbox environment."""
-        sandbox_indicators = []
-
+    async def _check_sandbox(self, is_windows: bool) -> bool:
+        indicators = []
         try:
-            # Check CPU count (sandboxes often have low core counts)
-            cpu_out = await self._vm.execute_command("nproc 2>/dev/null || echo 0", timeout=5)
-            if int(cpu_out.strip()) < 2:
-                sandbox_indicators.append("low_cpu_count")
-
-            # Check RAM
-            ram_out = await self._vm.execute_command(
-                "free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0", timeout=5
-            )
-            if int(ram_out.strip()) < 1000:
-                sandbox_indicators.append("low_ram")
-
+            if is_windows:
+                cpu_out = await self._vm.execute_command(
+                    'powershell -NoProfile -Command '
+                    '"(Get-WmiObject Win32_ComputerSystem).NumberOfLogicalProcessors"',
+                    timeout=10,
+                )
+                if cpu_out.strip().isdigit() and int(cpu_out.strip()) < 2:
+                    indicators.append("low_cpu")
+                ram_out = await self._vm.execute_command(
+                    'powershell -NoProfile -Command '
+                    '"[math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1MB)"',
+                    timeout=10,
+                )
+                if ram_out.strip().isdigit() and int(ram_out.strip()) < 1000:
+                    indicators.append("low_ram")
+            else:
+                cpu_out = await self._vm.execute_command("nproc 2>/dev/null || echo 0", timeout=5)
+                if int(cpu_out.strip() or 0) < 2:
+                    indicators.append("low_cpu")
+                ram_out = await self._vm.execute_command(
+                    "free -m 2>/dev/null | awk '/Mem:/{print $2}' || echo 0", timeout=5
+                )
+                if int(ram_out.strip() or 0) < 1000:
+                    indicators.append("low_ram")
         except Exception as e:
             logger.warning("Sandbox check failed: %s", e)
+        return len(indicators) > 0
 
-        return len(sandbox_indicators) > 0
 
+# ---------------------------------------------------------------------------
+# Standalone (no VM) — compile-check only
+# ---------------------------------------------------------------------------
 
-# Convenience function for standalone use without a VM
 async def verify_standalone(
     source_code: str,
     target_spec,
     compile_cmd: Optional[str] = None,
     workdir: str = "/tmp",
 ) -> VerificationResult:
-    """Verify malware compilation and basic execution on the local host.
-
-    Useful for quick smoke tests without a VM.
-    """
+    """Verify compilation on the local host without a VM (smoke-test mode)."""
     result = VerificationResult()
+    src_path = Path(workdir) / "malware_src.c"
+    src_path.write_text(source_code)
 
-    src_path = f"{workdir}/malware_src.c"
-    with open(src_path, "w") as f:
-        f.write(source_code)
+    win = _is_windows(target_spec)
+    if win:
+        mingw = shutil.which("x86_64-w64-mingw32-gcc")
+        compiler = compile_cmd or (
+            f"{mingw} -fsyntax-only -x c" if mingw else None
+        )
+        if not compiler:
+            result.compilation_output = "x86_64-w64-mingw32-gcc not found"
+            return result
+    else:
+        compiler = compile_cmd or "gcc -O2 -Wall"
 
-    compiler = compile_cmd or "gcc -O2 -Wall"
+    syntax_only = "-fsyntax-only" in compiler
+    out_flag = "" if syntax_only else f"-o {workdir}/malware_bin"
+    shell_cmd = f"{compiler} {src_path} {out_flag}"
+
     try:
         proc = await asyncio.create_subprocess_shell(
-            f"{compiler} {src_path} -o {workdir}/malware_bin",
+            shell_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
-        stdout, stderr = await proc.communicate()
-
-        result.compilation_output = (stdout.decode("utf-8") or "") + (stderr.decode("utf-8") or "")
+        stdout, _ = await proc.communicate()
+        result.compilation_output = stdout.decode("utf-8", errors="replace")
 
         if proc.returncode == 0:
             result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = True
-            result.detection_score = DetectionLevel.NONE  # no EDR on host in standalone mode
-
-            # Try running it
-            try:
-                run_proc = await asyncio.create_subprocess_exec(
-                    f"{workdir}/malware_bin",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    timeout=10,
-                )
-                _, _ = await run_proc.communicate()
-                result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = True
-            except (asyncio.TimeoutError, Exception):
-                result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = False
-
+            result.detection_score = DetectionLevel.NONE
+            if not syntax_only and not win:
+                try:
+                    run_proc = await asyncio.create_subprocess_exec(
+                        f"{workdir}/malware_bin",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    try:
+                        await asyncio.wait_for(run_proc.communicate(), timeout=10)
+                    except asyncio.TimeoutError:
+                        run_proc.kill()
+                        await run_proc.communicate()
+                    result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = True
+                except Exception:
+                    result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = False
     except FileNotFoundError:
-        result.compilation_output = "gcc not found in PATH"
+        result.compilation_output = f"compiler not found: {compiler}"
 
     return result

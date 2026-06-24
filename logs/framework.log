@@ -1,0 +1,116 @@
+2026-06-24 18:38:26 [INFO] START command=test args={}
+2026-06-24 18:38:26 [WARNING] WARN test warning
+2026-06-24 18:38:26 [INFO] DONE command=test exit_code=0
+2026-06-25 00:36:37 [INFO] START command=run args={'verbose': False, 'debug': False, 'command': 'run', 'spec': 'spec.yaml', 'output': './results', 'malware_type': None, 'max_iters': 5, 'min_iters': 1, 'exhaustive': False, 'loop': True, 'use_existing_vm': True, 'boot_existing': False, 'os': 'windows-11', 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 00:36:37 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 00:36:37 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 00:36:37 [INFO] Using local LLM for generation
+2026-06-25 00:36:37 [INFO] Loading target spec from spec.yaml
+2026-06-25 00:36:37 [INFO] Target spec loaded: linux (Linux-6.17.0-35-generic-x86_64-with-glibc2.39)
+2026-06-25 00:36:37 [INFO] Generating malware...
+2026-06-25 00:36:40 [INFO] INTERRUPTED command=run
+2026-06-25 00:37:19 [INFO] START command=run args={'verbose': False, 'debug': False, 'command': 'run', 'spec': 'spec.yaml', 'output': './results', 'malware_type': None, 'max_iters': 5, 'min_iters': 1, 'exhaustive': False, 'loop': True, 'use_existing_vm': True, 'boot_existing': False, 'os': 'windows-11', 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 00:37:19 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 00:37:19 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 00:37:19 [INFO] Using local LLM for generation
+2026-06-25 00:37:19 [INFO] Loading target spec from spec.yaml
+2026-06-25 00:37:19 [INFO] Target spec loaded: linux (Linux-6.17.0-35-generic-x86_64-with-glibc2.39)
+2026-06-25 00:37:19 [INFO] Generating malware...
+2026-06-25 00:37:21 [INFO] INTERRUPTED command=run
+2026-06-25 00:37:27 [INFO] START command=run args={'verbose': False, 'debug': False, 'command': 'run', 'spec': 'spec.yaml', 'output': './results', 'malware_type': 'ransomware', 'max_iters': 5, 'min_iters': 1, 'exhaustive': False, 'loop': True, 'use_existing_vm': True, 'boot_existing': False, 'os': 'windows-11', 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 00:37:27 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 00:37:27 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 00:37:27 [INFO] Using local LLM for generation
+2026-06-25 00:37:27 [INFO] Loading target spec from spec.yaml
+2026-06-25 00:37:27 [INFO] Target spec loaded: linux (Linux-6.17.0-35-generic-x86_64-with-glibc2.39)
+2026-06-25 00:37:27 [INFO] Generating malware...
+2026-06-25 00:37:50 [INFO] INTERRUPTED command=run
+2026-06-25 00:40:27 [INFO] START command=generate args={'verbose': False, 'debug': False, 'command': 'generate', 'spec': '/tmp/test_spec.yaml', 'output': None, 'malware_type': 'ransomware'}
+2026-06-25 00:40:27 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 00:40:27 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 00:40:27 [INFO] Using local LLM for generation
+2026-06-25 00:40:27 [INFO] Loading target spec from /tmp/test_spec.yaml
+2026-06-25 00:40:27 [ERROR] FAILED command=generate error=Failed to load target spec: mapping values are not allowed here
+  in "<unicode string>", line 1, column 33:
+    os_platform: windows\nos_version: windows-11
+                                    ^
+Traceback (most recent call last):
+  File "/home/kei/llm_vault/malware_gen_framework/pipeline.py", line 110, in run
+    target_spec = parse_target_spec(spec_path=spec_path, **spec_overrides)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/llm_vault/malware_gen_framework/spec_parser.py", line 76, in parse_target_spec
+    raw.update(yaml.safe_load(content) or {})  # type: ignore[union-attr]
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/__init__.py", line 125, in safe_load
+    return load(stream, SafeLoader)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/__init__.py", line 81, in load
+    return loader.get_single_data()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/constructor.py", line 49, in get_single_data
+    node = self.get_single_node()
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/composer.py", line 36, in get_single_node
+    document = self.compose_document()
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/composer.py", line 55, in compose_document
+    node = self.compose_node(None, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/composer.py", line 127, in compose_mapping_node
+    while not self.check_event(MappingEndEvent):
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/parser.py", line 98, in check_event
+    self.current_event = self.state()
+                         ^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/parser.py", line 428, in parse_block_mapping_key
+    if self.check_token(KeyToken):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/scanner.py", line 116, in check_token
+    self.fetch_more_tokens()
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/scanner.py", line 223, in fetch_more_tokens
+    return self.fetch_value()
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/kei/.local/lib/python3.12/site-packages/yaml/scanner.py", line 577, in fetch_value
+    raise ScannerError(None, None,
+yaml.scanner.ScannerError: mapping values are not allowed here
+  in "<unicode string>", line 1, column 33:
+    os_platform: windows\nos_version: windows-11
+                                    ^
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kei/llm_vault/malware_gen_framework/cli.py", line 588, in main
+    exit_code = asyncio.run(handler(args))
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/kei/llm_vault/malware_gen_framework/cli.py", line 74, in cmd_generate
+    result = await pipeline.run(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/home/kei/llm_vault/malware_gen_framework/pipeline.py", line 122, in run
+    raise PipelineError(f"Failed to load target spec: {e}") from e
+malware_gen_framework.pipeline.PipelineError: Failed to load target spec: mapping values are not allowed here
+  in "<unicode string>", line 1, column 33:
+    os_platform: windows\nos_version: windows-11
+                                    ^
+2026-06-25 01:12:19 [INFO] START command=run args={'verbose': False, 'debug': False, 'command': 'run', 'spec': 'spec.yaml', 'output': './results', 'malware_type': 'ransomware', 'behavior': None, 'max_iters': 5, 'min_iters': 1, 'exhaustive': False, 'loop': True, 'use_existing_vm': True, 'boot_existing': False, 'os': 'windows-11', 'vm_port': 10022, 'vm_user': 'vmuser', 'vm_pass': 'vmuser123'}
+2026-06-25 01:12:19 [INFO] DB engine auto-initialised for generation stage
+2026-06-25 01:12:19 [WARNING] No GGUF model found; set model_path explicitly
+2026-06-25 01:12:19 [INFO] Using local LLM for generation
+2026-06-25 01:12:19 [INFO] Loading target spec from spec.yaml
+2026-06-25 01:12:19 [INFO] Target spec loaded: windows (windows-11)
+2026-06-25 01:12:19 [INFO] Generating malware...
+2026-06-25 01:13:59 [INFO] Planning malware structure (prompt: 2540 chars)...
+2026-06-25 01:15:05 [INFO] Plan parsed (cycle=0, attempt=1/3) — 32 components: ['patch_scan_buffer', 'enumerate_processes', 'resolve_api_address', 'get_module_handle', 'encrypt_file_content', 'create_file_mapping', 'copy_registry_value', 'launch_shell_command', 'connect_http_endpoint', 'internet_open', 'get_system_directory', 'create_process_handle', 'delete_file_remotely', 'query_physical_memory', 'inject_code_to_process', 'main', 'patch_scan_buffer', 'enumerate_processes', 'resolve_api_address', 'get_module_handle', 'encrypt_file_content', 'create_file_mapping', 'copy_registry_value', 'launch_shell_command', 'connect_http_endpoint', 'internet_open', 'get_system_directory', 'create_process_handle', 'delete_file_remotely', 'query_physical_memory', 'inject_code_to_process', 'main']
+2026-06-25 01:15:30 [INFO] Plan review: APPROVED (cycle=0)

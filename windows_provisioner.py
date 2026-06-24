@@ -5,300 +5,532 @@ Windows VM Provisioner using autounattend.xml.
 """
 
 import logging
-import subprocess
-import tempfile
+import struct
 from pathlib import Path
-from typing import Optional
-import xml.etree.ElementTree as ET
 
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# EFI shell startup script — searches all FSn mounts for the Windows bootloader
+# ---------------------------------------------------------------------------
+# OVMF has no ISO9660 driver, so it can't read the autounattend ISO9660 disk.
+# By creating the autounattend "disk" as a raw FAT12 image, OVMF's FatDxe will
+# mount it as FSn.  The EFI Shell then finds startup.nsh there and runs it,
+# which locates and launches the Windows installer EFI binary on another FSn.
+#
+# Windows Setup (in WindowsPE) enumerates all drives including ATAPI CD-ROMs
+# that contain FAT, so AUTOUNATTEND.XML on this disk will be found too.
 
-# Windows autounattend.xml schema for unattended install
+_STARTUP_NSH = """\
+# & exit /b
+@echo -off
+connect -r
+map -r
+fs0:\\EFI\\Microsoft\\Boot\\bootmgfw.efi
+fs1:\\EFI\\Microsoft\\Boot\\bootmgfw.efi
+fs2:\\EFI\\Microsoft\\Boot\\bootmgfw.efi
+fs3:\\EFI\\Microsoft\\Boot\\bootmgfw.efi
+fs4:\\EFI\\Microsoft\\Boot\\bootmgfw.efi
+"""
+
+# ---------------------------------------------------------------------------
+# Autounattend XML template
+# ---------------------------------------------------------------------------
+# Uses a plain string template instead of xml.etree because ElementTree can't
+# emit wcm: namespace attributes, which Windows Setup requires on collection
+# elements (Disk, CreatePartition, LocalAccount, SynchronousCommand, etc.)
+# Without wcm:action="add", Windows silently ignores those elements.
+
+_AUTOUNATTEND_TEMPLATE = """\
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <!-- WindowsPE pass: TPM bypass, disk setup, product key -->
+  <settings pass="windowsPE">
+    <component name="Microsoft-Windows-International-Core-WinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <SetupUILanguage>
+        <UILanguage>en-US</UILanguage>
+      </SetupUILanguage>
+      <UILanguage>en-US</UILanguage>
+      <SystemLocale>en-US</SystemLocale>
+      <UserLocale>en-US</UserLocale>
+      <UILanguageFallback>en-US</UILanguageFallback>
+      <InputLocale>en-US</InputLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <!-- Bypass Windows 11 hardware checks before setup validates requirements -->
+      <RunSynchronous>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Path>reg add "HKLM\\SYSTEM\\Setup\\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Path>reg add "HKLM\\SYSTEM\\Setup\\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>3</Order>
+          <Path>reg add "HKLM\\SYSTEM\\Setup\\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>4</Order>
+          <Path>reg add "HKLM\\SYSTEM\\Setup\\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add">
+          <Order>5</Order>
+          <Path>reg add "HKLM\\SYSTEM\\Setup\\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f</Path>
+        </RunSynchronousCommand>
+      </RunSynchronous>
+
+      <DiskConfiguration>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>100</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Format>FAT32</Format>
+              <Label>SYSTEM</Label>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>2</PartitionID>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>3</Order>
+              <PartitionID>3</PartitionID>
+              <Format>NTFS</Format>
+              <Label>Windows</Label>
+              <Letter>C</Letter>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/NAME</Key>
+              <Value>Windows 11 Pro</Value>
+            </MetaData>
+          </InstallFrom>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>3</PartitionID>
+          </InstallTo>
+          <WillShowUI>Never</WillShowUI>
+        </OSImage>
+      </ImageInstall>
+
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>Analyst</FullName>
+        <Organization>Security Team</Organization>
+        <ProductKey>
+          <Key>W269N-WFGWX-YVC9B-4J6C9-T83GX</Key>
+          <WillShowUI>Never</WillShowUI>
+        </ProductKey>
+      </UserData>
+
+    </component>
+  </settings>
+
+  <!-- Specialize pass: computer name -->
+  <settings pass="specialize">
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <ComputerName>MalwareVM</ComputerName>
+    </component>
+  </settings>
+
+  <!-- OOBE pass: create user, configure autologon, install SSH -->
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipUserOOBE>true</SkipUserOOBE>
+        <ProtectYourPC>3</ProtectYourPC>
+      </OOBE>
+
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>{username}</Name>
+            <DisplayName>VM User</DisplayName>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>{password}</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <Username>{username}</Username>
+        <Password>
+          <Value>{password}</Value>
+          <PlainText>true</PlainText>
+        </Password>
+        <LogonCount>5</LogonCount>
+      </AutoLogon>
+
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <Description>Disable password expiry</Description>
+          <CommandLine>net accounts /maxpwage:unlimited</CommandLine>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <Description>Install and start OpenSSH Server</Description>
+          <CommandLine>powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Set-Service sshd -StartupType Automatic; Start-Service sshd; New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -ErrorAction SilentlyContinue"</CommandLine>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+
+    </component>
+  </settings>
+
+</unattend>
+"""
+
+
+# ---------------------------------------------------------------------------
+# Pure-Python FAT12 disk image builder with subdirectory support
+# ---------------------------------------------------------------------------
+
+def _fat12_lfn_checksum(name83: bytes) -> int:
+    s = 0
+    for b in name83:
+        s = (((s & 1) << 7) | (s >> 1)) + b & 0xFF
+    return s
+
+
+def _lfn_entries(long_name: str, short11: bytes) -> bytes:
+    cksum = _fat12_lfn_checksum(short11)
+    ucs2 = long_name.encode("utf-16-le") + b"\x00\x00"
+    while (len(ucs2) // 2) % 13 != 0:
+        ucs2 += b"\xff\xff"
+    n = len(ucs2) // 26
+    out = bytearray()
+    for i in range(n - 1, -1, -1):
+        chunk = ucs2[i * 26 : (i + 1) * 26]
+        e = bytearray(32)
+        e[0]      = (i + 1) | (0x40 if i == n - 1 else 0)
+        e[1:11]   = chunk[0:10]
+        e[11]     = 0x0F
+        e[13]     = cksum
+        e[14:26]  = chunk[10:22]
+        e[28:32]  = chunk[22:26]
+        out.extend(e)
+    return bytes(out)
+
+
+def _short11(long_name: str) -> bytes:
+    nm = long_name.upper()
+    base, ext = (nm.rsplit(".", 1) if "." in nm else (nm, ""))
+    b8 = ((base[:6] + "~1") if len(base) > 8 else base).ljust(8)[:8]
+    e3 = ext[:3].ljust(3)
+    return (b8 + e3).encode("ascii")
+
+
+def _make_file_entry(long_name: str, start_cluster: int, file_size: int) -> bytes:
+    s11 = _short11(long_name)
+    lfn = _lfn_entries(long_name, s11)
+    entry = bytearray(32)
+    entry[0:11]  = s11
+    entry[11]    = 0x20                         # ATTR_ARCHIVE
+    entry[26:28] = struct.pack("<H", start_cluster)
+    entry[28:32] = struct.pack("<I", file_size)
+    return lfn + bytes(entry)
+
+
+def _make_subdir_entry(long_name: str, start_cluster: int) -> bytes:
+    s11 = _short11(long_name)
+    lfn = _lfn_entries(long_name, s11)
+    entry = bytearray(32)
+    entry[0:11]  = s11
+    entry[11]    = 0x10                         # ATTR_DIRECTORY
+    entry[26:28] = struct.pack("<H", start_cluster)
+    return lfn + bytes(entry)
+
+
+def _build_fat12_image(files: dict, size_mb: int = 4) -> bytes:
+    """Build a FAT12 raw disk image with subdirectory support.
+
+    files     : {path_str: content_bytes}  path uses '/' separator, e.g.
+                "EFI/BOOT/BOOTX64.EFI" or "AUTOUNATTEND.XML"
+    size_mb   : disk size in MiB
+    """
+    SECTOR        = 512
+    CLUSTER_SECS  = 4          # 2 KiB per cluster
+    NUM_FATS      = 2
+    ROOT_ENTRIES  = 128
+    TOTAL_SECS    = size_mb * 1024 * 1024 // SECTOR
+    ROOT_DIR_SECS = ROOT_ENTRIES * 32 // SECTOR
+    CLUSTER_BYTES = CLUSTER_SECS * SECTOR
+
+    FAT_SECS = 3
+    for _ in range(6):
+        data_start = 1 + NUM_FATS * FAT_SECS + ROOT_DIR_SECS
+        n_clust    = (TOTAL_SECS - data_start) // CLUSTER_SECS
+        FAT_SECS   = max(1, (n_clust * 3 // 2 + SECTOR - 1) // SECTOR)
+
+    DATA_START_SEC = 1 + NUM_FATS * FAT_SECS + ROOT_DIR_SECS
+
+    image = bytearray(TOTAL_SECS * SECTOR)
+    fat   = bytearray(FAT_SECS * SECTOR)
+    fat[0] = 0xF8; fat[1] = 0xFF; fat[2] = 0xFF
+
+    _nc = [2]  # next_cluster (list for closure mutation)
+
+    def fat12_set(c: int, v: int) -> None:
+        off = c * 3 // 2
+        if c % 2 == 0:
+            fat[off]     = v & 0xFF
+            fat[off + 1] = (fat[off + 1] & 0xF0) | ((v >> 8) & 0x0F)
+        else:
+            fat[off]     = (fat[off] & 0x0F) | ((v & 0x0F) << 4)
+            fat[off + 1] = (v >> 4) & 0xFF
+
+    def alloc_clusters(n: int) -> list:
+        cs = list(range(_nc[0], _nc[0] + n))
+        _nc[0] += n
+        for i, c in enumerate(cs):
+            fat12_set(c, cs[i + 1] if i < n - 1 else 0xFFF)
+        return cs
+
+    def clusters_needed(size: int) -> int:
+        return max(1, -(-size // CLUSTER_BYTES))
+
+    def write_data(clusters: list, data: bytes) -> None:
+        for i, c in enumerate(clusters):
+            off = (DATA_START_SEC + (c - 2) * CLUSTER_SECS) * SECTOR
+            chunk = data[i * CLUSTER_BYTES : (i + 1) * CLUSTER_BYTES]
+            image[off : off + len(chunk)] = chunk
+
+    # Build directory tree from flat path dict
+    # tree: dict mapping dir_path_tuple → {name: ("file", data) | ("dir", {})}
+    tree: dict = {}  # top-level entries
+
+    def get_or_create_dir(parts):
+        node = tree
+        for p in parts:
+            pk = p.upper()
+            if pk not in node:
+                node[pk] = ("dir", {}, p)  # (type, children, original_name)
+            node = node[pk][1]
+        return node
+
+    for path_str, data in files.items():
+        parts = path_str.replace("\\", "/").split("/")
+        if len(parts) == 1:
+            tree[parts[0].upper()] = ("file", data, parts[0])
+        else:
+            dir_node = get_or_create_dir(parts[:-1])
+            fname = parts[-1]
+            dir_node[fname.upper()] = ("file", data, fname)
+
+    # First pass: allocate clusters for all files and directories (BFS)
+    # We need to know cluster numbers before writing directory entries
+    # Process: assign clusters to dirs, then build their content and write
+
+    def assign_and_write(node: dict, parent_cluster: int, is_root: bool) -> tuple:
+        """Return (dir_entries_bytes, own_cluster) for this directory node.
+
+        For the root directory, we write directly to the fixed root area.
+        For subdirectories, we allocate a cluster, write dot/dotdot + entries.
+        """
+        entries_bytes = bytearray()
+
+        # Sort: dirs first, then files (nice to have, not required)
+        items = sorted(node.items(), key=lambda kv: 0 if kv[1][0] == "dir" else 1)
+
+        for _key, item in items:
+            kind, payload, orig_name = item
+            if kind == "file":
+                data = payload
+                n = clusters_needed(len(data))
+                cs = alloc_clusters(n)
+                write_data(cs, data)
+                entries_bytes += _make_file_entry(orig_name, cs[0], len(data))
+            else:  # dir
+                children = payload
+                # Allocate cluster for this subdirectory NOW so we know it
+                dir_cs = alloc_clusters(1)
+                dir_cluster = dir_cs[0]
+                # Recurse
+                sub_entries, _ = assign_and_write(children, dir_cluster, False)
+                # Prepend . and ..
+                dot = bytearray(32)
+                dot[0:11] = b".          "; dot[11] = 0x10
+                dot[26:28] = struct.pack("<H", dir_cluster)
+                dotdot = bytearray(32)
+                dotdot[0:11] = b"..         "; dotdot[11] = 0x10
+                dotdot[26:28] = struct.pack("<H", parent_cluster)
+                full_dir_content = bytes(dot) + bytes(dotdot) + sub_entries
+                # Expand to multiple clusters if needed
+                extra = clusters_needed(len(full_dir_content)) - 1
+                if extra > 0:
+                    extra_cs = alloc_clusters(extra)
+                    fat12_set(dir_cs[-1], extra_cs[0])
+                    fat12_set(dir_cs[-1], extra_cs[0])
+                    dir_cs += extra_cs
+                    for i in range(len(dir_cs) - 1):
+                        fat12_set(dir_cs[i], dir_cs[i + 1])
+                    fat12_set(dir_cs[-1], 0xFFF)
+                write_data(dir_cs, full_dir_content)
+                entries_bytes += _make_subdir_entry(orig_name, dir_cluster)
+
+        return bytes(entries_bytes), parent_cluster
+
+    root_entries_bytes, _ = assign_and_write(tree, 0, True)
+
+    # Write root directory
+    root_off = (1 + NUM_FATS * FAT_SECS) * SECTOR
+    if len(root_entries_bytes) > ROOT_ENTRIES * 32:
+        raise RuntimeError("Root directory full — increase ROOT_ENTRIES")
+    image[root_off : root_off + len(root_entries_bytes)] = root_entries_bytes
+
+    # Write FAT copies
+    for i in range(NUM_FATS):
+        off = (1 + i * FAT_SECS) * SECTOR
+        image[off : off + FAT_SECS * SECTOR] = fat
+
+    # BPB
+    bs = bytearray(SECTOR)
+    bs[0:3]   = b"\xeb\x3c\x90"
+    bs[3:11]  = b"MSWIN4.1"
+    struct.pack_into("<H", bs, 11, SECTOR)
+    bs[13]    = CLUSTER_SECS
+    struct.pack_into("<H", bs, 14, 1)
+    bs[16]    = NUM_FATS
+    struct.pack_into("<H", bs, 17, ROOT_ENTRIES)
+    struct.pack_into("<H", bs, 19, TOTAL_SECS if TOTAL_SECS <= 0xFFFF else 0)
+    struct.pack_into("<I", bs, 32, TOTAL_SECS if TOTAL_SECS > 0xFFFF else 0)
+    bs[21]    = 0xF8
+    struct.pack_into("<H", bs, 22, FAT_SECS)
+    struct.pack_into("<H", bs, 24, 63)
+    struct.pack_into("<H", bs, 26, 255)
+    bs[36]    = 0x00
+    bs[38]    = 0x29
+    struct.pack_into("<I", bs, 39, 0x12345678)
+    bs[43:54] = b"WINBOOT    "
+    bs[54:62] = b"FAT12   "
+    bs[510]   = 0x55
+    bs[511]   = 0xAA
+    image[:SECTOR] = bs
+
+    return bytes(image)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def generate_autounattend_xml(
     username: str = "vmuser",
     password: str = "vmuser123",
     enable_ssh: bool = True,
     skip_tpm: bool = True,
-) -> ET.Element:
-    """
-    Generate an autounattend.xml answer file for Windows 11 unattended install.
-    
-    This file will be attached as a virtual floppy drive during installation.
-    Windows Setup reads this and performs all steps without user interaction.
-    """
-    root = ET.Element("unattend", xmlns="urn:schemas-microsoft-com:unattend")
-    
-    settings = ET.SubElement(root, "settings", Pass="specialize")
-    settings.append(_windows_settings())
-    
-    settings_install = ET.SubElement(root, "settings", Pass="windowsPE")
-    settings_install.append(_windows_pe_settings(skip_tpm=skip_tpm))
-    
-    settings = ET.SubElement(root, "settings", Pass="oobeSystem")
-    settings.append(_oobe_settings())
-    settings.append(_firstlogoncommands(username, password, enable_ssh))
-    
-    return root
+) -> str:
+    """Return autounattend.xml as a string, ready to write to disk."""
+    return _AUTOUNATTEND_TEMPLATE.format(username=username, password=password)
 
 
-def _windows_settings() -> ET.Element:
-    """Specialize pass: product key, computer name, network."""
-    component = ET.Element(
-        "component",
-        Name="Microsoft-Windows-Shell-Setup",
-        processorArchitecture="amd64",
-        publicKeyToken="31bf3856ad364e35",
-        language="neutral",
-        versionScope="nonSxS",
-    )
-    
-    ET.SubElement(component, "ProductKey").text = "VK7JG-NPHTM-C97JM-9MPGT-3V66T"
-    ET.SubElement(component, "ComputerName").text = "MalwareVM"
-    ET.SubElement(component, "RegisteredOwner").text = "Analyst"
-    ET.SubElement(component, "RegisteredOrganization").text = "Security Team"
-    
-    # Network settings
-    network = ET.SubElement(
-        component,
-        "NetworkLocation",
-    )
-    network.text = "Work"
-    
-    # Disable auto domain join
-    domainjoin = ET.SubElement(component, "JoinDomain")
-    domainjoin.text = ""
-    domainjoin = ET.SubElement(component, "DoNotJoinDomain")
-    
-    return component
 
+def create_autounattend_iso(
+    xml_content: str,
+    output_path: Path,
+) -> Path:
+    """Create the autounattend disk image that QEMU exposes as an ATAPI CD-ROM.
 
-def _windows_pe_settings(skip_tpm: bool = True) -> ET.Element:
-    """Windows PE pass: disk partitioning, image selection."""
-    component = ET.Element(
-        "component",
-        Name="Microsoft-Windows-Setup",
-        processorArchitecture="amd64",
-        publicKeyToken="31bf3856ad364e35",
-        language="neutral",
-        versionScope="nonSxS",
-    )
-    
-    # Disk configuration - partition automatically
-    disk_config = ET.SubElement(component, "DiskConfiguration")
-    disk = ET.SubElement(disk_config, "Disk")
-    ET.SubElement(disk, "DiskID").text = "0"
-    ET.SubElement(disk, "WillWipeDisk").text = "true"
-    
-    partitions = ET.SubElement(disk, "CreatePartitions")
-    
-    # EFI partition (100MB)
-    efi = ET.SubElement(partitions, "CreatePartition")
-    ET.SubElement(efi, "Type").text = "EFI"
-    ET.SubElement(efi, "Size").text = "100"
-    
-    # MSR partition (16MB)
-    msr = ET.SubElement(partitions, "CreatePartition")
-    ET.SubElement(msr, "Order").text = "2"
-    ET.SubElement(msr, "Type").text = "MSR"
-    ET.SubElement(msr, "Size").text = "16"
-    
-    # Primary (Windows) partition
-    primary = ET.SubElement(partitions, "CreatePartition")
-    ET.SubElement(primary, "Order").text = "3"
-    ET.SubElement(primary, "Type").text = "Primary"
-    ET.SubElement(primary, "Extend").text = "true"
-    
-    # Format partitions
-    formats = ET.SubElement(disk, "ModifyPartitions")
-    
-    # EFI format
-    efi_fmt = ET.SubElement(formats, "ModifyPartition")
-    ET.SubElement(efi_fmt, "Order").text = "1"
-    ET.SubElement(efi_fmt, "PartitionID").text = "1"
-    ET.SubElement(efi_fmt, "Format").text = "FAT32"
-    ET.SubElement(efi_fmt, "Label").text = "SYSTEM"
-    ET.SubElement(efi_fmt, "Active").text = "true"
-    
-    # MSR (no format needed)
-    msr_fmt = ET.SubElement(formats, "ModifyPartition")
-    ET.SubElement(msr_fmt, "Order").text = "2"
-    ET.SubElement(msr_fmt, "PartitionID").text = "2"
-    
-    # Windows (C:) format
-    win_fmt = ET.SubElement(formats, "ModifyPartition")
-    ET.SubElement(win_fmt, "Order").text = "3"
-    ET.SubElement(win_fmt, "PartitionID").text = "3"
-    ET.SubElement(win_fmt, "Format").text = "NTFS"
-    ET.SubElement(win_fmt, "Label").text = "Windows"
-    ET.SubElement(win_fmt, "Letter").text = "C"
-    
-    # Image install
-    image_install = ET.SubElement(component, "ImageInstall")
-    OS_image = ET.SubElement(image_install, "OSImage")
-    install_to = ET.SubElement(OS_image, "InstallTo")
-    ET.SubElement(install_to, "DiskID").text = "0"
-    ET.SubElement(install_to, "PartitionID").text = "3"
-    
-    # Which Windows edition to install
-    install_image = ET.SubElement(OS_image, "InstallFrom")
-    keys = ET.SubElement(install_image, "Keys")
-    ET.SubElement(keys, "Key").text = "4"
-    ET.SubElement(keys, "Value").text = "Windows 11 Pro"
-    
-    # Enable TPM/network checks bypass in PE (if needed)
-    if skip_tpm:
-        # These are handled via registry in FirstLogonCommands, not PE pass
-        pass
-    
-    return component
+    The disk is a raw FAT12 image containing only AUTOUNATTEND.XML and
+    startup.nsh.  BOOTX64.EFI/BCD are intentionally NOT embedded.
 
+    Boot flow:
+      OVMF BDS → Boot0001 (Windows ISO/Sata(0x1)) times out scanning ISO9660
+               → Boot0003 (our FAT disk/Sata(0x3)) "Not Found" — no BOOTX64.EFI
+               → EFI Shell finds startup.nsh on our FAT disk and runs it
+               → startup.nsh executes FS1:\\EFI\\BOOT\\BOOTX64.EFI
+                  (the Windows ISO's El Torito EFI FAT partition = VenMedia)
+               → WBM is loaded with the VenMedia partition as its device handle
+               → WBM finds BCD on the same VenMedia partition and boots Windows PE
 
-def _oobe_settings() -> ET.Element:
-    """OOBE pass: finalize user settings."""
-    component = ET.Element(
-        "component",
-        Name="Microsoft-Windows-Shell-Setup",
-        processorArchitecture="amd64",
-        publicKeyToken="31bf3856ad364e35",
-        language="neutral",
-        versionScope="nonSxS",
-    )
-    
-    # OOBE settings
-    OOBE = ET.SubElement(component, "OOBE")
-    ET.SubElement(OOBE, "HideEULAPage").text = "true"
-    ET.SubElement(OOBE, "HideLocalAccountScreen").text = "true"
-    ET.SubElement(OOBE, "HideOnlineAccountScreens").text = "true"
-    ET.SubElement(OOBE, "HideWirelessSetupInOOBE").text = "true"
-    ET.SubElement(OOBE, "NetworkLocation").text = "Work"
-    ET.SubElement(OOBE, "ProtectYourPC").text = "1"
-    
-    # User accounts
-    users = ET.SubElement(component, "UserAccounts")
-    local_accounts = ET.SubElement(users, "LocalAccounts")
-    local_account = ET.SubElement(local_accounts, "LocalAccount")
-    ET.SubElement(local_account, "Name").text = "vmuser"
-    ET.SubElement(local_account, "DisplayName").text = "VM User"
-    ET.SubElement(local_account, "Group").text = "Administrators"
-    
-    password_elem = ET.SubElement(local_account, "Password")
-    password_val = ET.SubElement(password_elem, "Value")
-    password_val.text = "vmuser123"
-    ET.SubElement(password_elem, "PlainText").text = "true"
-    
-    # Auto logon
-    auto_logon = ET.SubElement(component, "AutoLogon")
-    ET.SubElement(auto_logon, "Enabled").text = "true"
-    ET.SubElement(auto_logon, "Username").text = "vmuser"
-    auto_pass = ET.SubElement(auto_logon, "Password")
-    ET.SubElement(auto_pass, "Value").text = "vmuser123"
-    ET.SubElement(auto_pass, "PlainText").text = "true"
-    ET.SubElement(auto_logon, "LogonCount").text = "1"
-    
-    NTAuth = ET.SubElement(auto_logon, "Domain").text = ""
-    
-    return component
-
-
-def _firstlogoncommands(username: str, password: str, enable_ssh: bool = True) -> ET.Element:
-    """FirstLogonCommands: scripts that run after first logon."""
-    component = ET.Element(
-        "component",
-        Name="Microsoft-Windows-Shell-Setup",
-        processorArchitecture="amd64",
-        publicKeyToken="31bf3856ad364e35",
-        language="neutral",
-        versionScope="nonSxS",
-    )
-    
-    flc = ET.SubElement(component, "FirstLogonCommands")
-    
-    # Step 1: Enable local admin password expiry to never expire
-    cmd1 = ET.SubElement(flc, "SynchronousCommand")
-    ET.SubElement(cmd1, "Order").text = "1"
-    ET.SubElement(cmd1, "Description").text = "Disable password expiry"
-    ET.SubElement(cmd1, "CommandLine").text = 'cmd.exe /c "net accounts /maxpwage:unlimited"'
-    ET.SubElement(cmd1, "RequiresUserInput").text = "false"
-    
-    if enable_ssh:
-        # Step 2: Install and enable OpenSSH Server
-        cmd2 = ET.SubElement(flc, "SynchronousCommand")
-        ET.SubElement(cmd2, "Order").text = "2"
-        ET.SubElement(cmd2, "Description").text = "Install OpenSSH Server"
-        ET.SubElement(cmd2, "CommandLine").text = (
-            'powershell.exe -Command '
-            '"Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 '
-            '| Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0; '
-            'Set-Service -Name sshd -StartupType Automatic; '
-            'Start-Service sshd"'
-        )
-        ET.SubElement(cmd2, "RequiresUserInput").text = "false"
-        
-        # Step 3: Configure Firewall for SSH
-        cmd3 = ET.SubElement(flc, "SynchronousCommand")
-        ET.SubElement(cmd3, "Order").text = "3"
-        ET.SubElement(cmd3, "Description").text = "Configure Firewall for SSH"
-        ET.SubElement(cmd3, "CommandLine").text = (
-            'powershell.exe -Command '
-            '"New-NetFirewallRule -Name sshd -DisplayName \'OpenSSH Server (sshd)\' '
-            '-Enabled True -Action Allow -Protocol TCP -LocalPort 22"'
-        )
-        ET.SubElement(cmd3, "RequiresUserInput").text = "false"
-    
-    return component
-
-
-def create_autounattend_iso(xml_root: ET.Element, output_path: Path) -> Path:
-    """
-    Write autounattend.xml to a temp file, then package into a virtual floppy ISO.
-    Windows Setup looks for AUTOUNATTEND.XML on a floppy or CD.
+    Embedding BOOTX64.EFI on our raw FAT disk causes WBM to load with
+    Sata(0x3) as its device.  WBM only searches for BCD on GPT EFI System
+    Partitions; a raw FAT12 disk has no GPT/ESP marker, so BCD is never
+    found (STATUS_NO_SUCH_FILE 0xc000000f).  Running WBM from the VenMedia
+    partition avoids this because that partition IS recognised as an ESP.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        xml_path = tmpdir / "AUTOUNATTEND.XML"
-        
-        # Write XML
-        tree = ET.ElementTree(xml_root)
-        ET.indent(tree, space="  ")
-        tree.write(str(xml_path), encoding="utf-8", xml_declaration=True)
-        
-        # Create ISO with genisoimage
-        result = subprocess.run(
-            [
-                "genisoimage", "-volid", "AUTOUNATTEND", "-joliet", "-rock",
-                "-o", str(output_path), str(tmpdir)
-            ],
-            capture_output=True, timeout=30,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"genisoimage failed for autounattend: {result.stderr.decode().strip()}"
-            )
-    
-    logger.info(f"Autounattend ISO created: {output_path}")
+    files: dict = {
+        "AUTOUNATTEND.XML": xml_content.encode("utf-8"),
+        "startup.nsh":      _STARTUP_NSH.encode("utf-8"),
+    }
+    image_bytes = _build_fat12_image(files, size_mb=4)
+    output_path.write_bytes(image_bytes)
+    logger.info(
+        "Autounattend FAT12 disk created: %s (%d KiB, startup.nsh + AUTOUNATTEND.XML)",
+        output_path, len(image_bytes) // 1024,
+    )
     return output_path
 
 
-# Convenience function for direct use
-def generate_and_create_iso(username="vmuser", password="vmuser123", enable_ssh=True) -> tuple[ET.Element, Path]:
-    """Generate XML and create ISO in one call."""
-    xml_root = generate_autounattend_xml(username, password, enable_ssh)
-    iso_path = Path("/tmp") / f"autounattend-{hash(str(xml_root)) % 10000}.iso"
-    iso_path = create_autounattend_iso(xml_root, iso_path)
-    return xml_root, iso_path
-
-
 # ---------------------------------------------------------------------------
-# Wrapper classes for class-based usage patterns
+# Wrapper class for class-based usage patterns
 # ---------------------------------------------------------------------------
 
 class WindowsProvisioner:
-    """Class-based wrapper around Windows autounattend provisioning functions."""
-
     def __init__(self, username="vmuser", password="vmuser123", enable_ssh=True, skip_tpm=True):
         self.username = username
         self.password = password
@@ -306,10 +538,7 @@ class WindowsProvisioner:
         self.skip_tpm = skip_tpm
 
     def create_unattended_iso(self, target_dir: str) -> str:
-        """Create an autounattend ISO in the given directory."""
-        xml_root = generate_autounattend_xml(
-            self.username, self.password, self.enable_ssh, self.skip_tpm
-        )
+        xml = generate_autounattend_xml(self.username, self.password, self.enable_ssh, self.skip_tpm)
         output_path = Path(target_dir) / "autounattend.iso"
-        create_autounattend_iso(xml_root, output_path)
+        create_autounattend_iso(xml, output_path)
         return str(output_path)

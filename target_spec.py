@@ -117,6 +117,18 @@ class TargetEnvironmentSpec(BaseModel):
         description="Freeform behavioural description of malware (e.g. 'info stealer', 'ransomware', 'spyware'). The LLM reads this and decides payload format, runtime actions, and DB queries.",
     )
 
+    # -- detailed behavior spec ----------------------------------------------
+    behavior_spec: Optional[str] = Field(
+        default=None,
+        description=(
+            "Precise behavioral requirements passed verbatim to the LLM. "
+            "Use this to specify exact runtime behavior beyond malware_type — "
+            "e.g. 'keylogger that sends all keystrokes to 10.0.0.5:9001 over AES-256 "
+            "encrypted TCP, persists via HKCU\\\\Run, kills defender.exe on startup'. "
+            "The LLM treats this as a binding spec and adjusts every generated function accordingly."
+        ),
+    )
+
     # -- extra metadata ------------------------------------------------------
     notes: Optional[str] = None
 

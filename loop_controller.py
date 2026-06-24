@@ -26,6 +26,7 @@ class FailureMode(Enum):
     SANDBOX_DETECTED = "sandbox_detected"           # VM is running in a sandbox
     CONTEXT_STUCK = "context_stuck"                 # Same context hash across iterations
     LLM_GENERATION_EMPTY = "llm_empty"              # LLM returned empty/nothing useful
+    FUNCTIONAL_FAILURE = "functional_failure"       # Ran and evaded AV but did nothing useful
     UNKNOWN = "unknown"
 
 
@@ -76,6 +77,7 @@ class LoopController:
         verify_fn: Callable[[str], Awaitable],   # verifies source code, returns result dict
         target_spec,                             # TargetEnvironmentSpec
         initial_source: Optional[str] = None,
+        reset_fn: Optional[Callable[[], Awaitable]] = None,  # called before each iteration after the first
     ):
         """Run the full verification loop.
 
@@ -101,6 +103,16 @@ class LoopController:
 
         for iteration in range(1, self.max_iterations + 1):
             iter_start = time.time()
+
+            # Reset VM to clean snapshot before each iteration after the first
+            if iteration > 1 and reset_fn is not None:
+                try:
+                    if self._debug and self._debug.enabled:
+                        self._debug.step(f"iter_{iteration}_reset", "Restoring VM to clean snapshot...")
+                    await reset_fn()
+                    logger.info("VM reset to clean state for iteration %d", iteration)
+                except Exception as e:
+                    logger.warning("VM reset failed at iteration %d (continuing on dirty state): %s", iteration, e)
 
             if self._debug and self._debug.enabled:
                 self._debug.step(f"iter_{iteration}", f"Running verification #{iteration}/{self.max_iterations}...")
@@ -150,14 +162,21 @@ class LoopController:
             history.append(record)
 
             # -- Check stopping conditions -----------------------------------
-            if record.detection_score == "none":
+            # True success: detection_score is "none" AND no compile/exec failure
+            # (compile failure also leaves detection_score="none" since no binary ran)
+            _truly_undetected = (
+                record.detection_score == "none"
+                and record.failure_mode is None
+            )
+            if _truly_undetected:
                 logger.info("Iteration %d: UNDETECTED! Stopping.", iteration)
                 if self._debug and self._debug.enabled:
                     self._debug.ok(f"Iteration {iteration} — undetected (SUCCESS)")
                     self._debug.step("stop", f"Stopping loop at iteration {iteration}")
                 break  # success — no need for more iterations
 
-            if self._is_stuck(consecutive_same_hash, prev_context_hash, record.context_hash):
+            # -- Update stuck-detection counter (single location) ------------
+            if record.context_hash and prev_context_hash and record.context_hash == prev_context_hash:
                 consecutive_same_hash += 1
                 if self._debug and self._debug.enabled:
                     self._debug.step("stuck_check", f"Context hash unchanged (count={consecutive_same_hash})")
@@ -165,11 +184,18 @@ class LoopController:
                     logger.warning(
                         "Stuck at iteration %d (same context hash %d times). "
                         "Forcing new variant with different seed.",
-                        iteration, consecutive_same_hash
+                        iteration, consecutive_same_hash,
                     )
+            else:
+                consecutive_same_hash = 0
+            prev_context_hash = record.context_hash
+
+            # -- Skip generation on last iteration — it would never be used --
+            if iteration >= self.max_iterations:
+                break
 
             # -- Backoff before next generation ------------------------------
-            if iteration < self.max_iterations and not result.get("is_undetected"):
+            if not result.get("is_undetected"):
                 backoff = min(
                     self.backoff_base * (2 ** (iteration - 1)),
                     self.backoff_max,
@@ -183,14 +209,8 @@ class LoopController:
             # -- Generate next variant ---------------------------------------
             source_code = await generate_fn(target_spec, variant_seed=f"iter_{iteration}")
 
-            # Update context hash tracking
-            if record.context_hash == prev_context_hash:
-                consecutive_same_hash += 1
-            else:
-                consecutive_same_hash = 0
-            prev_context_hash = record.context_hash
-
-        success = any(r.detection_score == "none" for r in history)
+        # success = undetected AND no compile/exec failure (failure_mode is None means clean)
+        success = any(r.detection_score == "none" and r.failure_mode is None for r in history)
 
         if self._debug and self._debug.enabled:
             self._debug.ok(f"Loop complete — {len(history)} iterations, success={success}")
@@ -220,12 +240,17 @@ class LoopController:
         score = result.get("detection_score", "")
         alerts = result.get("alerts_count", 0)
 
-        if score == "none" and alerts == 0:
-            return None  # success, no failure
         if score in ("high",):
             return FailureMode.DETECTED
         if alerts > 3:
             return FailureMode.DETECTED
+
+        # Functional failure: ran and evaded AV but produced no observable effect
+        if result.get("functional_failed"):
+            return FailureMode.FUNCTIONAL_FAILURE
+
+        if score == "none" and alerts == 0:
+            return None  # genuine success
         return FailureMode.UNKNOWN
 
     @staticmethod
@@ -259,7 +284,13 @@ class LoopController:
         ex_score = score_order.get(existing.detection_score, 99)
 
         if cur_score != ex_score:
-            return cur_score < ex_score  # lower detection score is better
+            return cur_score < ex_score
+        # Same detection score: a clean run (no failure_mode) beats a failed one
+        # e.g. iter 4 (undetected, compiled+ran) beats iter 1 (undetected, compilation_failed)
+        cur_clean = current.failure_mode is None
+        ex_clean = existing.failure_mode is None
+        if cur_clean != ex_clean:
+            return cur_clean
         return current.alerts_count < existing.alerts_count
 
 
