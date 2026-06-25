@@ -59,7 +59,13 @@ class MalwarePipeline:
         existing_vm_port: int = 10022,
         existing_vm_user: str = "vmuser",
         existing_vm_pass: str = "vmuser123",
-        run_mode: str = "local-run",  # "local-run" | "cloud-run"
+        run_mode: str = "local-run",    # "local-run" | "cloud-run"
+        cloud_provider: str = "fugu",   # "fugu" | "openrouter"
+        cloud_model: str = "",          # override provider default model
+        llm_url: str = "",              # override local LLM API URL (default: http://localhost:1234)
+        llm_model: str = "",            # override local LLM model name
+        plan_review_cycles: int = 10,   # 0 = loop until approved
+        qemu_process=None,  # QEMUProcess ref for --boot-existing; enables snapshots
     ):
         self._generate = generate
         self._provision_vm = provision_vm
@@ -70,6 +76,13 @@ class MalwarePipeline:
         self._existing_vm_port = existing_vm_port
         self._existing_vm_user = existing_vm_user
         self._existing_vm_pass = existing_vm_pass
+        self._qemu_process = qemu_process
+        self._cloud_provider = cloud_provider
+        self._cloud_model = cloud_model
+        self._llm_url = llm_url
+        self._llm_model = llm_model
+        self._plan_review_cycles = plan_review_cycles
+        self._run_mode = run_mode
 
         if generate and not db_engine:
             logger.info("DB engine auto-initialised for generation stage")
@@ -77,7 +90,13 @@ class MalwarePipeline:
 
         # Stages that are always enabled
         self.engine = (
-            GenerationEngine(db_engine=db_engine, debug=debug, run_mode=run_mode)
+            GenerationEngine(
+                db_engine=db_engine, debug=debug,
+                run_mode=run_mode,
+                cloud_provider=cloud_provider, cloud_model=cloud_model,
+                llm_url=llm_url, llm_model=llm_model,
+                plan_review_cycles=plan_review_cycles,
+            )
             if generate else None
         )
 
@@ -166,15 +185,20 @@ class MalwarePipeline:
         _validation_plan = None
         if self._verify and gen_source and self.engine:
             try:
-                from .verifier import ValidationPlan
-                _validation_plan = await self.engine.generate_validation_plan(target_spec)
+                _validation_plan = await self.engine.generate_validation_plan(
+                    target_spec, source_code=gen_source,
+                )
                 if _validation_plan.checks:
                     logger.info(
                         "Behavioral validation plan ready — %d checks",
                         len(_validation_plan.checks),
                     )
                 else:
-                    logger.info("Behavioral validation plan: no checks generated (skipping functional validation)")
+                    logger.warning(
+                        "BEHAVIORAL VALIDATION UNAVAILABLE — no checks could be generated. "
+                        "Any 'undetected' result will be treated as a functional failure until "
+                        "the malware's effect can be verified."
+                    )
                     _validation_plan = None
             except Exception as e:
                 logger.warning("Validation plan generation failed (%s) — functional validation disabled", e)
@@ -185,7 +209,7 @@ class MalwarePipeline:
         if self._use_existing_vm:
             from .provision_engine import VMInstance
             vm_instance = VMInstance(
-                qemu=None,
+                qemu=self._qemu_process,  # None for --use-existing-vm, QEMUProcess for --boot-existing
                 vm_user=self._existing_vm_user,
                 vm_pass=self._existing_vm_pass,
                 ssh_port=self._existing_vm_port,
@@ -193,7 +217,13 @@ class MalwarePipeline:
             vm_instance.status = "running"
             result.vm_status = "running"
             result.ssh_port = self._existing_vm_port
-            logger.info("Using pre-existing VM at localhost:%d (user=%s)", self._existing_vm_port, self._existing_vm_user)
+            if self._qemu_process:
+                logger.info(
+                    "Using booted VM (disk=%s) at localhost:%d (user=%s)",
+                    self._qemu_process.disk_img, self._existing_vm_port, self._existing_vm_user,
+                )
+            else:
+                logger.info("Using pre-existing VM at localhost:%d (user=%s)", self._existing_vm_port, self._existing_vm_user)
 
         if not self._use_existing_vm and self._provision_vm and vm_config is None:
             # Auto-build a VMProvisionConfig from the parsed target spec so the
@@ -263,12 +293,67 @@ class MalwarePipeline:
 
         # Shared state: passes failure analysis + source + plan from verify → next generate
         _state: dict = {
-            "last_analysis": None,          # FailureAnalysis | None
-            "last_source":   None,          # str | None — source that was verified and failed
-            "last_plan":     _initial_plan, # MalwarePlan | None — seeded from initial generation
-            "fixed_source":  None,          # str | None — directly compiler-fixed source (skip re-gen)
+            "last_analysis":      None,          # FailureAnalysis | None
+            "last_source":        None,          # str | None — source that was verified and failed
+            "last_plan":          _initial_plan, # MalwarePlan | None — seeded from initial generation
+            "fixed_source":       None,          # str | None — directly compiler-fixed source (skip re-gen)
+            "failure_history":    [],            # list[str] — accumulated failure summaries across all iterations
+            "current_permissions": "user",       # privilege level on VM: "user" | "admin" | "system"
         }
-        _error_analyzer = ErrorAnalyzer()
+        _error_analyzer = ErrorAnalyzer(
+            cloud_provider=self._cloud_provider,
+            cloud_model=self._cloud_model,
+            llm_url=self._llm_url,
+            llm_model=self._llm_model,
+            run_mode=self._run_mode,
+        )
+
+        # -- Stage 2b: Pre-loop compile check ------------------------------------
+        # Cross-compile the generated source on the host BEFORE touching the VM.
+        # Compile failures cost milliseconds here; inside the VM loop they cost
+        # a full iteration + backoff each time.
+        if self._verify and gen_source and _error_analyzer.available:
+            import shutil as _shutil
+            _mingw = _shutil.which("x86_64-w64-mingw32-gcc")
+            _is_win_target = (target_spec.os_platform.value == "windows")
+            if _mingw or not _is_win_target:
+                from .verifier import verify_standalone, BehaviourCheck as _BC
+                logger.info("Pre-loop compile check...")
+                _precheck_src = gen_source
+                _pre_ok = False
+                for _attempt in range(3):
+                    _pre = await verify_standalone(_precheck_src, target_spec, output_dir=output)
+                    _pre_ok = _pre.behaviour_checks.get(_BC.COMPILATION_SUCCESS, False)
+                    if _pre_ok:
+                        logger.info("Pre-loop compile check: OK (attempt %d)", _attempt + 1)
+                        break
+                    logger.warning(
+                        "Pre-loop compile check FAILED (attempt %d/3)%s",
+                        _attempt + 1,
+                        f":\n{_pre.compilation_output[:800]}" if _pre.compilation_output else "",
+                    )
+                    if _pre.compilation_output:
+                        _fixed = await _error_analyzer.fix_compile_error(
+                            _precheck_src, _pre.compilation_output
+                        )
+                        if _fixed:
+                            _precheck_src = _fixed
+                            logger.info("Pre-loop fix applied (%d chars) — re-checking", len(_fixed))
+                        else:
+                            logger.warning("Pre-loop fix_compile_error returned nothing — stopping pre-check")
+                            break
+                    else:
+                        break
+                if _pre_ok and _precheck_src is not gen_source:
+                    gen_source = _precheck_src
+                    logger.info("Pre-loop: using compiler-fixed source (%d chars)", len(gen_source))
+                    if output:
+                        (output / "malware_source.c").write_text(gen_source)
+                elif not _pre_ok:
+                    logger.warning(
+                        "Pre-loop: source still does not compile after 3 fix attempts — "
+                        "entering VM loop anyway (compile-fix will retry per iteration)"
+                    )
 
         # Shared generate_fn used by both VM and local loop paths
         async def _generate_fn(spec, variant_seed="default"):
@@ -286,26 +371,39 @@ class MalwarePipeline:
                 _state["last_analysis"] = None
                 _state["last_source"]   = None
 
+                # Archive current analysis into failure history before building context
+                if analysis:
+                    _state["failure_history"].append(
+                        f"[Attempt {len(_state['failure_history']) + 1}] {analysis.patch_instructions or analysis.summary}"
+                    )
+
                 if analysis and last_src and not analysis.full_rewrite_needed and analysis.problem_functions:
                     # Patch mode: only rewrite the functions flagged by failure analysis
                     patched = await self.engine.patch_source(last_src, analysis, spec, plan=last_plan)
                     return patched or gen_source
-                elif analysis:
-                    # Full rewrite informed by the failure analysis
+                elif _state["failure_history"]:
+                    # Full rewrite with accumulated failure context across all prior iterations
+                    history = _state["failure_history"]
+                    logger.info("Rewrite: injecting %d accumulated failure(s) as context", len(history))
+                    accumulated = "\n\n".join(history)
                     vresult = await self.engine.generate_variant(
                         spec, variant_seed=variant_seed,
-                        error_context=analysis.patch_instructions or analysis.summary,
+                        error_context=accumulated,
+                        current_permissions=_state["current_permissions"],
                     )
                     _state["last_plan"] = vresult.plan
                     return vresult.source_code or gen_source
                 else:
-                    vresult = await self.engine.generate_variant(spec, variant_seed=variant_seed)
+                    vresult = await self.engine.generate_variant(
+                        spec, variant_seed=variant_seed,
+                        current_permissions=_state["current_permissions"],
+                    )
                     _state["last_plan"] = vresult.plan
                     return vresult.source_code or gen_source
             return ""
 
         if self._verify and gen_source and vm_instance is not None:
-            verifier = Verifier(vm_instance=vm_instance, debug=self._debug)
+            verifier = Verifier(vm_instance=vm_instance, debug=self._debug, output_dir=output)
             if self._debug and self._debug.enabled:
                 self._debug.phase("VERIFY+LOOP")
                 self._debug.step("verifier_init", "Verifier created (VM=running)")
@@ -316,6 +414,7 @@ class MalwarePipeline:
                         source_code=src_code,
                         target_spec=target_spec,
                         timeout=60,
+                        validation_plan=_validation_plan,
                     )
                     _compile_ok = vresult.behaviour_checks.get(BehaviourCheck.COMPILATION_SUCCESS, True)
                     _exec_ok = vresult.execution_exit_code == 0
@@ -330,29 +429,52 @@ class MalwarePipeline:
                     }
 
                     # -- Behavioral validation (only when undetected and ran clean) --
-                    _func_validation_output = ""
-                    if (
-                        vresult.is_undetected
-                        and _compile_ok
-                        and _exec_ok
-                        and _validation_plan is not None
-                    ):
-                        try:
-                            _func_passed = await verifier.run_validation_checks(_validation_plan)
-                            result_dict["functional_failed"] = not _func_passed
-                            vresult.functional_validation_passed = _func_passed
-                            if not _func_passed:
-                                logger.warning(
-                                    "Behavioral validation FAILED — malware ran but produced no observable effect"
-                                )
-                                if self._debug and self._debug.enabled:
-                                    self._debug.fail("Behavioral validation: FAIL (malware did nothing)")
-                            else:
-                                logger.info("Behavioral validation: PASS")
-                                if self._debug and self._debug.enabled:
-                                    self._debug.ok("Behavioral validation: PASS")
-                        except Exception as fve:
-                            logger.warning("Behavioral validation error: %s", fve)
+                    if vresult.is_undetected and _compile_ok and _exec_ok:
+                        if _validation_plan is not None:
+                            try:
+                                _func_passed = await verifier.run_validation_checks(_validation_plan)
+                                result_dict["functional_failed"] = not _func_passed
+                                vresult.functional_validation_passed = _func_passed
+                                if not _func_passed:
+                                    logger.warning(
+                                        "Behavioral validation FAILED — malware ran but produced no observable effect"
+                                    )
+                                    if self._debug and self._debug.enabled:
+                                        self._debug.fail("Behavioral validation: FAIL (malware did nothing)")
+                                else:
+                                    logger.info("Behavioral validation: PASS")
+                                    if self._debug and self._debug.enabled:
+                                        self._debug.ok("Behavioral validation: PASS")
+                                    # Detect privilege level after successful execution
+                                    try:
+                                        _priv_out = await vm_instance.execute_command(
+                                            r'net session >NUL 2>&1 && echo ADMIN || echo USER', timeout=10
+                                        )
+                                        if "ADMIN" in _priv_out.upper():
+                                            _state["current_permissions"] = "admin"
+                                            logger.info("Privilege check: ADMIN (elevated)")
+                                        elif "SYSTEM" in (await vm_instance.execute_command(
+                                            r'whoami 2>&1', timeout=5
+                                        )).upper():
+                                            _state["current_permissions"] = "system"
+                                            logger.info("Privilege check: SYSTEM")
+                                        else:
+                                            _state["current_permissions"] = "user"
+                                            logger.info("Privilege check: user (standard)")
+                                    except Exception:
+                                        pass
+                            except Exception as fve:
+                                logger.warning("Behavioral validation error: %s", fve)
+                        else:
+                            # No validation plan means we cannot confirm the malware did anything.
+                            # Treat as functional failure — "undetected" alone is not success.
+                            result_dict["functional_failed"] = True
+                            logger.warning(
+                                "Behavioral validation SKIPPED (no plan) — marking as functional failure. "
+                                "Malware must demonstrably perform its intended function to count as success."
+                            )
+                            if self._debug and self._debug.enabled:
+                                self._debug.fail("Behavioral validation: SKIPPED — no plan, counting as failure")
 
                     _is_failure = (
                         result_dict["compilation_failed"]
@@ -509,7 +631,7 @@ class MalwarePipeline:
                             "is_undetected": compile_ok,
                         }
                     vresult = await verify_standalone(
-                        src_code, target_spec, compile_cmd=_local_compile_cmd
+                        src_code, target_spec, compile_cmd=_local_compile_cmd, output_dir=output
                     )
                     compile_ok = bool(
                         vresult.behaviour_checks.get(BehaviourCheck.COMPILATION_SUCCESS)
@@ -563,6 +685,19 @@ class MalwarePipeline:
         # -- Stage 4: Write final report -------------------------------------
         if output and result.generation_result:
             (output / "pipeline_report.txt").write_text(self._build_report(result))
+            # On success, write a deploy-and-test script next to the results
+            _loop_ok = result.loop_result and result.loop_result.success
+            if _loop_ok and vm_instance is not None:
+                _qmp_path = str(vm_instance.qemu.qmp_socket) if vm_instance.qemu else ""
+                _deploy_script = self._build_deploy_script(
+                    ssh_port=vm_instance.ssh_port or 10022,
+                    vm_user=vm_instance.vm_user,
+                    vm_pass=vm_instance.vm_pass,
+                    qmp_socket=_qmp_path,
+                    snapshot_tag=_snapshot_tag or "clean_state",
+                )
+                (output / "deploy_and_test.py").write_text(_deploy_script)
+                logger.info("Deploy script written to %s/deploy_and_test.py", output)
             if self._debug and self._debug.enabled:
                 self._debug.ok(f"Report written to {output}/pipeline_report.txt")
 
@@ -576,6 +711,104 @@ class MalwarePipeline:
             self._debug.ok("Pipeline complete")
 
         return result
+
+    @staticmethod
+    def _build_deploy_script(
+        ssh_port: int,
+        vm_user: str,
+        vm_pass: str,
+        qmp_socket: str,
+        snapshot_tag: str,
+    ) -> str:
+        restore_block = ""
+        if qmp_socket:
+            restore_block = f"""
+print("\\nRestoring VM snapshot '{snapshot_tag}'...")
+import socket as _sock, json as _json
+try:
+    s = _sock.socket(_sock.AF_UNIX, _sock.SOCK_STREAM)
+    s.settimeout(5)
+    s.connect({qmp_socket!r})
+    s.recv(4096)
+    s.sendall(b'{{"execute":"qmp_capabilities"}}\\n')
+    s.recv(4096)
+    cmd = _json.dumps({{"execute": "human-monitor-command",
+                        "arguments": {{"command-line": "loadvm {snapshot_tag}"}}}}).encode() + b"\\n"
+    s.sendall(cmd)
+    s.recv(4096)
+    s.close()
+    print("Snapshot restored.")
+except Exception as e:
+    print(f"Could not restore snapshot: {{e}}")
+    print(f"Restore manually: python3 -m malware_gen_framework restore-snapshot --tag {snapshot_tag}")
+"""
+        else:
+            restore_block = """
+print("\\nNo QMP socket available — snapshot restore skipped.")
+print("If the VM is still running, restore manually via the QEMU monitor.")
+"""
+        return f"""\
+#!/usr/bin/env python3
+\"\"\"Deploy-and-test script — generated by malware_gen_framework on success.
+
+Usage:  python3 deploy_and_test.py
+  1. Uploads malware_source.exe to the VM
+  2. Opens an interactive SSH session (type 'exit' to leave)
+  3. Restores the clean VM snapshot automatically on exit
+\"\"\"
+import asyncio, os, subprocess, sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).parent
+EXE        = SCRIPT_DIR / "malware_source.exe"
+SSH_PORT   = {ssh_port}
+VM_USER    = {vm_user!r}
+VM_PASS    = {vm_pass!r}
+REMOTE_EXE = r"C:\\Users\\vmuser\\malware_test.exe"
+
+async def upload():
+    try:
+        import asyncssh
+    except ImportError:
+        print("asyncssh not installed — skipping upload (copy manually or: pip install asyncssh)")
+        return
+    if not EXE.exists():
+        print(f"{{EXE}} not found — did the framework succeed and produce a compiled exe?")
+        return
+    print(f"Uploading {{EXE.name}} → {{REMOTE_EXE}} ...")
+    async with asyncssh.connect("localhost", port=SSH_PORT,
+                                username=VM_USER, password=VM_PASS,
+                                known_hosts=None) as conn:
+        async with conn.start_sftp_client() as sftp:
+            await sftp.put(str(EXE), REMOTE_EXE)
+    print("Upload complete.")
+
+def open_ssh():
+    print(f"\\nOpening SSH to VM (localhost:{{SSH_PORT}}).")
+    print("Type 'exit' when done — snapshot will be restored automatically.\\n")
+    # Try sshpass for password-less interactive login
+    if subprocess.run(["which", "sshpass"], capture_output=True).returncode == 0:
+        subprocess.run([
+            "sshpass", f"-p{{VM_PASS}}",
+            "ssh", "-p", str(SSH_PORT),
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            f"{{VM_USER}}@localhost",
+        ])
+    else:
+        print(f"(sshpass not found — you'll be prompted for password: {{VM_PASS}})")
+        subprocess.run([
+            "ssh", "-p", str(SSH_PORT),
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            f"{{VM_USER}}@localhost",
+        ])
+
+if __name__ == "__main__":
+    asyncio.run(upload())
+    open_ssh()
+{restore_block}
+"""
 
     @staticmethod
     def _trim_stored_vms(base_dir: Path = Path("/tmp/vm_provision"), keep: int = 2) -> None:

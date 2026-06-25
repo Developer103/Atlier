@@ -538,7 +538,7 @@ class VMInstance:
             username=self.vm_user, password=self.vm_pass,
             known_hosts=None,
         ) as conn:
-            result = await conn.run(command, check=True, timeout=timeout)
+            result = await conn.run(command, check=False, timeout=timeout)
         return (result.stdout or "") + (result.stderr or "")
 
     async def upload_file(self, local_path: str, remote_path: str) -> None:

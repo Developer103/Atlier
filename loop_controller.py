@@ -240,7 +240,7 @@ class LoopController:
         score = result.get("detection_score", "")
         alerts = result.get("alerts_count", 0)
 
-        if score in ("high",):
+        if score in ("high", "medium"):
             return FailureMode.DETECTED
         if alerts > 3:
             return FailureMode.DETECTED
@@ -317,10 +317,16 @@ class LoopResult:
 
         lines.append("\nIteration details:")
         for r in self.iterations:
-            status = "✓ UNDETECTED" if r.detection_score == "none" else \
-                     f"detected({r.detection_score})" if r.alerts_count >= 0 else "?"
-            fail_note = f" [{r.failure_mode.value}]" if r.failure_mode else ""
-            lines.append(f"  Iter {r.iteration}: {status}{fail_note}")
+            if r.failure_mode is None and r.detection_score == "none":
+                status = "✓ UNDETECTED"
+            elif r.failure_mode is not None:
+                status = f"✗ {r.failure_mode.value.upper()}"
+            elif r.detection_score != "none":
+                alert_note = f", {r.alerts_count} alerts" if r.alerts_count > 0 else ""
+                status = f"✗ DETECTED ({r.detection_score}{alert_note})"
+            else:
+                status = "?"
+            lines.append(f"  Iter {r.iteration}: {status}")
 
         return "\n".join(lines)
 

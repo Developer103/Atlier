@@ -3,7 +3,11 @@
 Automated pipeline that queries threat-intelligence databases, plans and generates
 Windows/Linux malware source code via a local LLM (LM Studio / llama.cpp), cross-compiles
 it, deploys it into a QEMU/KVM VM, checks EDR detection, and iterates until the binary is
-undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assisting failure analysis.
+undetected and behaviorally confirmed.
+
+Two execution modes: **local-run** (everything stays local) and **cloud-run** (per-function
+chunk generation offloaded to a cloud LLM — Fugu/Sakana AI or OpenRouter — while all
+orchestration remains local).
 
 ---
 
@@ -169,13 +173,17 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
          │
          ├─ compilation_failed?
          │       │
-         │    YES ──► fix_compile_error(src, compiler_error)  [Fugu→local]
+         │    YES ──► fix_compile_error(src, compiler_error)
+         │              local-run:  local LLM only
+         │              cloud-run:  cloud LLM first → local fallback
          │              → _state["fixed_source"]  (returned directly, no re-gen)
          │              if fix fails → analyze_failure(mode=compilation_failed)
          │
          ├─ execution_crashed / detected?
          │       │
-         │      ──► analyze_failure(mode, detection_score)  [Fugu→local]
+         │      ──► analyze_failure(mode, detection_score)
+         │              local-run:  local LLM only
+         │              cloud-run:  cloud LLM first → local fallback
          │              → FailureAnalysis { summary, problem_functions[], patch_instructions }
          │              → full_rewrite_needed?
          │                 YES → generate_variant(error_context)
@@ -188,11 +196,6 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
                        NO observable effect. Expected: <behavior_spec>.
                        Rewrite so the malware actually performs its function."
                     → generate_variant(error_context)
-
-  LLM routing for fix_compile_error and analyze_failure:
-    1st try → Fugu (cloud, api.sakana.ai, model: "fugu")
-    fallback → local LLM (LM Studio, localhost:1234)
-    both fail → None → loop continues with variant generation
 ```
 
 ---
@@ -200,36 +203,78 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
 ## LLM Routing
 
 ```
-  ┌───────────────────────────────────────────────────────┐
-  │                    LLM CLIENTS                        │
-  │                                                       │
-  │  SubprocessLLMClient          CloudLLMClient          │
-  │  ├─ LM Studio HTTP API        ├─ Sakana AI / Fugu     │
-  │  │   localhost:1234            │   api.sakana.ai/v1    │
-  │  │   /v1/chat/completions      │   model: "fugu"       │
-  │  ├─ model: qwen3.6-35b        ├─ env: FUGU_API_KEY    │
-  │  │   (uncensored variant)     └─ env: FUGU_API_URL    │
-  │  ├─ assistant prefill for                             │
-  │  │   structured output calls                          │
-  │  │   e.g. prefix="LANGUAGE: c\n" for planning        │
-  │  └─ reasoning_content fallback                        │
-  │      (strips <think>…</think>, extracts after tag)    │
-  │                                                       │
-  │  WHAT USES WHICH LLM:                                 │
-  │                                                       │
-  │  Planning (retry+review loop) ──────► SubprocessLLM  │
-  │  Plan structure review ─────────────► SubprocessLLM  │
-  │  Chunk generation ──────────────────► SubprocessLLM  │
-  │  Monolithic generation ─────────────► SubprocessLLM  │
-  │  generate_variant() ────────────────► SubprocessLLM  │
-  │  Behavioral validation plan gen ────► SubprocessLLM  │
-  │    (ALL code generation = ALWAYS local)               │
-  │                                                       │
-  │  fix_compile_error() ──────────────► CloudLLMClient  │
-  │                         fallback ──► SubprocessLLM   │
-  │  analyze_failure() ────────────────► CloudLLMClient  │
-  │                         fallback ──► SubprocessLLM   │
-  └───────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────────────┐
+  │                       LLM CLIENTS                           │
+  │                                                             │
+  │  SubprocessLLMClient           CloudLLMClient               │
+  │  ├─ LM Studio HTTP API         ├─ OpenAI-compatible API     │
+  │  │   default: localhost:1234   │                            │
+  │  │   override: --llm-url       │  Fugu (Sakana AI)          │
+  │  │   /v1/chat/completions      │    api.sakana.ai/v1        │
+  │  ├─ model name                 │    model: "fugu"           │
+  │  │   default: qwen3-35b        │    env: FUGU_API_KEY       │
+  │  │   override: --llm-model     │    env: FUGU_MODEL         │
+  │  │   (LM Studio loads it if    │                            │
+  │  │    not already loaded)      │  OpenRouter                │
+  │  ├─ assistant prefill for      │    openrouter.ai/api/v1    │
+  │  │   structured output calls   │    model: deepseek-r1-0528 │
+  │  └─ reasoning_content fallback │    env: OPENROUTER_API_KEY │
+  │      (strips <think>…</think>) │    env: OPENROUTER_MODEL   │
+  │                                │                            │
+  │                                │  permanent disable on      │
+  │                                │  HTTP 401/402/403/429      │
+  │                                │  → fallback to local only  │
+  └─────────────────────────────────────────────────────────────┘
+
+  ──── local-run mode (default) ────────────────────────────────
+
+  ALL tasks ──────────────────────────────► SubprocessLLM only
+    Planning, review, chunking, fix, analysis — nothing touches
+    the cloud. Cloud section in the portal is grayed out.
+
+  ──── cloud-run mode (--mode cloud-run) ───────────────────────
+
+  Planning (retry+review loop) ──────────► SubprocessLLM
+  Plan structure review ─────────────────► SubprocessLLM
+  generate_variant() ────────────────────► SubprocessLLM
+  Behavioral validation plan gen ────────► SubprocessLLM
+  Monolithic fallback ───────────────────► SubprocessLLM
+    (orchestration always stays local)
+
+  Chunk code gen (per function) ─────────► CloudLLMClient
+    guardrail refusal → immediate fallback to local
+    cloud disabled (quota/auth) → local for remainder of run
+    retry up to 3× per chunk → then local fallback
+
+  fix_compile_error() ───────────────────► CloudLLMClient
+                             fallback ───► SubprocessLLM
+  analyze_failure() ─────────────────────► CloudLLMClient
+                             fallback ───► SubprocessLLM
+
+  ──── Cloud sanitization (cloud-run only) ─────────────────────
+
+  All text sent to the cloud LLM is filtered by _sanitize_for_cloud():
+  lines containing keywords that trigger guardrails are stripped before
+  the prompt is sent. Signatures and structural info are kept; only
+  descriptive context lines are filtered.
+
+  ──── Remote local LLM via SSH tunnel (--llm-url) ─────────────
+
+  The framework can be pointed at any LM Studio instance, including
+  one on a remote machine accessible via SSH reverse tunnel:
+
+    # On machine Y (same network as Z, has Tailscale):
+    ssh -R 11234:<Z-local-ip>:1234 kei@<X-tailscale-ip> -N
+
+    # Then run on X with:
+    --llm-url http://localhost:11234
+
+  Portal "Local LLM" section provides two preset buttons:
+    X local  → http://localhost:1234   (X's own LM Studio)
+    Z tunnel → http://localhost:11234  (SSH-tunneled Z model)
+  Plus a free-form URL text field and a Model name text field.
+  Leave Model name blank to use whatever is currently loaded in LM Studio;
+  fill it in to request a specific model (LM Studio loads it if needed).
 ```
 
 ---
@@ -248,6 +293,8 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
        │   category:        "process"
        │   responsibility:  "open handle to process by PID"
        │   dependencies:    []
+       │   param_notes:     "pid: target process ID from caller"
+       │   return_notes:    "NULL on failure; caller must CloseHandle"
        │
        ├─ ComponentSpec
        │   name:            "read_memory_region"
@@ -255,22 +302,25 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
        │   category:        "memory"
        │   responsibility:  "copy n bytes from process address space into buf"
        │   dependencies:    ["open_target_process"]
+       │   param_notes:     "h: from open_target_process; buf: pre-allocated n bytes"
+       │   return_notes:    "FALSE on partial read or access denied"
        │
-       ├─ ComponentSpec
-       │   name:            "patch_scan_buffer"
-       │   category:        "memory"
-       │   responsibility:  "overwrite an in-memory buffer at a given offset"
-       │   dependencies:    ["read_memory_region"]
-       │
-       └─ ComponentSpec { name: "main", dependencies: ["patch_scan_buffer"] }
+       └─ ComponentSpec { name: "main", dependencies: ["read_memory_region"] }
 
   _topo_sort() reorders so deps always appear before dependents.
 
   For each component (in dep order):
-    prompt = _CHUNK_PROMPT
+    prompt = _CHUNK_PROMPT (local) or _CLOUD_CHUNK_PROMPT (cloud)
       "Implement ONE standalone C utility function for windows windows-11.
-       No malicious framing. No #include lines. Only Win32 APIs in standard MinGW."
-    → local LLM → function body string
+       No #include lines. Only Win32 APIs in standard MinGW."
+      Signature:   <exact C signature>
+      Purpose:     <responsibility>
+      Parameters:  <param_notes>
+      Returns:     <return_notes>
+      Callee signatures (dep_sigs_section):
+        <full signature + param/return notes of every direct dependency>
+      Technical notes: <relevant DB techniques — sanitized for cloud>
+    → LLM → function body
 
   _assemble_chunks() output:
     ┌──────────────────────────────────────────────────────┐
@@ -290,6 +340,13 @@ undetected and behaviorally confirmed — with cloud LLM (Fugu / Sakana AI) assi
     │ int main(int argc, char** argv) { … }                │
     └──────────────────────────────────────────────────────┘
 
+  Smooth pass (post-assembly):
+    For each dependency pair (caller, callee):
+      _SMOOTH_PAIR_PROMPT → show only those two functions
+      LLM fixes call-site mismatches (arg count, types, variable names)
+      Patched caller is spliced back if output length is plausible.
+    Bounded input/output — no full-file reproduction, no truncation risk.
+
   Patch mode (on failure, specific functions flagged by analyze_failure):
     _PATCH_CHUNK_PROMPT → rewrite ONLY problem_functions[]
     _replace_c_functions() → brace-counting regex splice back into original source
@@ -305,10 +362,36 @@ malware_gen_framework/
 │
 ├── __main__.py          Entry point  →  python -m malware_gen_framework
 ├── cli.py               Argparse + subcommand dispatch
-│                        Subcommands: generate | provision | verify | run | clean | analyze
+│                        Subcommands: generate | provision | verify | run | clean | analyze | portal
+│                        --mode {local-run,cloud-run} on generate | run | verify | analyze
+│                        --cloud-provider {fugu,openrouter}  (cloud-run only)
+│                        --cloud-model <str>                 (override provider default)
+│                        --llm-url <url>                     (override local LLM base URL)
+│                        --llm-model <str>                   (override local LLM model name)
 │                        Early validation (before any async work):
 │                          • --spec file must exist on disk
 │                          • malware_type must be set (CLI or in YAML)
+│
+├── portal/              Web portal (aiohttp, localhost)
+│   ├── app.py           aiohttp server — REST + WebSocket for live log streaming
+│   │                    POST /api/jobs → start job, GET /api/jobs/{id} → status
+│   │                    WS  /ws/{id}  → stream stdout in real-time
+│   │                    WS  /ws/ssh   → SSH PTY proxy (asyncssh, registered before /{id})
+│   │                    GET /api/results/{file} → serve results/ files
+│   │                    Maps llm_url → --llm-url (omitted if default localhost:1234)
+│   │                    Maps llm_model → --llm-model (omitted if empty)
+│   └── static/
+│       └── index.html   Single-page UI — dark terminal theme, live logs, job history
+│                        Mode section: local-run / cloud-run buttons
+│                        Cloud section: provider (fugu/openrouter) + model override
+│                          → grayed out (disabled) when local-run is selected
+│                        Local LLM section: X local / Z tunnel preset buttons
+│                          + editable URL field; Z tunnel = SSH reverse-tunneled
+│                          remote LM Studio on localhost:11234
+│                          + Model name field (blank = use whatever LM Studio has loaded)
+│                        SSH tab: xterm.js terminal, Connect/Disconnect button,
+│                          host/port/user/pass form; proxied via /ws/ssh WebSocket
+│                        Form state persisted per-tab in localStorage (survives refresh)
 │
 ├── pipeline.py          MalwarePipeline — end-to-end orchestrator
 │                        Stage 1:   parse spec → generate source code
@@ -320,11 +403,24 @@ malware_gen_framework/
 │                        _generate_fn: fixed_source → patch_source → generate_variant
 │                        _verify_fn:   compile-fix or analyze_failure on every failure,
 │                                      plus behavioral validation on undetected+ran runs
+│                        Passes run_mode, cloud_provider, cloud_model, llm_url, llm_model
+│                        down to both GenerationEngine and ErrorAnalyzer.
 │
 ├── generation_engine.py GenerationEngine + LLM clients + data models
-│   ├─ SubprocessLLMClient    local LLM (LM Studio HTTP or llama.cpp CLI)
-│   ├─ CloudLLMClient         OpenAI-compatible (Fugu / sakana.ai)
+│   ├─ SubprocessLLMClient    local LLM (LM Studio HTTP)
+│   │                         llm_api_url param: overrides default localhost:1234
+│   │                         llm_model_name param: model sent to LM Studio; if the
+│   │                           model isn't loaded, LM Studio loads it automatically
+│   ├─ CloudLLMClient         OpenAI-compatible cloud LLM
+│   │   for_provider()          factory: reads preset for fugu or openrouter
+│   │   _disabled flag          set permanently on HTTP 401/402/403/429 — all
+│   │                           subsequent calls fall through to local immediately
+│   ├─ _CLOUD_PROVIDER_PRESETS  fugu → api.sakana.ai; openrouter → openrouter.ai
+│   ├─ _sanitize_for_cloud()    strips lines matching guardrail keywords before
+│   │                           sending to cloud (signatures kept; descriptions filtered)
 │   ├─ ComponentSpec          one planned C function
+│   │   name, signature, category, responsibility, dependencies
+│   │   param_notes, return_notes   (new: per-param/return contracts for chunk prompts)
 │   ├─ MalwarePlan            complete function structure from planning phase
 │   ├─ FailureAnalysis        summary, problem_functions[], patch_instructions
 │   ├─ GenerationEngine
@@ -332,19 +428,25 @@ malware_gen_framework/
 │   │     planning retry loop:  max 3 parse-retries per review cycle
 │   │     plan review loop:     max 2 revision cycles (_PLAN_REVIEW_PROMPT)
 │   │                           APPROVED → chunks; REVISION_NEEDED → re-plan
-│   │   generate_validation_plan()  LLM generates 3-5 behavioral checks (_VALIDATION_PLAN_PROMPT)
+│   │   generate_validation_plan()  LLM generates 3-5 behavioral checks
 │   │   generate_variant()      re-generates with modified malware_type seed
-│   │   patch_source()          rewrite only flagged functions (_PATCH_CHUNK_PROMPT)
-│   │   _review_plan()          calls _PLAN_REVIEW_PROMPT, parses APPROVED/REVISION_NEEDED
-│   │   _format_plan_summary()  formats MalwarePlan for the review prompt
-│   │   _generate_chunks()      N focused LLM calls, one per ComponentSpec
+│   │   patch_source()          rewrite only flagged functions
+│   │   _generate_chunks()      one focused LLM call per ComponentSpec
+│   │                           local: _CHUNK_PROMPT with full dep sigs + param/return notes
+│   │                           cloud: _CLOUD_CHUNK_PROMPT (sanitized, count-only dep hint)
 │   │   _assemble_chunks()      combines into complete C source with fwd declarations
+│   │   _smooth_assembled_source()  per-dependency-pair smooth pass (local LLM)
 │   └─ ErrorAnalyzer
-│       fix_compile_error()     cloud→local: returns complete fixed source file
-│       analyze_failure()       cloud→local: returns FailureAnalysis struct
+│       run_mode param:         local-run → self._cloud = None (no cloud calls at all)
+│                               cloud-run → cloud-first, local fallback
+│       llm_model param:        forwarded to SubprocessLLMClient as llm_model_name
+│       fix_compile_error()     targeted function extraction + splice; returns fixed source
+│       analyze_failure()       returns FailureAnalysis struct
 │
 ├── verifier.py          Verifier — compile → deploy → execute → EDR check → behavioral check
-│   ├─ ValidationCheck        description + command + success_pattern (one behavioral check)
+│   ├─ verify_standalone()    host-only MinGW compile check; uses tempfile.mkstemp()
+│   │                         (no fixed /tmp path — safe for concurrent portal jobs)
+│   ├─ ValidationCheck        description + command + success_pattern
 │   ├─ ValidationPlan         list of ValidationChecks + is_windows flag
 │   ├─ BehaviourCheck enum    COMPILATION_SUCCESS | EXECUTION_SUCCESS | LAUNCHES_NETWORK |
 │   │                         CREATES_FILE | MODIFIES_REGISTRY | FUNCTIONAL_GOAL_MET | …
@@ -357,14 +459,14 @@ malware_gen_framework/
 │   ├─ _verify_linux()        SFTP source → compile on VM → run
 │   ├─ _check_edr_alerts()    PowerShell: Get-WinEvent Defender/Operational
 │   ├─ _run_behaviour_checks() netstat ESTABLISHED, file presence
-│   ├─ _check_sandbox()       CPU count + RAM size heuristics
-│   └─ verify_standalone()    host-only compile check (no VM)
+│   └─ _check_sandbox()       CPU count + RAM size heuristics
 │
 ├── loop_controller.py   LoopController — retry loop with exponential backoff
 │                        success = detection_score=="none" AND failure_mode is None
 │                        Failure modes: COMPILATION_FAILED | EXECUTION_CRASHED |
 │                                       DETECTED | SANDBOX_DETECTED | CONTEXT_STUCK |
 │                                       FUNCTIONAL_FAILURE | LLM_GENERATION_EMPTY
+│                        DETECTED threshold: "high" or "medium" score
 │                        FUNCTIONAL_FAILURE: ran + evaded AV but produced no observable effect
 │                        Backoff: 1s → 2s → 4s → … capped at 30s
 │
@@ -406,6 +508,14 @@ malware_gen_framework/
 # Both are validated before anything else runs.
 # ------------------------------------------------------------------
 
+# Launch the web portal (all options + live output in the browser):
+python -m malware_gen_framework portal
+# Open http://127.0.0.1:7070
+# Custom port / bind to all interfaces:
+python -m malware_gen_framework portal --port 8080 --host 0.0.0.0
+
+# ------------------------------------------------------------------
+
 # Generate only — no VM, writes results/malware_source.c
 python -m malware_gen_framework generate \
   --spec target.yaml \
@@ -425,16 +535,6 @@ python -m malware_gen_framework generate \
 python -m malware_gen_framework run \
   --spec target.yaml \
   --malware-type ransomware \
-  --output ./results \
-  --loop --max-iters 5
-
-# Full run with detailed behavior spec:
-python -m malware_gen_framework run \
-  --spec target.yaml \
-  --malware-type ransomware \
-  --behavior "encrypt all .docx .xlsx .pdf files in C:\Users with AES-256, \
-              drop ransom note README.txt in each folder, \
-              delete shadow copies with vssadmin" \
   --output ./results \
   --loop --max-iters 5
 
@@ -458,6 +558,69 @@ python -m malware_gen_framework run \
   --spec target.yaml --malware-type exe \
   --loop --max-iters 5
 
+# ------------------------------------------------------------------
+# Cloud-run mode — chunk generation via cloud LLM
+# ------------------------------------------------------------------
+
+# Fugu (Sakana AI):
+export FUGU_API_KEY=sk-...
+python -m malware_gen_framework generate \
+  --spec target.yaml \
+  --malware-type keylogger \
+  --mode cloud-run
+
+# OpenRouter (any model):
+export OPENROUTER_API_KEY=sk-or-...
+python -m malware_gen_framework run \
+  --spec target.yaml \
+  --malware-type ransomware \
+  --mode cloud-run \
+  --cloud-provider openrouter \
+  --cloud-model deepseek/deepseek-r1-0528 \
+  --loop --max-iters 5
+
+# Override model for Fugu:
+python -m malware_gen_framework generate \
+  --spec target.yaml --malware-type keylogger \
+  --mode cloud-run \
+  --cloud-provider fugu \
+  --cloud-model fugu-coder
+
+# ------------------------------------------------------------------
+# Remote local LLM (SSH reverse tunnel to a stronger machine)
+# ------------------------------------------------------------------
+
+# Step 1 — on machine Y (same LAN as Z, has Tailscale to X):
+ssh -R 11234:<Z-LAN-IP>:1234 kei@<X-tailscale-ip> -N &
+
+# Step 2 — run on X pointing at the tunneled LM Studio:
+python -m malware_gen_framework generate \
+  --spec target.yaml --malware-type keylogger \
+  --llm-url http://localhost:11234
+
+python -m malware_gen_framework run \
+  --spec target.yaml --malware-type ransomware \
+  --llm-url http://localhost:11234 \
+  --loop --max-iters 5
+
+# ------------------------------------------------------------------
+# Override local LLM model name (--llm-model)
+# ------------------------------------------------------------------
+
+# Use a specific model in LM Studio (loaded automatically if not active):
+python -m malware_gen_framework generate \
+  --spec target.yaml --malware-type keylogger \
+  --llm-model qwen3-35b-a3b-uncensored
+
+# Combined with remote endpoint:
+python -m malware_gen_framework run \
+  --spec target.yaml --malware-type ransomware \
+  --llm-url http://localhost:11234 \
+  --llm-model qwen3-35b-a3b-uncensored \
+  --loop --max-iters 5
+
+# ------------------------------------------------------------------
+
 # Provision a fresh VM only (for testing the VM setup in isolation):
 python -m malware_gen_framework provision --os windows-11
 
@@ -476,9 +639,6 @@ python -m malware_gen_framework clean --all
 
 # Kill a running VM:
 kill $(pgrep qemu-system-x86)
-
-# Find the PID if there are multiple QEMU processes:
-ps aux | grep qemu-system-x86
 
 # Reuse without reprovisioning (VM is still running):
 #   --use-existing-vm --vm-port 10022
@@ -571,6 +731,51 @@ malware actually *did something* — not just ran and exited cleanly.
 
 ---
 
+## Web Portal (systemd service)
+
+The portal can be run as a persistent background service:
+
+```ini
+# ~/.config/systemd/user/malware-gen-portal.service
+[Unit]
+Description=Malware Gen Framework Web Portal
+
+[Service]
+WorkingDirectory=/home/kei/llm_vault/malware_gen_framework
+ExecStart=/usr/bin/python3 -m malware_gen_framework portal --host 0.0.0.0 --port 7070
+Restart=on-failure
+Environment=FUGU_API_KEY=sk-...
+Environment=OPENROUTER_API_KEY=sk-or-...
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now malware-gen-portal
+systemctl --user status malware-gen-portal
+```
+
+Access from another machine on Tailscale: `http://<X-tailscale-ip>:7070`
+
+**SSH terminal tab** — connect directly to the running VM from the browser:
+
+1. Switch to the **ssh** tab in the portal sidebar
+2. Fill in Host, Port, Username, Password (defaults match the VM defaults)
+3. Click **Connect** — an xterm.js terminal opens in the main panel
+4. Click **Disconnect** (or close the tab) to end the session
+
+The terminal is proxied via `/ws/ssh` → asyncssh PTY on the backend.
+Terminal resize events are forwarded automatically.
+
+**Form state persistence** — all form fields (mode, endpoint, model name, checkboxes,
+text inputs) are saved to `localStorage` per tab on every Run click and restored on
+page refresh. Each command tab (`run`, `generate`, `verify`, …) remembers its own state
+independently.
+
+---
+
 ## VM Disk Persistence
 
 The Windows 11 VM disk is a COW (copy-on-write) QCOW2 snapshot at
@@ -616,9 +821,11 @@ kill $(pgrep qemu-system-x86)
 | `pydantic` | Spec validation | `pip install pydantic` |
 | `jinja2` | Prompt templates | `pip install jinja2` |
 | `pyyaml` | YAML spec files | `pip install pyyaml` |
-| LM Studio | Local LLM server | `localhost:1234` |
+| `aiohttp` | Web portal server | `pip install aiohttp` |
+| LM Studio | Local LLM server | `localhost:1234` (default) |
 | Qwen3-35B (uncensored) | Code generation model | loaded in LM Studio |
-| Fugu API (optional) | Cloud failure analysis | `export FUGU_API_KEY=…` |
+| Fugu API key | Cloud chunk gen (optional) | `export FUGU_API_KEY=sk-…` |
+| OpenRouter API key | Cloud chunk gen (optional) | `export OPENROUTER_API_KEY=sk-or-…` |
 
 ---
 

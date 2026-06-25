@@ -50,6 +50,7 @@ class ValidationPlan:
     """Set of behavioral validation checks generated before the verification loop."""
     checks: list[ValidationCheck]
     is_windows: bool
+    setup_commands: list[str] = field(default_factory=list)  # run on VM before exe launches
 
 
 @dataclass
@@ -90,9 +91,10 @@ def _is_windows(spec) -> bool:
 class Verifier:
     """Runs generated malware in a provisioned VM and checks for detections."""
 
-    def __init__(self, vm_instance=None, debug=None):
+    def __init__(self, vm_instance=None, debug=None, output_dir: Optional[Path] = None):
         self._vm = vm_instance
         self._debug = debug
+        self._output_dir = output_dir
 
     async def verify(
         self,
@@ -101,6 +103,7 @@ class Verifier:
         compiler_instructions: str = "",
         timeout: int = 120,
         check_sandbox: bool = True,
+        validation_plan: Optional["ValidationPlan"] = None,
     ) -> VerificationResult:
         """Full verification pipeline.
 
@@ -115,7 +118,8 @@ class Verifier:
 
         if win:
             await self._verify_windows(result, source_code, target_spec,
-                                        compiler_instructions, timeout)
+                                        compiler_instructions, timeout,
+                                        validation_plan=validation_plan)
         else:
             await self._verify_linux(result, source_code, target_spec,
                                       compiler_instructions, timeout)
@@ -144,15 +148,20 @@ class Verifier:
 
         return result
 
-    async def run_validation_checks(self, plan: ValidationPlan) -> bool:
+    async def run_validation_checks(self, plan: ValidationPlan, settle_secs: int = 5) -> bool:
         """Run all behavioral validation checks against the live VM.
 
         Returns True if a majority of checks pass (tolerates LLM-generated checks
         that point to the wrong path or slightly wrong pattern).
-        An empty plan (no checks) is considered passing — caller decides whether to generate one.
+        An empty plan returns False — no evidence of function means not a success.
         """
         if not plan.checks:
-            return True
+            logger.warning("run_validation_checks called with empty plan — returning False")
+            return False
+
+        # Brief settle wait so any async file writes / registry ops finish
+        if settle_secs > 0:
+            await asyncio.sleep(settle_secs)
 
         n_pass = 0
         outputs: list[str] = []
@@ -167,7 +176,7 @@ class Verifier:
                 outputs.append(f"[ERROR] {check.description}: {exc}")
                 logger.warning("Validation check '%s' error: %s", check.description, exc)
 
-        threshold = max(1, len(plan.checks) // 2)
+        threshold = (len(plan.checks) + 1) // 2  # strict majority
         overall = n_pass >= threshold
         logger.info(
             "Behavioral validation: %d/%d checks passed (threshold %d) — %s",
@@ -180,7 +189,8 @@ class Verifier:
     # ------------------------------------------------------------------
 
     async def _verify_windows(self, result, source_code, spec,
-                               compiler_instructions, timeout):
+                               compiler_instructions, timeout,
+                               validation_plan=None):
         # Step 1: cross-compile on host
         mingw = shutil.which("x86_64-w64-mingw32-gcc")
         if not mingw:
@@ -212,13 +222,15 @@ class Verifier:
                 f"{_std_libs} 2>&1"
             )
 
+            logger.info("Compile command: %s", compile_cmd)
             proc = await asyncio.create_subprocess_shell(
                 compile_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
             stdout, _ = await proc.communicate()
-            result.compilation_output = stdout.decode("utf-8", errors="replace")
+            compiler_stdout = stdout.decode("utf-8", errors="replace")
+            result.compilation_output = f"$ {compile_cmd}\n{compiler_stdout}"
             result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = (proc.returncode == 0)
 
             if self._debug:
@@ -229,6 +241,12 @@ class Verifier:
                 logger.warning("Compilation failed:\n%s", result.compilation_output)
                 return
 
+            # Persist compiled .exe next to the source for later use
+            if self._output_dir:
+                dest_exe = self._output_dir / "malware_source.exe"
+                shutil.copy2(str(exe), str(dest_exe))
+                logger.info("Compiled .exe saved to %s", dest_exe)
+
             # Step 2: upload .exe to VM
             remote_exe = r"C:\Users\vmuser\malware_test.exe"
             await self._vm.upload_file(str(exe), remote_exe)
@@ -236,8 +254,17 @@ class Verifier:
             if self._debug:
                 self._debug.step("vfy_2_upload", f"Uploaded .exe → {remote_exe}")
 
-        # Step 3: execute on VM (detached, short wait)
-        exec_cmd = f'start /B "" "{remote_exe}" & timeout /t 3 /nobreak >NUL & echo LAUNCHED'
+        # Step 2b: run pre-execution setup commands (create canary files, etc.)
+        if validation_plan and validation_plan.setup_commands:
+            for setup_cmd in validation_plan.setup_commands:
+                try:
+                    await self._vm.execute_command(setup_cmd, timeout=15)
+                    logger.info("Pre-execution setup: %s", setup_cmd[:120])
+                except Exception as exc:
+                    logger.warning("Pre-execution setup command failed (%s): %s", setup_cmd[:80], exc)
+
+        # Step 3: execute on VM — 15s wait gives malware time to do real work
+        exec_cmd = f'start /B "" "{remote_exe}" & timeout /t 15 /nobreak >NUL & echo LAUNCHED'
         try:
             exec_out = await self._vm.execute_command(exec_cmd, timeout=timeout)
             result.execution_output = exec_out
@@ -415,11 +442,13 @@ async def verify_standalone(
     target_spec,
     compile_cmd: Optional[str] = None,
     workdir: str = "/tmp",
+    output_dir: Optional[Path] = None,
 ) -> VerificationResult:
     """Verify compilation on the local host without a VM (smoke-test mode)."""
+    import tempfile as _tempfile
+    import os as _os
+
     result = VerificationResult()
-    src_path = Path(workdir) / "malware_src.c"
-    src_path.write_text(source_code)
 
     win = _is_windows(target_spec)
     if win:
@@ -434,37 +463,59 @@ async def verify_standalone(
         compiler = compile_cmd or "gcc -O2 -Wall"
 
     syntax_only = "-fsyntax-only" in compiler
-    out_flag = "" if syntax_only else f"-o {workdir}/malware_bin"
-    shell_cmd = f"{compiler} {src_path} {out_flag}"
 
+    src_fd, src_name = _tempfile.mkstemp(suffix=".c", dir=workdir)
+    bin_fd, bin_name = (None, None) if syntax_only else _tempfile.mkstemp(dir=workdir)
     try:
-        proc = await asyncio.create_subprocess_shell(
-            shell_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await proc.communicate()
-        result.compilation_output = stdout.decode("utf-8", errors="replace")
+        _os.close(src_fd)
+        Path(src_name).write_text(source_code)
+        if bin_fd is not None:
+            _os.close(bin_fd)
 
-        if proc.returncode == 0:
-            result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = True
-            result.detection_score = DetectionLevel.NONE
-            if not syntax_only and not win:
-                try:
-                    run_proc = await asyncio.create_subprocess_exec(
-                        f"{workdir}/malware_bin",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
+        out_flag = "" if syntax_only else f"-o {bin_name}"
+        shell_cmd = f"{compiler} {src_name} {out_flag}"
+
+        logger.info("Compile command: %s", shell_cmd)
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                shell_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            compiler_stdout = stdout.decode("utf-8", errors="replace")
+            result.compilation_output = f"$ {shell_cmd}\n{compiler_stdout}"
+
+            if proc.returncode == 0:
+                result.behaviour_checks[BehaviourCheck.COMPILATION_SUCCESS] = True
+                result.detection_score = DetectionLevel.NONE
+                if not syntax_only and output_dir and bin_name:
+                    dest_exe = Path(output_dir) / "malware_source.exe"
+                    shutil.copy2(bin_name, str(dest_exe))
+                    logger.info("Compiled .exe saved to %s", dest_exe)
+                if not syntax_only and not win and bin_name:
                     try:
-                        await asyncio.wait_for(run_proc.communicate(), timeout=10)
-                    except asyncio.TimeoutError:
-                        run_proc.kill()
-                        await run_proc.communicate()
-                    result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = True
-                except Exception:
-                    result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = False
-    except FileNotFoundError:
-        result.compilation_output = f"compiler not found: {compiler}"
+                        run_proc = await asyncio.create_subprocess_exec(
+                            bin_name,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
+                        try:
+                            await asyncio.wait_for(run_proc.communicate(), timeout=10)
+                        except asyncio.TimeoutError:
+                            run_proc.kill()
+                            await run_proc.communicate()
+                        result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = True
+                    except Exception:
+                        result.behaviour_checks[BehaviourCheck.EXECUTION_SUCCESS] = False
+        except FileNotFoundError:
+            result.compilation_output = f"compiler not found: {compiler}"
+    finally:
+        for p in (src_name, bin_name):
+            if p:
+                try:
+                    _os.unlink(p)
+                except OSError:
+                    pass
 
     return result

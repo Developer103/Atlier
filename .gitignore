@@ -1,0 +1,24 @@
+# Generated outputs
+results/malware_source.c
+results/malware_source.exe
+results/pipeline_report.txt
+results/deploy_and_test.py
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# VM artifacts
+/tmp/vm_provision/
+*.qcow2
+*.cow.qcow2
+
+# Local env
+.env
+*.env

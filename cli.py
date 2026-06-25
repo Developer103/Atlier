@@ -66,6 +66,11 @@ async def cmd_generate(args) -> int:
     pipeline = MalwarePipeline(
         generate=True, provision_vm=False, verify=False, retry_loop=False, debug=debug,
         run_mode=getattr(args, "mode", "local-run"),
+        cloud_provider=getattr(args, "cloud_provider", "fugu"),
+        cloud_model=getattr(args, "cloud_model", ""),
+        llm_url=getattr(args, "llm_url", ""),
+        llm_model=getattr(args, "llm_model", ""),
+        plan_review_cycles=getattr(args, "plan_review_cycles", 10),
     )
 
     overrides = {}
@@ -165,9 +170,42 @@ async def cmd_provision(args) -> int:
 
 async def cmd_verify(args) -> int:
     """Verify already-generated source against a provisioned VM."""
+    from .provision_engine import ProvisionEngine, QEMUProcess
     debug = DebugLogger(enabled=getattr(args, "debug", False))
 
     _use_existing = getattr(args, "use_existing_vm", False)
+    _boot_existing = getattr(args, "boot_existing", False)
+    qemu = None
+
+    if _boot_existing:
+        config = VMProvisionConfig(os_type=_infer_os_from_spec(args))
+        config.compute_paths()
+        if not config.cow_img or not config.cow_img.exists():
+            print(f"No existing VM disk found at {config.cow_img}")
+            print("Run 'provision --os <os>' first to install the VM.")
+            return 1
+        qemu = QEMUProcess(
+            vm_name=config.vm_name % config.os_type.value,
+            qmp_socket=config.qmp_socket,
+            disk_img=config.cow_img,
+            cpu_cores=config.resources.CPU_cores,
+            ram_mb=config.resources.RAM_GB * 1024,
+            windows_boot_only=True,
+        )
+        await qemu.start()
+        ssh_port = config.network.port_fwd_ssh
+        print(f"Booting existing VM, waiting for SSH on port {ssh_port}…")
+        _vm_user = getattr(args, "vm_user", "vmuser")
+        _vm_pass = getattr(args, "vm_pass", "vmuser123")
+        if not await ProvisionEngine._wait_for_ssh(
+            ssh_port, timeout=300, username=_vm_user, password=_vm_pass
+        ):
+            print("SSH did not respond in 5 minutes.")
+            await qemu.stop()
+            return 1
+        _use_existing = True
+        args.vm_port = ssh_port
+
     pipeline = MalwarePipeline(
         generate=False,
         provision_vm=not _use_existing,
@@ -180,17 +218,28 @@ async def cmd_verify(args) -> int:
         existing_vm_user=getattr(args, "vm_user", "vmuser"),
         existing_vm_pass=getattr(args, "vm_pass", "vmuser123"),
         run_mode=getattr(args, "mode", "local-run"),
+        cloud_provider=getattr(args, "cloud_provider", "fugu"),
+        cloud_model=getattr(args, "cloud_model", ""),
+        llm_url=getattr(args, "llm_url", ""),
+        llm_model=getattr(args, "llm_model", ""),
+        qemu_process=qemu,
     )
 
     source_path = Path(args.source or "/tmp/malware_source.c")
     if not source_path.exists():
         print(f"Error: source file not found: {source_path}")
+        if qemu:
+            await qemu.stop()
         return 1
 
-    result = await pipeline.run(
-        spec_path=args.spec,
-        output_dir=getattr(args, "output", None),
-    )
+    try:
+        result = await pipeline.run(
+            spec_path=args.spec,
+            output_dir=getattr(args, "output", None),
+        )
+    finally:
+        if qemu:
+            await qemu.stop()
 
     print(result.print_summary())
     if result.loop_result:
@@ -252,6 +301,12 @@ async def cmd_run(args) -> int:
         existing_vm_user=getattr(args, "vm_user", "vmuser"),
         existing_vm_pass=getattr(args, "vm_pass", "vmuser123"),
         run_mode=getattr(args, "mode", "local-run"),
+        cloud_provider=getattr(args, "cloud_provider", "fugu"),
+        cloud_model=getattr(args, "cloud_model", ""),
+        llm_url=getattr(args, "llm_url", ""),
+        llm_model=getattr(args, "llm_model", ""),
+        plan_review_cycles=getattr(args, "plan_review_cycles", 10),
+        qemu_process=qemu,  # None unless --boot-existing; enables per-iteration snapshot resets
     )
 
     overrides = {}
@@ -336,6 +391,25 @@ async def cmd_clean(args) -> int:
     return 0
 
 
+async def cmd_portal(args) -> int:
+    """Launch the web portal on localhost."""
+    from .portal.app import create_app
+    from aiohttp import web
+    app = create_app()
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, args.host, args.port)
+    await site.start()
+    print(f"\n  Portal running at  http://{args.host}:{args.port}")
+    print("  Press Ctrl-C to stop.\n")
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await runner.cleanup()
+    return 0
+
+
 async def cmd_analyze(args) -> int:
     """Run DB queries and show the context without generating code."""
     debug = DebugLogger(enabled=getattr(args, "debug", False))
@@ -407,7 +481,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=["local-run", "cloud-run"],
         default="local-run",
-        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY); orchestration (planning, review, analysis) stays local. Falls back to local on refusal or error.",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via cloud provider; orchestration stays local.",
+    )
+    gen_parser.add_argument(
+        "--cloud-provider", choices=["fugu", "openrouter"], default="fugu",
+        help="Cloud LLM provider for cloud-run mode (default: fugu). fugu=Sakana AI (FUGU_API_KEY). openrouter=OpenRouter (OPENROUTER_API_KEY).",
+    )
+    gen_parser.add_argument(
+        "--cloud-model", default="",
+        help="Override the cloud provider's default model (e.g. deepseek/deepseek-r1-0528 for openrouter).",
+    )
+    gen_parser.add_argument(
+        "--llm-url", default="",
+        help="Local LLM API base URL (default: http://localhost:1234). Use to point at a remote LM Studio endpoint.",
+    )
+    gen_parser.add_argument(
+        "--llm-model", default="",
+        help="Override the local LLM model name sent to LM Studio (default: uses whatever is loaded).",
+    )
+    gen_parser.add_argument(
+        "--plan-review-cycles", type=int, default=10,
+        help="Max plan review/revision cycles (default: 10). 0 = loop until the plan is approved.",
     )
 
     # -- provision ----------------------------------------------------------
@@ -441,14 +535,36 @@ def build_parser() -> argparse.ArgumentParser:
     ver_parser = subparsers.add_parser("verify", help="Verify malware in a VM")
     ver_parser.add_argument("--spec", required=True, help="Path to target spec")
     ver_parser.add_argument("--source", "-s", help="Path to source code file (default: /tmp/malware_source.c)")
-    ver_parser.add_argument("--os", choices=["linux", "windows"], default="linux")
     ver_parser.add_argument("--loop", action="store_true", help="Enable retry loop after first verification")
+    ver_parser.add_argument("--max-iters", type=int, default=5, help="Max retry iterations (default: 5)")
     ver_parser.add_argument(
         "--mode", choices=["local-run", "cloud-run"], default="local-run",
-        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY).",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via cloud provider.",
+    )
+    ver_parser.add_argument(
+        "--cloud-provider", choices=["fugu", "openrouter"], default="fugu",
+        help="Cloud LLM provider for cloud-run mode (default: fugu).",
+    )
+    ver_parser.add_argument(
+        "--cloud-model", default="",
+        help="Override the cloud provider's default model.",
+    )
+    ver_parser.add_argument(
+        "--llm-url", default="",
+        help="Local LLM API base URL (default: http://localhost:1234).",
+    )
+    ver_parser.add_argument(
+        "--llm-model", default="",
+        help="Override the local LLM model name sent to LM Studio.",
     )
     ver_parser.add_argument("--use-existing-vm", action="store_true",
         help="Skip provisioning and use an already-running VM")
+    ver_parser.add_argument("--boot-existing", action="store_true",
+        help="Boot the already-installed VM disk, verify, then shut it down")
+    ver_parser.add_argument("--os",
+        choices=["windows-11", "windows-10", "ubuntu-24.04", "ubuntu-22.04"],
+        default="windows-11",
+        help="OS of the VM disk (used with --boot-existing, default: windows-11)")
     ver_parser.add_argument("--vm-port", type=int, default=10022,
         help="SSH port of the existing VM (default: 10022)")
     ver_parser.add_argument("--vm-user", default="vmuser",
@@ -491,7 +607,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=["local-run", "cloud-run"],
         default="local-run",
-        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY); orchestration stays local. Falls back to local on refusal or error.",
+        help="local-run: local LLM for everything (default). cloud-run: chunk code gen via cloud provider; orchestration stays local.",
+    )
+    run_parser.add_argument(
+        "--cloud-provider", choices=["fugu", "openrouter"], default="fugu",
+        help="Cloud LLM provider for cloud-run mode (default: fugu). fugu=Sakana AI (FUGU_API_KEY). openrouter=OpenRouter (OPENROUTER_API_KEY).",
+    )
+    run_parser.add_argument(
+        "--cloud-model", default="",
+        help="Override the cloud provider's default model (e.g. deepseek/deepseek-r1-0528 for openrouter).",
+    )
+    run_parser.add_argument(
+        "--llm-url", default="",
+        help="Local LLM API base URL (default: http://localhost:1234). Use to point at a remote LM Studio endpoint.",
+    )
+    run_parser.add_argument(
+        "--llm-model", default="",
+        help="Override the local LLM model name sent to LM Studio.",
+    )
+    run_parser.add_argument(
+        "--plan-review-cycles", type=int, default=10,
+        help="Max plan review/revision cycles (default: 10). 0 = loop until the plan is approved.",
     )
     run_parser.add_argument("--max-iters", type=int, default=5)
     run_parser.add_argument("--min-iters", type=int, default=1)
@@ -529,6 +665,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--all", action="store_true",
         help="Remove everything including base ISO copies and VirtIO drivers",
     )
+
+    # -- portal -------------------------------------------------------------
+    portal_parser = subparsers.add_parser(
+        "portal",
+        help="Launch the web portal on localhost (default: http://127.0.0.1:7070)",
+    )
+    portal_parser.add_argument("--port", type=int, default=7070, help="Port to listen on (default: 7070)")
+    portal_parser.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
 
     # -- analyze ------------------------------------------------------------
     ana_parser = subparsers.add_parser("analyze", help="Query DBs and show context without generating code")
@@ -627,6 +771,7 @@ def main():
         "run":       cmd_run,
         "clean":     cmd_clean,
         "analyze":   cmd_analyze,
+        "portal":    cmd_portal,
     }
 
     handler = command_map.get(args.command)

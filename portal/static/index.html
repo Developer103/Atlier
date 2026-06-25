@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Malware Gen Framework</title>
+<style>
+:root {
+  --bg:     #0d1117;
+  --bg2:    #161b22;
+  --bg3:    #21262d;
+  --border: #30363d;
+  --text:   #c9d1d9;
+  --muted:  #8b949e;
+  --accent: #388bfd;
+  --green:  #3fb950;
+  --yellow: #d29922;
+  --red:    #f85149;
+  --purple: #bc8cff;
+  --mono: 'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column}
+
+/* ── Header ── */
+.hdr{
+  display:flex;align-items:center;gap:10px;padding:9px 16px;
+  background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.hdr-dot{width:9px;height:9px;border-radius:50%;background:var(--red)}
+.hdr h1{font-size:13px;font-weight:600}
+.hdr-sub{font-size:12px;color:var(--muted)}
+.hdr-sp{flex:1}
+.hdr-badge{
+  font-size:11px;padding:2px 9px;border-radius:10px;
+  border:1px solid var(--border);color:var(--muted);
+  font-family:var(--mono);
+}
+.hdr-badge.running{border-color:var(--green);color:var(--green)}
+
+/* ── Layout ── */
+.layout{flex:1;display:flex;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{
+  width:310px;min-width:310px;background:var(--bg2);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;
+}
+
+/* Command tabs */
+.tabs{
+  display:flex;flex-wrap:wrap;gap:2px;padding:8px 8px 0;
+  border-bottom:1px solid var(--border);background:var(--bg2);
+}
+.tab{
+  padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid transparent;border-bottom:none;border-radius:5px 5px 0 0;
+  color:var(--muted);background:transparent;transition:all .12s;
+  text-transform:uppercase;letter-spacing:.04em;
+}
+.tab:hover{color:var(--text);background:var(--bg3)}
+.tab.active{color:var(--accent);border-color:var(--border);border-bottom-color:var(--bg2);background:var(--bg2)}
+
+/* Form area */
+.form-scroll{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+
+.sec{display:flex;flex-direction:column;gap:7px}
+.sec-hdr{
+  font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.08em;padding-bottom:5px;border-bottom:1px solid var(--border);
+}
+
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:3px}
+.req{color:var(--red);font-size:10px}
+
+input[type=text],input[type=number],select,textarea{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  padding:5px 8px;border-radius:5px;font-size:12px;font-family:var(--sans);
+  width:100%;outline:none;transition:border-color .12s;
+}
+input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{
+  border-color:var(--accent);
+}
+textarea{resize:vertical;min-height:54px;font-family:var(--sans)}
+select option{background:var(--bg3)}
+
+.chk-row{
+  display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);
+  cursor:pointer;user-select:none;padding:1px 0;
+}
+input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer;flex-shrink:0}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+
+/* Mode selector */
+.mode-pair{display:flex;gap:6px}
+.mode-btn{
+  flex:1;padding:6px 4px;font-size:12px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);border-radius:5px;color:var(--muted);
+  background:var(--bg3);text-align:center;transition:all .12s;
+}
+.mode-btn:hover{color:var(--text);border-color:var(--muted)}
+.mode-btn.sel{color:var(--accent);border-color:var(--accent);background:rgba(56,139,253,.08)}
+.mode-btn.cloud.sel{color:var(--purple);border-color:var(--purple);background:rgba(188,140,255,.08)}
+
+/* Disabled section */
+.sec.sec-disabled{opacity:.35;pointer-events:none}
+
+/* LLM endpoint toggle */
+.llm-pair{display:flex;gap:6px;margin-bottom:5px}
+.llm-btn{
+  flex:1;padding:6px 4px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);border-radius:5px;color:var(--muted);
+  background:var(--bg3);text-align:center;transition:all .12s;
+}
+.llm-btn:hover{color:var(--text);border-color:var(--muted)}
+.llm-btn.sel{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.08)}
+
+/* Run button */
+.run-wrap{padding:10px 12px 12px;flex-shrink:0}
+.run-btn{
+  width:100%;padding:9px;background:var(--green);color:#0d1117;
+  font-size:13px;font-weight:700;border:none;border-radius:6px;cursor:pointer;
+  transition:background .12s;
+}
+.run-btn:hover{background:#3dd68c}
+.run-btn:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
+.run-btn.stop{background:var(--red);color:#fff}
+.run-btn.stop:hover{background:#ff6b63}
+
+/* ── Main panel ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* Jobs bar */
+.jobs-bar{
+  padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;gap:5px;flex-wrap:wrap;align-items:center;min-height:38px;
+}
+.jobs-lbl{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
+.job-chip{
+  font-size:11px;padding:2px 9px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--border);color:var(--muted);font-family:var(--mono);
+  transition:all .12s;white-space:nowrap;
+}
+.job-chip:hover{opacity:.8}
+.job-chip.running{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.08)}
+.job-chip.success{color:var(--accent);border-color:var(--accent);background:rgba(56,139,253,.08)}
+.job-chip.failed,.job-chip.error{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)}
+.job-chip.active{box-shadow:0 0 0 2px rgba(56,139,253,.25)}
+.jobs-empty{font-size:12px;color:var(--muted)}
+
+/* Terminal */
+.term-wrap{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
+.term{
+  flex:1;overflow-y:auto;padding:12px 16px;
+  font-family:var(--mono);font-size:12px;line-height:1.75;
+  background:#080d12;color:#c9d1d9;
+}
+.ll{white-space:pre-wrap;word-break:break-all}
+.ll.info {}
+.ll.dbg {color:#6e7681}
+.ll.warn{color:var(--yellow)}
+.ll.err {color:var(--red)}
+.ll.ok  {color:var(--green)}
+.ll.meta{color:var(--purple);font-style:italic}
+.term-hint{
+  color:var(--muted);text-align:center;margin-top:60px;
+  font-family:var(--mono);font-size:12px;line-height:2.2;
+}
+.cursor{
+  display:inline-block;width:8px;height:13px;
+  background:var(--green);vertical-align:text-bottom;
+  animation:blink 1s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Results pane */
+.res-pane{
+  border-top:1px solid var(--border);background:var(--bg2);
+  display:flex;flex-direction:column;transition:max-height .15s;
+}
+.res-hdr{
+  display:flex;align-items:center;padding:6px 12px;gap:6px;
+  cursor:pointer;user-select:none;flex-shrink:0;
+}
+.res-hdr span{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.res-toggle{font-size:10px;color:var(--muted);margin-left:auto}
+.res-files{display:flex;gap:5px;padding:0 12px 8px;flex-wrap:wrap;max-height:90px;overflow-y:auto}
+.res-file{
+  font-size:11px;padding:2px 9px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:4px;color:var(--text);cursor:pointer;font-family:var(--mono);transition:border-color .12s;
+}
+.res-file:hover{border-color:var(--accent);color:var(--accent)}
+.res-empty{font-size:12px;color:var(--muted);padding:0 0 8px}
+
+/* Modal */
+.modal-bg{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  z-index:200;justify-content:center;align-items:center;
+}
+.modal-bg.open{display:flex}
+.modal{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  width:82vw;max-height:82vh;display:flex;flex-direction:column;
+}
+.modal-hdr{
+  display:flex;align-items:center;padding:10px 14px;
+  border-bottom:1px solid var(--border);gap:8px;flex-shrink:0;
+}
+.modal-title{font-size:13px;font-weight:600;font-family:var(--mono)}
+.modal-x{margin-left:auto;cursor:pointer;color:var(--muted);font-size:20px;line-height:1;padding:0 2px}
+.modal-x:hover{color:var(--text)}
+.modal-body{flex:1;overflow-y:auto;padding:14px}
+.modal-body pre{font-family:var(--mono);font-size:12px;line-height:1.65;color:#c9d1d9;white-space:pre-wrap}
+
+/* SSH xterm container */
+#xterm-container{flex:1;overflow:hidden;display:none;background:#000;padding:4px}
+#xterm-container.active{display:block}
+.ssh-status{
+  padding:3px 12px;font-family:var(--mono);font-size:11px;
+  color:var(--muted);background:var(--bg2);border-bottom:1px solid var(--border);
+  flex-shrink:0;display:none;
+}
+.ssh-status.active{display:block}
+
+/* Scrollbars */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#484f58}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-dot"></div>
+  <h1>Malware Gen Framework</h1>
+  <span class="hdr-sub">localhost portal</span>
+  <div class="hdr-sp"></div>
+  <span class="hdr-badge" id="status-badge">idle</span>
+</div>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-cmd="run">run</button>
+      <button class="tab" data-cmd="generate">generate</button>
+      <button class="tab" data-cmd="provision">provision</button>
+      <button class="tab" data-cmd="verify">verify</button>
+      <button class="tab" data-cmd="analyze">analyze</button>
+      <button class="tab" data-cmd="clean">clean</button>
+      <button class="tab" data-cmd="ssh">ssh</button>
+    </div>
+    <div class="form-scroll" id="form-area"></div>
+    <div class="run-wrap">
+      <button class="run-btn" id="run-btn">&#9654;&#xFE0E;  Run</button>
+    </div>
+  </div>
+
+  <!-- ── Main panel ── -->
+  <div class="main">
+
+    <!-- Jobs bar -->
+    <div class="jobs-bar" id="jobs-bar">
+      <span class="jobs-lbl">Jobs</span>
+      <span class="jobs-empty" id="jobs-empty">no jobs yet</span>
+    </div>
+
+    <!-- Terminal -->
+    <div class="term-wrap">
+      <div class="ssh-status" id="ssh-status">SSH — disconnected</div>
+      <div class="term" id="term">
+        <div class="term-hint" id="term-hint">
+          Configure a command on the left and press Run<br>
+          <span class="cursor"></span>
+        </div>
+      </div>
+      <div id="xterm-container"></div>
+    </div>
+
+    <!-- Results pane -->
+    <div class="res-pane" id="res-pane">
+      <div class="res-hdr" id="res-hdr">
+        <span>Results</span>
+        <span class="res-toggle" id="res-toggle">&#9650;</span>
+      </div>
+      <div class="res-files" id="res-files">
+        <span class="res-empty">no results yet</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- File viewer modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modal-title"></span>
+      <span class="modal-x" id="modal-x">&#xD7;</span>
+    </div>
+    <div class="modal-body"><pre id="modal-body"></pre></div>
+  </div>
+</div>
+
+<script>
+// ── Field definitions ────────────────────────────────────────────────────────
+const CMDS = {
+  run: [
+    {s:'Target', f:[
+      {id:'spec',         lbl:'Spec file',     type:'text', req:1, ph:'spec.yaml or /full/path/target.yaml'},
+      {id:'malware_type', lbl:'Malware type',  type:'text', req:1, ph:'keylogger · ransomware · backdoor · info stealer…'},
+      {id:'behavior',     lbl:'Behavior spec', type:'area', ph:'(optional) keylogger that sends to 10.0.0.5:9001 over AES-256 TCP, persists via HKCU Run key…'},
+      {id:'output',       lbl:'Output dir',    type:'text', ph:'./results'},
+    ]},
+    {s:'Mode', f:[{id:'mode', type:'mode'}]},
+    {s:'Cloud', f:[
+      {id:'cloud_provider', lbl:'Provider', type:'sel',
+        opts:['fugu','openrouter'], def:'fugu'},
+      {id:'cloud_model', lbl:'Model override', type:'text',
+        ph:'openrouter: deepseek/deepseek-r1-0528, anthropic/claude-sonnet-4-5…'},
+    ]},
+    {s:'Local LLM', f:[
+      {id:'llm_url',   type:'llm_endpoint'},
+      {id:'llm_model', lbl:'Model name', type:'text', ph:'qwen3-35b-a3b… (blank = use loaded model)'},
+    ]},
+    {s:'Planning', f:[
+      {id:'plan_review_cycles', lbl:'Review cycles', type:'num', ph:'10', def:'10'},
+      {id:'plan_review_infinite', lbl:'Infinite (loop until approved)', type:'chk'},
+    ]},
+    {s:'Loop', f:[
+      {id:'loop',      lbl:'Enable retry loop',                    type:'chk'},
+      {id:'exhaustive',lbl:'Exhaustive (try all techniques)',      type:'chk'},
+      {id:'max_iters', lbl:'Max iterations',  type:'num', ph:'5', def:'5'},
+      {id:'min_iters', lbl:'Min iterations',  type:'num', ph:'1', def:'1'},
+    ]},
+    {s:'VM', f:[
+      {id:'boot_existing',  lbl:'Boot existing VM disk (--boot-existing)',   type:'chk'},
+      {id:'use_existing_vm',lbl:'Use already-running VM (--use-existing-vm)',type:'chk'},
+      {id:'os', lbl:'OS (--boot-existing)', type:'sel',
+        opts:['windows-11','windows-10','ubuntu-24.04','ubuntu-22.04'], def:'windows-11'},
+      {id:'vm_port', lbl:'SSH port',     type:'num', ph:'10022', def:'10022'},
+      {id:'vm_user', lbl:'SSH username', type:'text', ph:'vmuser'},
+      {id:'vm_pass', lbl:'SSH password', type:'text', ph:'vmuser123'},
+    ]},
+    {s:'Flags', f:[
+      {id:'verbose', lbl:'Verbose logging',       type:'chk'},
+      {id:'debug',   lbl:'Debug mode (step trace)',type:'chk'},
+    ]},
+  ],
+  generate: [
+    {s:'Target', f:[
+      {id:'spec',         lbl:'Spec file',    type:'text', req:1, ph:'spec.yaml'},
+      {id:'malware_type', lbl:'Malware type', type:'text', req:1, ph:'keylogger · ransomware · backdoor…'},
+      {id:'behavior',     lbl:'Behavior spec',type:'area', ph:'(optional) detailed behavioral requirements'},
+      {id:'output',       lbl:'Output dir',   type:'text', ph:'./results'},
+    ]},
+    {s:'Mode', f:[{id:'mode', type:'mode'}]},
+    {s:'Cloud', f:[
+      {id:'cloud_provider', lbl:'Provider', type:'sel',
+        opts:['fugu','openrouter'], def:'fugu'},
+      {id:'cloud_model', lbl:'Model override', type:'text',
+        ph:'openrouter: deepseek/deepseek-r1-0528, anthropic/claude-sonnet-4-5…'},
+    ]},
+    {s:'Local LLM', f:[
+      {id:'llm_url',   type:'llm_endpoint'},
+      {id:'llm_model', lbl:'Model name', type:'text', ph:'qwen3-35b-a3b… (blank = use loaded model)'},
+    ]},
+    {s:'Planning', f:[
+      {id:'plan_review_cycles', lbl:'Review cycles', type:'num', ph:'10', def:'10'},
+      {id:'plan_review_infinite', lbl:'Infinite (loop until approved)', type:'chk'},
+    ]},
+    {s:'Flags', f:[
+      {id:'verbose', lbl:'Verbose logging',        type:'chk'},
+      {id:'debug',   lbl:'Debug mode (step trace)', type:'chk'},
+    ]},
+  ],
+  provision: [
+    {s:'VM', f:[
+      {id:'os', lbl:'OS', type:'sel',
+        opts:['windows-11','windows-10','ubuntu-24.04','ubuntu-22.04'], def:'windows-11'},
+      {id:'boot_existing', lbl:'Boot existing disk (skip installer)', type:'chk'},
+    ]},
+  ],
+  verify: [
+    {s:'Target', f:[
+      {id:'spec',   lbl:'Spec file',   type:'text', req:1, ph:'spec.yaml'},
+      {id:'source', lbl:'Source file', type:'text', ph:'results/malware_source.c'},
+    ]},
+    {s:'Mode', f:[{id:'mode', type:'mode'}]},
+    {s:'Cloud', f:[
+      {id:'cloud_provider', lbl:'Provider', type:'sel',
+        opts:['fugu','openrouter'], def:'fugu'},
+      {id:'cloud_model', lbl:'Model override', type:'text',
+        ph:'openrouter: deepseek/deepseek-r1-0528, anthropic/claude-sonnet-4-5…'},
+    ]},
+    {s:'Local LLM', f:[
+      {id:'llm_url',   type:'llm_endpoint'},
+      {id:'llm_model', lbl:'Model name', type:'text', ph:'qwen3-35b-a3b… (blank = use loaded model)'},
+    ]},
+    {s:'Loop', f:[
+      {id:'loop',      lbl:'Enable retry loop',   type:'chk'},
+      {id:'max_iters', lbl:'Max iterations', type:'num', ph:'5', def:'5'},
+    ]},
+    {s:'VM', f:[
+      {id:'boot_existing',  lbl:'Boot existing VM disk (--boot-existing)',    type:'chk'},
+      {id:'use_existing_vm',lbl:'Use already-running VM (--use-existing-vm)', type:'chk'},
+      {id:'os', lbl:'OS (--boot-existing)', type:'sel',
+        opts:['windows-11','windows-10','ubuntu-24.04','ubuntu-22.04'], def:'windows-11'},
+      {id:'vm_port', lbl:'SSH port',     type:'num',  ph:'10022', def:'10022'},
+      {id:'vm_user', lbl:'SSH username', type:'text', ph:'vmuser'},
+      {id:'vm_pass', lbl:'SSH password', type:'text', ph:'vmuser123'},
+    ]},
+    {s:'Flags', f:[
+      {id:'verbose', lbl:'Verbose logging',        type:'chk'},
+      {id:'debug',   lbl:'Debug mode (step trace)', type:'chk'},
+    ]},
+  ],
+  analyze: [
+    {s:'Target', f:[
+      {id:'spec',         lbl:'Spec file',          type:'text', req:1, ph:'spec.yaml'},
+      {id:'malware_type', lbl:'Malware type',        type:'text', ph:'keylogger'},
+      {id:'behavior',     lbl:'Behavior spec',       type:'area', ph:'(optional)'},
+      {id:'db_n',         lbl:'DB results per query',type:'num', ph:'10', def:'10'},
+    ]},
+    {s:'Mode', f:[{id:'mode', type:'mode'}]},
+    {s:'Flags', f:[{id:'verbose', lbl:'Verbose logging', type:'chk'}]},
+  ],
+  clean: [
+    {s:'Options', f:[
+      {id:'clean_all', lbl:'Remove everything including base images (--all)', type:'chk'},
+    ]},
+  ],
+  ssh: [
+    {s:'VM Connection', f:[
+      {id:'ssh_host', lbl:'Host',     type:'text', ph:'localhost', def:'localhost'},
+      {id:'ssh_port', lbl:'Port',     type:'num',  ph:'10022',    def:'10022'},
+      {id:'ssh_user', lbl:'Username', type:'text', ph:'vmuser',   def:'vmuser'},
+      {id:'ssh_pass', lbl:'Password', type:'text', ph:'vmuser123',def:'vmuser123'},
+    ]},
+  ],
+};
+
+// ── State ────────────────────────────────────────────────────────────────────
+let activeCmd = 'run';
+let activeJobId = null;
+let activeWs = null;
+let resCollapsed = false;
+
+// SSH state
+let sshWs = null;
+let sshTerm = null;
+let sshFitAddon = null;
+let sshConnected = false;
+
+// ── Form rendering ────────────────────────────────────────────────────────────
+function renderForm(cmd) {
+  const area = document.getElementById('form-area');
+  area.innerHTML = '';
+  const secs = CMDS[cmd] || [];
+  secs.forEach(sec => {
+    const sDiv = el('div', 'sec');
+    sDiv.appendChild(el('div', 'sec-hdr', sec.s));
+    sec.f.forEach(f => {
+      const wrap = el('div', 'field');
+      if (f.type === 'mode') {
+        wrap.innerHTML = `
+          <label>LLM mode</label>
+          <div class="mode-pair">
+            <div class="mode-btn sel" data-m="local-run" onclick="pickMode('local-run')">local&#x2011;run</div>
+            <div class="mode-btn cloud" data-m="cloud-run" onclick="pickMode('cloud-run')">cloud&#x2011;run</div>
+          </div>`;
+      } else if (f.type === 'llm_endpoint') {
+        wrap.innerHTML = `
+          <label>Endpoint</label>
+          <div class="llm-pair">
+            <div class="llm-btn sel" onclick="pickLLM('http://localhost:1234',this)">X&#xa0;local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
+            <div class="llm-btn" onclick="pickLLM('http://localhost:11234',this)">Z&#xa0;tunnel<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+          </div>
+          <input type="text" id="f_llm_url" value="http://localhost:1234" placeholder="http://localhost:1234" oninput="syncLLMBtns(this.value)">`;
+      } else if (f.type === 'chk') {
+        wrap.innerHTML = `<label class="chk-row"><input type="checkbox" id="f_${f.id}"${f.def?' checked':''}> ${f.lbl}</label>`;
+      } else if (f.type === 'sel') {
+        const opts = f.opts.map(o=>`<option${o===f.def?' selected':''}>${o}</option>`).join('');
+        wrap.innerHTML = `<label for="f_${f.id}">${f.lbl}${f.req?'<span class="req"> *</span>':''}</label><select id="f_${f.id}">${opts}</select>`;
+      } else if (f.type === 'area') {
+        wrap.innerHTML = `<label for="f_${f.id}">${f.lbl}${f.req?'<span class="req"> *</span>':''}</label><textarea id="f_${f.id}" placeholder="${f.ph||''}"></textarea>`;
+      } else {
+        wrap.innerHTML = `<label for="f_${f.id}">${f.lbl}${f.req?'<span class="req"> *</span>':''}</label><input type="${f.type==='num'?'number':'text'}" id="f_${f.id}" placeholder="${f.ph||''}" value="${f.def||''}">`;
+      }
+      sDiv.appendChild(wrap);
+    });
+    area.appendChild(sDiv);
+  });
+  restoreFormState(cmd);
+}
+
+function pickMode(m) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('sel'));
+  document.querySelector(`.mode-btn[data-m="${m}"]`)?.classList.add('sel');
+  // Gray out the Cloud section when local-run is selected
+  document.querySelectorAll('.sec').forEach(sec => {
+    const hdr = sec.querySelector('.sec-hdr');
+    if (hdr && hdr.textContent.trim().toUpperCase() === 'CLOUD') {
+      sec.classList.toggle('sec-disabled', m === 'local-run');
+    }
+  });
+}
+
+function getMode() {
+  return document.querySelector('.mode-btn.sel')?.dataset.m || 'local-run';
+}
+
+function pickLLM(url, btn) {
+  btn.closest('.llm-pair').querySelectorAll('.llm-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  const inp = document.getElementById('f_llm_url');
+  if (inp) inp.value = url;
+}
+
+function syncLLMBtns(url) {
+  const presets = {'http://localhost:1234': 0, 'http://localhost:11234': 1};
+  const inp = document.getElementById('f_llm_url');
+  if (!inp) return;
+  const btns = inp.closest('.field')?.querySelectorAll('.llm-btn') || [];
+  btns.forEach(b => b.classList.remove('sel'));
+  const idx = presets[url.trim()];
+  if (idx !== undefined) btns[idx]?.classList.add('sel');
+}
+
+// ── Form state persistence ────────────────────────────────────────────────────
+function saveFormState(cmd, data) {
+  try { localStorage.setItem('mgf_state_' + cmd, JSON.stringify(data)); } catch(e) {}
+}
+
+function restoreFormState(cmd) {
+  try {
+    const raw = localStorage.getItem('mgf_state_' + cmd);
+    if (!raw) { if (cmd !== 'ssh') pickMode('local-run'); return; }
+    const saved = JSON.parse(raw);
+    (CMDS[cmd] || []).forEach(sec => sec.f.forEach(f => {
+      if (f.type === 'mode') {
+        if (saved.mode) pickMode(saved.mode);
+        return;
+      }
+      if (f.type === 'llm_endpoint') {
+        const e = document.getElementById('f_llm_url');
+        if (e && saved.llm_url) { e.value = saved.llm_url; syncLLMBtns(saved.llm_url); }
+        return;
+      }
+      const e = document.getElementById('f_' + f.id);
+      if (!e || saved[f.id] === undefined) return;
+      if (f.type === 'chk') e.checked = !!saved[f.id];
+      else e.value = saved[f.id];
+    }));
+    if (saved.mode) pickMode(saved.mode);
+  } catch(e) { if (cmd !== 'ssh') pickMode('local-run'); }
+}
+
+// ── SSH terminal ──────────────────────────────────────────────────────────────
+function setSshView(active) {
+  document.getElementById('term').style.display = active ? 'none' : '';
+  document.getElementById('xterm-container').classList.toggle('active', active);
+  document.getElementById('ssh-status').classList.toggle('active', active);
+}
+
+function setSshConnected(on) {
+  sshConnected = on;
+  const btn = document.getElementById('run-btn');
+  btn.classList.remove('stop');
+  if (on) {
+    btn.textContent = '⏹  Disconnect';
+    btn.classList.add('stop');
+    document.getElementById('ssh-status').textContent = 'SSH — connected';
+  } else {
+    btn.textContent = '⏎  Connect';
+    document.getElementById('ssh-status').textContent = 'SSH — disconnected';
+  }
+}
+
+function connectSSH() {
+  if (sshWs) { sshWs.close(); sshWs = null; }
+
+  const host = document.getElementById('f_ssh_host')?.value.trim() || 'localhost';
+  const port = parseInt(document.getElementById('f_ssh_port')?.value) || 10022;
+  const user = document.getElementById('f_ssh_user')?.value.trim() || 'vmuser';
+  const pass = document.getElementById('f_ssh_pass')?.value.trim() || 'vmuser123';
+
+  // Init xterm if not done yet
+  if (!sshTerm) {
+    sshTerm = new Terminal({
+      theme: {background:'#000000', foreground:'#c9d1d9', cursor:'#3fb950'},
+      fontFamily: "'JetBrains Mono','Fira Code',Cascadia Code,Consolas,monospace",
+      fontSize: 12,
+      cursorBlink: true,
+    });
+    sshFitAddon = new FitAddon.FitAddon();
+    sshTerm.loadAddon(sshFitAddon);
+    sshTerm.open(document.getElementById('xterm-container'));
+  }
+  setSshView(true);
+  sshFitAddon.fit();
+  const cols = sshTerm.cols;
+  const rows = sshTerm.rows;
+
+  const ws = new WebSocket(`ws://${location.host}/ws/ssh`);
+  ws.binaryType = 'arraybuffer';
+  sshWs = ws;
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({host, port, username: user, password: pass, cols, rows}));
+  };
+
+  ws.onmessage = ev => {
+    if (typeof ev.data === 'string') {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'connected') {
+          setSshConnected(true);
+          sshTerm.onData(data => { if (ws.readyState === 1) ws.send(new TextEncoder().encode(data)); });
+        } else if (msg.type === 'disconnected' || msg.type === 'error') {
+          sshTerm.writeln('\r\n\x1b[31m[SSH] ' + (msg.msg || 'disconnected') + '\x1b[0m');
+          setSshConnected(false);
+          sshWs = null;
+        }
+      } catch(e) {}
+    } else {
+      sshTerm.write(new Uint8Array(ev.data));
+    }
+  };
+
+  ws.onclose = () => { if (sshConnected) { setSshConnected(false); sshTerm.writeln('\r\n\x1b[31m[SSH] connection closed\x1b[0m'); } sshWs = null; };
+  ws.onerror = () => { sshTerm.writeln('\r\n\x1b[31m[SSH] websocket error\x1b[0m'); };
+}
+
+function disconnectSSH() {
+  if (sshWs) { sshWs.close(); sshWs = null; }
+  setSshConnected(false);
+}
+
+// resize xterm when window resizes
+window.addEventListener('resize', () => {
+  if (activeCmd === 'ssh' && sshFitAddon && sshTerm) {
+    sshFitAddon.fit();
+    if (sshWs && sshWs.readyState === 1) {
+      sshWs.send(JSON.stringify({type:'resize', cols:sshTerm.cols, rows:sshTerm.rows}));
+    }
+  }
+});
+
+function formData() {
+  const d = { command: activeCmd, mode: getMode() };
+  (CMDS[activeCmd] || []).forEach(sec => {
+    sec.f.forEach(f => {
+      if (f.type === 'mode') return;
+      if (f.type === 'llm_endpoint') {
+        const e = document.getElementById('f_llm_url');
+        if (e) d.llm_url = e.value.trim();
+        return;
+      }
+      const e = document.getElementById('f_' + f.id);
+      if (!e) return;
+      d[f.id] = f.type === 'chk' ? e.checked : e.value.trim();
+    });
+  });
+  return d;
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+document.getElementById('tabs').addEventListener('click', ev => {
+  const t = ev.target.closest('.tab');
+  if (!t) return;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  activeCmd = t.dataset.cmd;
+  renderForm(activeCmd);
+  if (activeCmd === 'ssh') {
+    setSshView(sshConnected || !!sshTerm);
+    setSshConnected(sshConnected);  // refresh button label
+    const btn = document.getElementById('run-btn');
+    if (!sshConnected) { btn.textContent = '⏎  Connect'; btn.classList.remove('stop'); }
+  } else {
+    setSshView(false);
+    if (!document.getElementById('run-btn').classList.contains('stop')) {
+      document.getElementById('run-btn').textContent = '▶︎  Run';
+    }
+    pickMode(getMode());  // re-apply cloud gray-out after form re-render
+  }
+});
+
+// ── Run / Stop ────────────────────────────────────────────────────────────────
+document.getElementById('run-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-btn');
+
+  // SSH tab: connect / disconnect
+  if (activeCmd === 'ssh') {
+    if (sshConnected) { disconnectSSH(); } else { connectSSH(); }
+    return;
+  }
+
+  // Stop running job
+  if (btn.classList.contains('stop') && activeJobId) {
+    await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
+    return;
+  }
+
+  const d = formData();
+  if (['run','generate','verify','analyze'].includes(d.command) && !d.spec) {
+    flashError('Spec file is required.'); return;
+  }
+  if (['run','generate'].includes(d.command) && !d.malware_type) {
+    flashError('Malware type is required.'); return;
+  }
+
+  saveFormState(activeCmd, d);
+
+  try {
+    const r = await fetch('/api/jobs', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d),
+    });
+    const {job_id, cmd_str} = await r.json();
+    openJob(job_id, cmd_str, true);
+  } catch(e) {
+    flashError(`Could not start job: ${e}`);
+  }
+});
+
+// ── Job connect / replay ──────────────────────────────────────────────────────
+function openJob(jobId, cmdStr, fresh) {
+  if (activeWs) { activeWs.close(); activeWs = null; }
+  activeJobId = jobId;
+
+  clearTerm();
+  if (cmdStr) appendLog(`$ ${cmdStr}`, 'meta');
+
+  // Mark chip active
+  document.querySelectorAll('.job-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById(`chip-${jobId}`)?.classList.add('active');
+
+  setRunning(true);
+  setBadge('running', true);
+
+  const ws = new WebSocket(`ws://${location.host}/ws/${jobId}`);
+  activeWs = ws;
+
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'log') {
+      appendLog(m.msg);
+    } else if (m.type === 'done') {
+      const ok = m.status === 'success';
+      appendLog('');
+      appendLog(`── job ${jobId}: ${m.status} ──`, ok ? 'ok' : 'err');
+      updateChip(jobId, m.status);
+      setRunning(false);
+      setBadge(m.status, false);
+      refreshResults();
+    }
+  };
+  ws.onerror = () => { appendLog('[portal] ws error', 'err'); setRunning(false); setBadge('error', false); };
+  ws.onclose = () => { if (activeWs === ws) activeWs = null; };
+}
+
+async function loadJob(jobId) {
+  if (activeWs) { activeWs.close(); activeWs = null; }
+  activeJobId = jobId;
+
+  const r = await fetch(`/api/jobs/${jobId}`);
+  const job = await r.json();
+
+  clearTerm();
+  if (job.cmd_str) appendLog(`$ ${job.cmd_str}`, 'meta');
+  job.output.forEach(l => appendLog(l));
+
+  document.querySelectorAll('.job-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById(`chip-${jobId}`)?.classList.add('active');
+
+  if (job.status !== 'running') {
+    const ok = job.status === 'success';
+    appendLog('');
+    appendLog(`── job ${jobId}: ${job.status} ──`, ok ? 'ok' : 'err');
+    setRunning(false);
+    setBadge(job.status, false);
+    return;
+  }
+
+  // Re-subscribe for a still-running job
+  setRunning(true);
+  setBadge('running', true);
+  const ws = new WebSocket(`ws://${location.host}/ws/${jobId}`);
+  activeWs = ws;
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'log') appendLog(m.msg);
+    else if (m.type === 'done') {
+      appendLog(`── job ${jobId}: ${m.status} ──`, m.status==='success'?'ok':'err');
+      updateChip(jobId, m.status);
+      setRunning(false);
+      setBadge(m.status, false);
+      refreshResults();
+    }
+  };
+}
+
+// ── Jobs bar ──────────────────────────────────────────────────────────────────
+function addChip(jobId, status, title) {
+  const bar = document.getElementById('jobs-bar');
+  document.getElementById('jobs-empty')?.remove();
+
+  if (!document.getElementById(`chip-${jobId}`)) {
+    const c = el('span', `job-chip ${status}`, `#${jobId}`);
+    c.id = `chip-${jobId}`;
+    c.title = title || jobId;
+    c.onclick = () => loadJob(jobId);
+    bar.appendChild(c);
+  }
+}
+
+function updateChip(jobId, status) {
+  const c = document.getElementById(`chip-${jobId}`);
+  if (c) c.className = `job-chip ${status}${activeJobId===jobId?' active':''}`;
+}
+
+// ── Terminal helpers ──────────────────────────────────────────────────────────
+function clearTerm() {
+  const t = document.getElementById('term');
+  t.innerHTML = '';
+}
+
+function appendLog(line, cls) {
+  if (!cls) {
+    const lo = line.toLowerCase();
+    if (lo.includes('[error]') || lo.includes('error:') || /\bfailed\b/.test(lo)) cls = 'err';
+    else if (lo.includes('[warning]') || lo.includes('warn')) cls = 'warn';
+    else if (lo.includes('[debug]')) cls = 'dbg';
+    else if (lo.includes('success') || lo.includes('undetected') || lo.includes('approved') || lo.includes('done')) cls = 'ok';
+    else cls = 'info';
+  }
+  const d = el('div', `ll ${cls}`, line || '​');
+  const t = document.getElementById('term');
+  t.appendChild(d);
+  t.scrollTop = t.scrollHeight;
+}
+
+// ── UI state helpers ──────────────────────────────────────────────────────────
+function setRunning(on) {
+  const btn = document.getElementById('run-btn');
+  if (on) {
+    btn.textContent = '⏹  Stop';
+    btn.classList.add('stop');
+  } else {
+    btn.textContent = '▶︎  Run';
+    btn.classList.remove('stop');
+    btn.disabled = false;
+  }
+}
+
+function setBadge(status, running) {
+  const b = document.getElementById('status-badge');
+  b.textContent = running ? 'running' : status;
+  b.className = 'hdr-badge' + (running ? ' running' : '');
+}
+
+function flashError(msg) {
+  const t = document.getElementById('term');
+  document.getElementById('term-hint')?.remove();
+  const d = el('div', 'll err', `[portal] ${msg}`);
+  t.appendChild(d);
+  t.scrollTop = t.scrollHeight;
+}
+
+// ── Results pane ──────────────────────────────────────────────────────────────
+async function refreshResults() {
+  try {
+    const r = await fetch('/api/results');
+    const files = await r.json();
+    const c = document.getElementById('res-files');
+    if (!files.length) {
+      c.innerHTML = '<span class="res-empty">no results yet</span>';
+      return;
+    }
+    c.innerHTML = files.map(f =>
+      `<button class="res-file" onclick="viewFile('${f}')">${f}</button>`
+    ).join('');
+  } catch {}
+}
+
+async function viewFile(name) {
+  const r = await fetch(`/api/results/${name}`);
+  const txt = await r.text();
+  document.getElementById('modal-title').textContent = name;
+  document.getElementById('modal-body').textContent = txt;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+document.getElementById('res-hdr').onclick = () => {
+  resCollapsed = !resCollapsed;
+  document.getElementById('res-files').style.display = resCollapsed ? 'none' : '';
+  document.getElementById('res-toggle').textContent = resCollapsed ? '▼' : '▲';
+};
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+document.getElementById('modal-x').onclick = closeModal;
+document.getElementById('modal-bg').onclick = e => { if (e.target===document.getElementById('modal-bg')) closeModal(); };
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+
+// ── Restore jobs from server on load ─────────────────────────────────────────
+async function initJobs() {
+  try {
+    const r = await fetch('/api/jobs');
+    const list = await r.json();
+    list.reverse().forEach(j => addChip(j.id, j.status, j.cmd_str));
+    // Auto-attach to most recent running job if any
+    const running = list.find(j => j.status === 'running');
+    if (running) loadJob(running.id);
+  } catch {}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function el(tag, cls, txt) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+// Patch openJob to also add chip
+const _origOpenJob = openJob;
+window.openJob = function(jobId, cmdStr, fresh) {
+  addChip(jobId, 'running', cmdStr);
+  _origOpenJob(jobId, cmdStr, fresh);
+};
+
+renderForm('run');
+// restoreFormState called inside renderForm; pickMode already called there via restoreFormState
+// fallback: ensure initial state if nothing was saved
+if (!localStorage.getItem('mgf_state_run')) pickMode('local-run');
+refreshResults();
+initJobs();
+setInterval(refreshResults, 15000);
+</script>
+</body>
+</html>
