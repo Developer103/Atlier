@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 from .target_spec import OSPlatform, TargetEnvironmentSpec
+from .spec_parser import parse_target_spec
 from .pipeline import MalwarePipeline, PipelineResult
 from .config_models import VMProvisionConfig, TargetOS
 from .debug_logger import DebugLogger
@@ -63,6 +64,13 @@ def _setup_logging(verbose: bool = False) -> None:
 async def cmd_generate(args) -> int:
     """Generate malware source code from a target spec."""
     debug = DebugLogger(enabled=getattr(args, "debug", False))
+
+    # Early validation — malware_type must be explicitly set in spec.yaml
+    target_spec = parse_target_spec(spec_path=args.spec)
+    if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        return 1
+
     pipeline = MalwarePipeline(
         generate=True, provision_vm=False, verify=False, retry_loop=False, debug=debug,
         run_mode=getattr(args, "mode", "local-run"),
@@ -74,8 +82,6 @@ async def cmd_generate(args) -> int:
     )
 
     overrides = {}
-    if getattr(args, "malware_type", None):
-        overrides["malware_type"] = args.malware_type
     if getattr(args, "behavior", None):
         overrides["behavior_spec"] = args.behavior
 
@@ -173,8 +179,16 @@ async def cmd_verify(args) -> int:
     from .provision_engine import ProvisionEngine, QEMUProcess
     debug = DebugLogger(enabled=getattr(args, "debug", False))
 
+    # Early validation — malware_type must be explicitly set in spec.yaml
+    target_spec = parse_target_spec(spec_path=args.spec)
+    if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        return 1
+
     _use_existing = getattr(args, "use_existing_vm", False)
     _boot_existing = getattr(args, "boot_existing", False)
+    if not _use_existing and getattr(args, "vm_port", None):
+        _use_existing = True
     qemu = None
 
     if _boot_existing:
@@ -198,9 +212,9 @@ async def cmd_verify(args) -> int:
         _vm_user = getattr(args, "vm_user", "vmuser")
         _vm_pass = getattr(args, "vm_pass", "vmuser123")
         if not await ProvisionEngine._wait_for_ssh(
-            ssh_port, timeout=300, username=_vm_user, password=_vm_pass
+            ssh_port, timeout=600, username=_vm_user, password=_vm_pass
         ):
-            print("SSH did not respond in 5 minutes.")
+            print("SSH did not respond in 10 minutes.")
             await qemu.stop()
             return 1
         _use_existing = True
@@ -211,7 +225,7 @@ async def cmd_verify(args) -> int:
         provision_vm=not _use_existing,
         verify=True,
         retry_loop=bool(getattr(args, "loop", False)),
-        max_iterations=getattr(args, "max_iters", 5),
+        max_iterations=getattr(args, "max_iters", 5) if getattr(args, "loop", False) else 1,
         debug=debug,
         use_existing_vm=_use_existing,
         existing_vm_port=getattr(args, "vm_port", 10022),
@@ -236,6 +250,7 @@ async def cmd_verify(args) -> int:
         result = await pipeline.run(
             spec_path=args.spec,
             output_dir=getattr(args, "output", None),
+            source_file=str(source_path),
         )
     finally:
         if qemu:
@@ -252,7 +267,16 @@ async def cmd_run(args) -> int:
     """Full pipeline: spec → generate → provision → verify → loop."""
     from .provision_engine import ProvisionEngine, QEMUProcess
     debug = DebugLogger(enabled=getattr(args, "debug", False))
+
+    # Early validation — malware_type must be explicitly set in spec.yaml
+    target_spec = parse_target_spec(spec_path=args.spec)
+    if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        return 1
+
     _use_existing = getattr(args, "use_existing_vm", False)
+    if not _use_existing and getattr(args, "vm_port", None):
+        _use_existing = True
     _boot_existing = getattr(args, "boot_existing", False)
 
     qemu = None  # track a VM we started ourselves so we can shut it down
@@ -279,9 +303,9 @@ async def cmd_run(args) -> int:
         _vm_user = getattr(args, "vm_user", "vmuser")
         _vm_pass = getattr(args, "vm_pass", "vmuser123")
         if not await ProvisionEngine._wait_for_ssh(
-            ssh_port, timeout=300, username=_vm_user, password=_vm_pass
+            ssh_port, timeout=600, username=_vm_user, password=_vm_pass
         ):
-            print("SSH did not respond in 5 minutes.")
+            print("SSH did not respond in 10 minutes.")
             await qemu.stop()
             return 1
         _use_existing = True
@@ -307,11 +331,10 @@ async def cmd_run(args) -> int:
         llm_model=getattr(args, "llm_model", ""),
         plan_review_cycles=getattr(args, "plan_review_cycles", 10),
         qemu_process=qemu,  # None unless --boot-existing; enables per-iteration snapshot resets
+        resume=bool(getattr(args, "resume", False)),
     )
 
     overrides = {}
-    if getattr(args, "malware_type", None):
-        overrides["malware_type"] = args.malware_type
     if getattr(args, "behavior", None):
         overrides["behavior_spec"] = args.behavior
 
@@ -465,11 +488,6 @@ def build_parser() -> argparse.ArgumentParser:
     gen_parser.add_argument("--spec", required=True, help="Path to target spec (YAML/JSON)")
     gen_parser.add_argument("--output", "-o", help="Output directory for generated files")
     gen_parser.add_argument(
-        "--malware-type",
-        default=None,
-        help="Freeform description of malware behaviour (e.g. \"info stealer\", \"ransomware\"); overrides spec.yaml if set",
-    )
-    gen_parser.add_argument(
         "--behavior",
         default=None,
         metavar="SPEC",
@@ -561,10 +579,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip provisioning and use an already-running VM")
     ver_parser.add_argument("--boot-existing", action="store_true",
         help="Boot the already-installed VM disk, verify, then shut it down")
-    ver_parser.add_argument("--os",
-        choices=["windows-11", "windows-10", "ubuntu-24.04", "ubuntu-22.04"],
-        default="windows-11",
-        help="OS of the VM disk (used with --boot-existing, default: windows-11)")
     ver_parser.add_argument("--vm-port", type=int, default=10022,
         help="SSH port of the existing VM (default: 10022)")
     ver_parser.add_argument("--vm-user", default="vmuser",
@@ -590,11 +604,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--spec", required=True, help="Path to target spec (YAML/JSON)")
     run_parser.add_argument("--output", "-o", help="Output directory")
-    run_parser.add_argument(
-        "--malware-type",
-        default=None,
-        help="Freeform description of malware behaviour (e.g. \"info stealer\", \"ransomware\"); overrides spec.yaml if set",
-    )
     run_parser.add_argument(
         "--behavior",
         default=None,
@@ -629,6 +638,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--plan-review-cycles", type=int, default=10,
         help="Max plan review/revision cycles (default: 10). 0 = loop until the plan is approved.",
     )
+    run_parser.add_argument("--resume", action="store_true",
+        help="Resume from last checkpoint (requires --output dir with checkpoint.json)")
     run_parser.add_argument("--max-iters", type=int, default=5)
     run_parser.add_argument("--min-iters", type=int, default=1)
     run_parser.add_argument("--exhaustive", action="store_true", help="Run until all techniques exhausted")
@@ -637,10 +648,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip provisioning and attach to an already-running VM on --vm-port")
     run_parser.add_argument("--boot-existing", action="store_true",
         help="Boot the already-installed VM disk, run the pipeline, then shut it down")
-    run_parser.add_argument("--os",
-        choices=["windows-11", "windows-10", "ubuntu-24.04", "ubuntu-22.04"],
-        default="windows-11",
-        help="OS of the existing VM disk to boot (used with --boot-existing, default: windows-11)")
     run_parser.add_argument("--vm-port", type=int, default=10022,
         help="SSH port of the existing VM (default: 10022)")
     run_parser.add_argument("--vm-user", default="vmuser",

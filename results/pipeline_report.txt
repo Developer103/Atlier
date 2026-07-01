@@ -6,28 +6,21 @@ Target OS: windows (windows-11)
 EDRs: 
 
 Generation:
-  Source code length: 18187 chars
-  Prompt length: 3472 chars
-  Context hash: a303e829ea501517
+  Source code length: 21592 chars
+  Prompt length: 7534 chars
+  Context hash: ab5ab04c08b05ac4
 
 VM Status: running
 SSH Port: 10022
 
 === Verification Loop Summary ===
-Total iterations: 10
+Total iterations: 3
 Success (undetected): YES
-Best result — iteration 10: detection=none, alerts=0, failure_mode=None
+Best result — iteration 3: detection=none, alerts=0, failure_mode=None
 
 Iteration details:
   Iter 1: ✗ COMPILATION_FAILED
   Iter 2: ✗ COMPILATION_FAILED
-  Iter 3: ✗ COMPILATION_FAILED
-  Iter 4: ✗ COMPILATION_FAILED
-  Iter 5: ✗ COMPILATION_FAILED
-  Iter 6: ✗ COMPILATION_FAILED
-  Iter 7: ✗ COMPILATION_FAILED
-  Iter 8: ✗ COMPILATION_FAILED
-  Iter 9: ✗ COMPILATION_FAILED
-  Iter 10: ✓ UNDETECTED
+  Iter 3: ✓ UNDETECTED
 
 ============================================================

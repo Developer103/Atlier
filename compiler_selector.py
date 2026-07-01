@@ -123,12 +123,20 @@ class CompilerSelector:
             )
 
         elif compiler == "rustc":
-            cmd = "rustc --release source.rs -o malware"
-            return CompilerInstruction(tool="rustc", command=cmd, language="rust", target_os=self._infer_target(spec))
+            target_os = self._infer_target(spec)
+            if "windows" in target_os:
+                cmd = "rustc --target x86_64-pc-windows-gnu -C opt-level=2 -C strip=symbols malware_source.rs -o malware_source.exe"
+            else:
+                cmd = "rustc -C opt-level=2 -C strip=symbols malware_source.rs -o malware_source"
+            return CompilerInstruction(tool="rustc", command=cmd, language="rust", target_os=target_os)
 
         elif compiler == "go":
-            cmd = "CGO_ENABLED=0 go build -ldflags='-s -w' -o malware source.go"
-            return CompilerInstruction(tool="go", command=cmd, language="go", target_os=self._infer_target(spec))
+            target_os = self._infer_target(spec)
+            if "windows" in target_os:
+                cmd = "GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags='-s -w' -o malware_source.exe malware_source.go"
+            else:
+                cmd = "CGO_ENABLED=0 go build -ldflags='-s -w' -o malware_source malware_source.go"
+            return CompilerInstruction(tool="go", command=cmd, language="go", target_os=target_os)
 
         # Unknown compiler — generic fallback
         if spec.os_platform.value == "windows":

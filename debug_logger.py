@@ -30,6 +30,10 @@ _C = {
     "blue": "\033[94m",
     "cyan": "\033[96m",
     "white": "\033[97m",
+    "bold cyan": "\033[1;96m",
+    "bold green": "\033[1;92m",
+    "bold red": "\033[1;91m",
+    "bold yellow": "\033[1;93m",
 }
 
 

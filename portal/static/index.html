@@ -244,6 +244,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
   <span class="hdr-sub">localhost portal</span>
   <div class="hdr-sp"></div>
   <span class="hdr-badge" id="status-badge">idle</span>
+  <span class="hdr-badge" id="c2-badge" title="C2 Listener" style="cursor:pointer" onclick="document.querySelector('[data-cmd=listener]').click()">C2: off</span>
 </div>
 
 <div class="layout">
@@ -258,6 +259,8 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       <button class="tab" data-cmd="analyze">analyze</button>
       <button class="tab" data-cmd="clean">clean</button>
       <button class="tab" data-cmd="ssh">ssh</button>
+      <button class="tab" data-cmd="listener">c2</button>
+      <button class="tab" data-cmd="spec">spec</button>
     </div>
     <div class="form-scroll" id="form-area"></div>
     <div class="run-wrap">
@@ -321,6 +324,10 @@ const CMDS = {
       {id:'behavior',     lbl:'Behavior spec', type:'area', ph:'(optional) keylogger that sends to 10.0.0.5:9001 over AES-256 TCP, persists via HKCU Run key…'},
       {id:'output',       lbl:'Output dir',    type:'text', ph:'./results'},
     ]},
+    {s:'Output', f:[
+      {id:'source_language', lbl:'Language', type:'sel', opts:['c','go','best'], def:'c'},
+      {id:'output_format',   lbl:'Format',   type:'sel', opts:['exe','dll','shellcode'], def:'exe'},
+    ]},
     {s:'Mode', f:[{id:'mode', type:'mode'}]},
     {s:'Cloud', f:[
       {id:'cloud_provider', lbl:'Provider', type:'sel',
@@ -362,6 +369,10 @@ const CMDS = {
       {id:'malware_type', lbl:'Malware type', type:'text', req:1, ph:'keylogger · ransomware · backdoor…'},
       {id:'behavior',     lbl:'Behavior spec',type:'area', ph:'(optional) detailed behavioral requirements'},
       {id:'output',       lbl:'Output dir',   type:'text', ph:'./results'},
+    ]},
+    {s:'Output', f:[
+      {id:'source_language', lbl:'Language', type:'sel', opts:['c','go','best'], def:'c'},
+      {id:'output_format',   lbl:'Format',   type:'sel', opts:['exe','dll','shellcode'], def:'exe'},
     ]},
     {s:'Mode', f:[{id:'mode', type:'mode'}]},
     {s:'Cloud', f:[
@@ -447,6 +458,42 @@ const CMDS = {
       {id:'ssh_pass', lbl:'Password', type:'text', ph:'vmuser123',def:'vmuser123'},
     ]},
   ],
+  listener: [
+    {s:'C2 Listener', f:[
+      {id:'c2_port', lbl:'Port', type:'num', ph:'9001', def:'9001'},
+    ]},
+    {s:'Status', f:[
+      {id:'c2_status_display', type:'c2_status'},
+    ]},
+  ],
+  spec: {
+    label: 'spec.yaml',
+    build: (sec) => {
+      sec.innerHTML = `
+        <div class="sec">
+          <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">
+            <span>spec.yaml</span>
+            <span style="display:flex;align-items:center;gap:8px">
+              <span id="spec-status" style="font-size:11px"></span>
+              <button id="spec-save-btn" style="padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);border-radius:4px;color:var(--green);background:var(--bg3)" onclick="saveSpec()">Save</button>
+            </span>
+          </div>
+          <textarea id="spec-editor" rows="30" spellcheck="false" style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:8px;tab-size:2;resize:vertical;line-height:1.65;outline:none"></textarea>
+        </div>
+      `;
+      // Tab key support for indentation
+      document.getElementById('spec-editor').addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = this.selectionStart;
+          const end = this.selectionEnd;
+          this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+          this.selectionStart = this.selectionEnd = start + 2;
+        }
+      });
+      loadSpec();
+    }
+  },
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -465,7 +512,12 @@ let sshConnected = false;
 function renderForm(cmd) {
   const area = document.getElementById('form-area');
   area.innerHTML = '';
-  const secs = CMDS[cmd] || [];
+  const entry = CMDS[cmd];
+  if (entry && entry.build) {
+    entry.build(area);
+    return;
+  }
+  const secs = entry || [];
   secs.forEach(sec => {
     const sDiv = el('div', 'sec');
     sDiv.appendChild(el('div', 'sec-hdr', sec.s));
@@ -491,6 +543,9 @@ function renderForm(cmd) {
       } else if (f.type === 'sel') {
         const opts = f.opts.map(o=>`<option${o===f.def?' selected':''}>${o}</option>`).join('');
         wrap.innerHTML = `<label for="f_${f.id}">${f.lbl}${f.req?'<span class="req"> *</span>':''}</label><select id="f_${f.id}">${opts}</select>`;
+      } else if (f.type === 'c2_status') {
+        wrap.innerHTML = `<div id="c2-status-panel" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.8">Loading...</div>`;
+        setTimeout(refreshC2Status, 100);
       } else if (f.type === 'area') {
         wrap.innerHTML = `<label for="f_${f.id}">${f.lbl}${f.req?'<span class="req"> *</span>':''}</label><textarea id="f_${f.id}" placeholder="${f.ph||''}"></textarea>`;
       } else {
@@ -658,7 +713,9 @@ window.addEventListener('resize', () => {
 
 function formData() {
   const d = { command: activeCmd, mode: getMode() };
-  (CMDS[activeCmd] || []).forEach(sec => {
+  const entry = CMDS[activeCmd];
+  if (!entry || entry.build) return d;
+  (entry || []).forEach(sec => {
     sec.f.forEach(f => {
       if (f.type === 'mode') return;
       if (f.type === 'llm_endpoint') {
@@ -682,11 +739,20 @@ document.getElementById('tabs').addEventListener('click', ev => {
   t.classList.add('active');
   activeCmd = t.dataset.cmd;
   renderForm(activeCmd);
+  document.getElementById('run-btn').style.display = '';
   if (activeCmd === 'ssh') {
     setSshView(sshConnected || !!sshTerm);
     setSshConnected(sshConnected);  // refresh button label
     const btn = document.getElementById('run-btn');
     if (!sshConnected) { btn.textContent = '⏎  Connect'; btn.classList.remove('stop'); }
+  } else if (activeCmd === 'listener') {
+    setSshView(false);
+    refreshC2Status();
+    updateC2Button();
+  } else if (activeCmd === 'spec') {
+    setSshView(false);
+    const btn = document.getElementById('run-btn');
+    btn.style.display = 'none';
   } else {
     setSshView(false);
     if (!document.getElementById('run-btn').classList.contains('stop')) {
@@ -706,6 +772,12 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     return;
   }
 
+  // Listener tab: start / stop C2
+  if (activeCmd === 'listener') {
+    await toggleC2Listener();
+    return;
+  }
+
   // Stop running job
   if (btn.classList.contains('stop') && activeJobId) {
     await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
@@ -721,6 +793,26 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   }
 
   saveFormState(activeCmd, d);
+
+  // Write form values to spec.yaml before running
+  if (['run', 'generate'].includes(d.command)) {
+    try {
+      await fetch('/api/spec/merge', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          malware_type: d.malware_type || '',
+          behavior: d.behavior || '',
+          source_language: d.source_language || 'c',
+          output_format: d.output_format || 'exe',
+          os: d.os || 'windows-11',
+        }),
+      });
+    } catch(e) {
+      flashError(`Could not update spec.yaml: ${e}`);
+      return;
+    }
+  }
 
   try {
     const r = await fetch('/api/jobs', {
@@ -924,6 +1016,145 @@ async function initJobs() {
   } catch {}
 }
 
+// ── Spec editor ──────────────────────────────────────────────────────────────
+async function loadSpec() {
+  const editor = document.getElementById('spec-editor');
+  const status = document.getElementById('spec-status');
+  if (!editor) return;
+  try {
+    const res = await fetch('/api/spec');
+    if (res.ok) {
+      const data = await res.json();
+      editor.value = data.content;
+    } else {
+      editor.value = '';
+      editor.placeholder = 'spec.yaml not found — type your spec here and save';
+    }
+  } catch(e) {
+    if (status) { status.style.color = 'var(--red)'; status.textContent = 'Load error: ' + e.message; }
+  }
+}
+
+async function saveSpec() {
+  const editor = document.getElementById('spec-editor');
+  const status = document.getElementById('spec-status');
+  if (!editor || !status) return;
+  try {
+    const res = await fetch('/api/spec', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: editor.value})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      status.style.color = 'var(--green)';
+      status.textContent = 'Saved!';
+    } else {
+      status.style.color = 'var(--red)';
+      status.textContent = data.error || 'Save failed';
+    }
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Error: ' + e.message;
+  }
+  setTimeout(() => { if (status) status.textContent = ''; }, 3000);
+}
+
+// ── C2 Listener ──────────────────────────────────────────────────────────────
+let c2Running = false;
+
+async function refreshC2Status() {
+  try {
+    const r = await fetch('/api/c2');
+    const s = await r.json();
+    c2Running = s.running;
+    updateC2Badge(s);
+    updateC2Button();
+    const panel = document.getElementById('c2-status-panel');
+    if (!panel) return;
+    if (!s.running) {
+      panel.innerHTML = '<span style="color:var(--muted)">Listener is stopped. Press Start to begin accepting connections.</span>';
+      return;
+    }
+    let h = `<span style="color:var(--green)">Listening on ${s.host}:${s.port}</span><br>`;
+    h += `Connections: ${s.total_connections} | Bytes: ${s.total_bytes.toLocaleString()}<br>`;
+    if (s.connections.length) {
+      h += '<br><span style="color:var(--muted);font-size:10px">RECENT CONNECTIONS:</span><br>';
+      s.connections.slice(-10).reverse().forEach(c => {
+        const ts = new Date(c.connected_at * 1000).toLocaleTimeString();
+        const st = c.closed ? '<span style="color:var(--muted)">closed</span>' : '<span style="color:var(--green)">active</span>';
+        h += `${ts} ${c.addr}:${c.port} ${st} ${c.bytes_received.toLocaleString()}B`;
+        if (c.data_file && c.bytes_received > 0) {
+          h += ` <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="viewC2Data('${c.data_file}')">[view]</span>`;
+        }
+        h += '<br>';
+      });
+    }
+    panel.innerHTML = h;
+  } catch(e) {
+    const panel = document.getElementById('c2-status-panel');
+    if (panel) panel.innerHTML = '<span style="color:var(--red)">Could not reach portal API</span>';
+  }
+}
+
+function updateC2Badge(s) {
+  const badge = document.getElementById('c2-badge');
+  if (!badge) return;
+  if (s && s.running) {
+    badge.textContent = `C2: :${s.port}`;
+    badge.style.borderColor = 'var(--green)';
+    badge.style.color = 'var(--green)';
+  } else {
+    badge.textContent = 'C2: off';
+    badge.style.borderColor = '';
+    badge.style.color = '';
+  }
+}
+
+function updateC2Button() {
+  if (activeCmd !== 'listener') return;
+  const btn = document.getElementById('run-btn');
+  if (c2Running) {
+    btn.textContent = '⏹  Stop Listener';
+    btn.classList.add('stop');
+  } else {
+    btn.textContent = '▶︎  Start Listener';
+    btn.classList.remove('stop');
+  }
+}
+
+async function toggleC2Listener() {
+  if (c2Running) {
+    await fetch('/api/c2/stop', {method:'POST'});
+    appendLog('[C2] Listener stopped', 'warn');
+  } else {
+    const port = parseInt(document.getElementById('f_c2_port')?.value) || 9001;
+    const r = await fetch('/api/c2/start', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({port}),
+    });
+    const s = await r.json();
+    if (s.ok) {
+      appendLog(`[C2] Listener started on 0.0.0.0:${port} -- data saves to results/c2_received_*.bin`, 'ok');
+    } else {
+      appendLog(`[C2] Failed to start listener on port ${port}`, 'err');
+    }
+  }
+  await refreshC2Status();
+}
+
+async function viewC2Data(filename) {
+  try {
+    const r = await fetch(`/api/c2/data/${filename}`);
+    const txt = await r.text();
+    document.getElementById('modal-title').textContent = filename;
+    document.getElementById('modal-body').textContent = txt;
+    document.getElementById('modal-bg').classList.add('open');
+  } catch(e) {
+    flashError(`Could not load ${filename}: ${e}`);
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function el(tag, cls, txt) {
   const e = document.createElement(tag);
@@ -946,7 +1177,9 @@ renderForm('run');
 if (!localStorage.getItem('mgf_state_run')) pickMode('local-run');
 refreshResults();
 initJobs();
+refreshC2Status();
 setInterval(refreshResults, 15000);
+setInterval(refreshC2Status, 5000);
 </script>
 </body>
 </html>

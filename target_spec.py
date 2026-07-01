@@ -55,6 +55,11 @@ KNOWN_EDRS: Set[str] = {
     "trend_micro",
     "elastic_security",
     "sysmon",
+    "wazuh",
+    "elastic",
+    "openedr",
+    "velociraptor",
+    "whids",
 }
 
 KNOWN_COMPILER_TOOLS: Set[str] = {
@@ -77,6 +82,10 @@ class TargetEnvironmentSpec(BaseModel):
     # -- platform / OS -------------------------------------------------------
     os_platform: OSPlatform = Field(..., description="linux or windows")
     os_version: str = Field(..., description="e.g. 'ubuntu-24.04', 'windows-11'")
+    os_details: str = Field(
+        default="",
+        description="Specific OS release version (e.g. '25H2', '24H2', '22H2', '6.8.0-40-generic'). Optional — defaults to latest.",
+    )
 
     # -- security stack ------------------------------------------------------
     edrs: List[str] = Field(
@@ -111,6 +120,18 @@ class TargetEnvironmentSpec(BaseModel):
         description="Custom detection evasion requirements (free-form); e.g. ['no console window', 'sleep before main']"
     )
 
+    # -- source language -----------------------------------------------------
+    source_language: str = Field(
+        default="c",
+        description="Source language for generated malware: 'c', 'go', or 'best' (try both, pick whichever evades better)",
+    )
+
+    # -- output format -------------------------------------------------------
+    output_format: str = Field(
+        default="exe",
+        description="Output binary format: 'exe' (default), 'dll', or 'shellcode'",
+    )
+
     # -- malware type --------------------------------------------------------
     malware_type: str = Field(
         default="info stealer",
@@ -127,6 +148,16 @@ class TargetEnvironmentSpec(BaseModel):
             "encrypted TCP, persists via HKCU\\\\Run, kills defender.exe on startup'. "
             "The LLM treats this as a binding spec and adjusts every generated function accordingly."
         ),
+    )
+
+    # -- C2 / exfiltration config (for keylogger, infostealer, RAT, etc.) ----
+    c2_address: str = Field(
+        default="10.0.2.2",
+        description="C2/exfil server IP or hostname. Default 10.0.2.2 = QEMU host.",
+    )
+    c2_port: int = Field(
+        default=9001,
+        description="C2/exfil server port. The verifier starts a listener here during testing.",
     )
 
     # -- extra metadata ------------------------------------------------------
@@ -152,6 +183,15 @@ class TargetEnvironmentSpec(BaseModel):
         if isinstance(v, list):
             return [s.lower().replace(" ", "_") for s in v]
         return [v.lower().replace(" ", "_")] if v else []
+
+    @field_validator("output_format", mode="before")
+    @classmethod
+    def _normalize_output_format(cls, v):
+        if isinstance(v, str):
+            val = v.strip().lower()
+            if val in ("exe", "dll", "shellcode", "sc", "bin"):
+                return "shellcode" if val in ("sc", "bin") else val
+        return "exe"
 
     @field_validator("malware_type", mode="before")
     @classmethod

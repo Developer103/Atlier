@@ -379,9 +379,9 @@ def test_generation_engine_mock():
     from malware_gen_framework.target_spec import TargetEnvironmentSpec
     from malware_gen_framework.db_models import MalwareTechnique, PoC, CTIFinding, QueryResult
 
-    # Mock DB so query_all returns data even when chromadb is not installed
-    mock_db = MagicMock()  # Use MagicMock (not AsyncMock) since query_all is sync
-    mock_db.query_all.return_value = QueryResult(
+    # Mock DB — query_unified is async, so use AsyncMock
+    mock_db = MagicMock()
+    mock_db.query_unified = AsyncMock(return_value=QueryResult(
         malware_techniques=[
             MalwareTechnique(id="t1", name="test technique", description="", category="evasion", os_type="linux"),
         ],
@@ -389,10 +389,11 @@ def test_generation_engine_mock():
             PoC(id="p1", cve="CVE-2024-1", title="Test Exploit", description="", exploit_type="", target_os="linux", severity="high"),
         ],
         cti_findings=[CTIFinding(id="c1", title="Test CTI", description="", severity="high")],
-    )
+    ))
 
-    # Mock the LLM client — must be passed at init so GenerationEngine uses it
-    mock_llm = AsyncMock(return_value="int main(){return 0;}")
+    # Mock the LLM client — .generate() must be async and return a string
+    mock_llm = MagicMock()
+    mock_llm.generate = AsyncMock(return_value="int main(){return 0;}")
 
     engine = GenerationEngine(db_engine=mock_db, llm_client=mock_llm)
 

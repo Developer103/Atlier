@@ -41,6 +41,9 @@ class IterationRecord:
     alerts_count: int
     build_time_sec: float
     execution_exit_code: int
+    alert_messages: list[str] = field(default_factory=list)
+    precheck_blocked: bool = False
+    evasion_passes_applied: list[str] = field(default_factory=list)
 
 
 class LoopController:
@@ -78,6 +81,8 @@ class LoopController:
         target_spec,                             # TargetEnvironmentSpec
         initial_source: Optional[str] = None,
         reset_fn: Optional[Callable[[], Awaitable]] = None,  # called before each iteration after the first
+        iteration_offset: int = 0,
+        on_iteration_complete: Optional[Callable] = None,
     ):
         """Run the full verification loop.
 
@@ -101,7 +106,8 @@ class LoopController:
             self._debug.phase("LOOP")
             self._debug.step("init", f"Starting loop — max {self.max_iterations} iterations, min {self.min_iterations}")
 
-        for iteration in range(1, self.max_iterations + 1):
+        _start = iteration_offset + 1
+        for iteration in range(_start, self.max_iterations + 1):
             iter_start = time.time()
 
             # Reset VM to clean snapshot before each iteration after the first
@@ -160,6 +166,12 @@ class LoopController:
                 execution_exit_code=result.get("execution_exit_code", -1),
             )
             history.append(record)
+
+            if on_iteration_complete:
+                try:
+                    await on_iteration_complete(iteration, source_code, history)
+                except Exception as cb_err:
+                    logger.warning("on_iteration_complete callback failed: %s", cb_err)
 
             # -- Check stopping conditions -----------------------------------
             # True success: detection_score is "none" AND no compile/exec failure
@@ -224,6 +236,7 @@ class LoopController:
             best_result=self._find_best(history),
             total_iterations=len(history),
             success=success,
+            final_source=source_code,
         )
 
     # ------------------------------------------------------------------
@@ -240,7 +253,7 @@ class LoopController:
         score = result.get("detection_score", "")
         alerts = result.get("alerts_count", 0)
 
-        if score in ("high", "medium"):
+        if score in ("high", "medium", "low"):
             return FailureMode.DETECTED
         if alerts > 3:
             return FailureMode.DETECTED
@@ -301,6 +314,7 @@ class LoopResult:
     best_result: Optional[dict]
     total_iterations: int
     success: bool
+    final_source: Optional[str] = None
 
     def summary(self) -> str:
         """Human-readable summary string."""

@@ -29,8 +29,38 @@ from .windows_provisioner import generate_autounattend_xml, create_autounattend_
 logger = logging.getLogger(__name__)
 
 
+def _get_host_ip() -> str:
+    """Get the host IP reachable from a QEMU guest (10.0.2.2 for user-mode networking)."""
+    return "10.0.2.2"
+
+
 class SSHBridgeException(Exception):
     pass
+
+
+def cleanup_orphan_vms(name_prefix: str = "malgen_") -> int:
+    """Kill QEMU processes whose -name starts with name_prefix.
+
+    Returns the number of processes killed.
+    """
+    killed = 0
+    try:
+        out = subprocess.check_output(
+            ["pgrep", "-a", "-f", f"qemu-system.*-name {name_prefix}"],
+            text=True, stderr=subprocess.DEVNULL,
+        )
+        for line in out.strip().splitlines():
+            pid_str = line.split()[0]
+            try:
+                pid = int(pid_str)
+                os.kill(pid, 15)
+                killed += 1
+                logger.info("Killed orphan QEMU pid %d", pid)
+            except (ValueError, ProcessLookupError):
+                pass
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    return killed
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +82,9 @@ class QEMUProcess:
         windows_virtio_iso: Optional[Path] = None,
         windows_boot_only: bool = False,
         use_tpm: bool = False,
+        ssh_port: int = 10022,
+        vm_user: str = "vmuser",
+        vm_pass: str = "vmuser123",
     ):
         self.vm_name: str = vm_name
         self.qmp_socket: Path = qmp_socket
@@ -63,6 +96,9 @@ class QEMUProcess:
         self.windows_virtio_iso: Optional[Path] = windows_virtio_iso
         self.windows_boot_only: bool = windows_boot_only
         self.use_tpm: bool = use_tpm
+        self.ssh_port: int = ssh_port
+        self.vm_user: str = vm_user
+        self.vm_pass: str = vm_pass
         self.process = None
         self._swtpm_proc: Optional[subprocess.Popen] = None
         self._keypress_task: Optional[asyncio.Task] = None
@@ -429,7 +465,17 @@ class QEMUProcess:
             payload = json.dumps(payload_dict).encode() + b"\n"
             sock.sendall(payload)
             data = sock.recv(4096).decode()
-            return json.loads(data)
+            for line in data.strip().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if "return" in obj or "error" in obj:
+                        return obj
+                except json.JSONDecodeError:
+                    continue
+            return json.loads(data.split('\n')[0])
         finally:
             sock.close()
 
@@ -454,24 +500,90 @@ class QEMUProcess:
             await asyncio.sleep(0.5)
 
     async def save_snapshot(self, tag: str = "clean_state") -> None:
-        """Save a live VM snapshot (disk + RAM + CPU) via QMP.
+        """Create a disk overlay so all subsequent writes go to a temp file.
 
-        Uses savevm which records qcow2 disk state + guest RAM + CPU registers.
-        Safe to call while VM is running. Works even after ransomware encrypts
-        the disk — loadvm discards all writes since the snapshot.
+        Uses blockdev-snapshot-sync instead of savevm because UEFI pflash
+        devices don't support qcow2 internal snapshots (savevm crashes with
+        "Device 'pflash1' is writable but does not support snapshots").
+
+        The overlay file is named after the tag.  restore_snapshot() discards
+        it and reboots from the clean base disk.
         """
-        await self._send_qmp("human-monitor-command", {"command-line": f"savevm {tag}"})
-        logger.info("Snapshot saved: tag=%s disk=%s", tag, self.disk_img.name)
+        overlay = self.disk_img.parent / f"{self.disk_img.stem}.overlay-{tag}.qcow2"
+        overlay.unlink(missing_ok=True)
+        result = await self._send_qmp("blockdev-snapshot-sync", {
+            "device": "ide0-hd0",
+            "snapshot-file": str(overlay),
+            "format": "qcow2",
+        })
+        if "error" in str(result):
+            raise RuntimeError(f"blockdev-snapshot-sync failed: {result}")
+        self._overlay_path = overlay
+        logger.info("Overlay snapshot created: tag=%s overlay=%s", tag, overlay.name)
 
     async def restore_snapshot(self, tag: str = "clean_state") -> None:
-        """Restore a live VM snapshot via QMP. All disk/RAM/CPU changes are discarded.
+        """Restore VM to pre-snapshot state by discarding the overlay.
 
-        The VM continues running from exactly the saved point — no reboot needed.
-        Network connections reset (expected), but sshd is restored too so new
-        connections work immediately after a brief stabilisation delay.
+        Sequence: SSH shutdown → wait for QEMU exit → delete overlay →
+        restart swtpm → reboot QEMU → wait for SSH.
         """
-        await self._send_qmp("human-monitor-command", {"command-line": f"loadvm {tag}"})
-        logger.info("Snapshot restored: tag=%s", tag)
+        overlay = getattr(self, "_overlay_path", None)
+        if not overlay:
+            overlay = self.disk_img.parent / f"{self.disk_img.stem}.overlay-{tag}.qcow2"
+
+        # 1. Graceful shutdown
+        try:
+            await self._ssh_poweroff()
+        except Exception:
+            try:
+                await self._send_qmp("system_powerdown")
+            except Exception:
+                pass
+
+        # 2. Wait for QEMU to exit
+        if self.process:
+            deadline = asyncio.get_event_loop().time() + 30
+            while asyncio.get_event_loop().time() < deadline:
+                if self.process.poll() is not None:
+                    break
+                await asyncio.sleep(0.5)
+            else:
+                self.process.kill()
+                await asyncio.sleep(1)
+
+        # 3. Discard overlay
+        if overlay.exists():
+            overlay.unlink()
+        self._overlay_path = None
+
+        # 4. Clean up sockets
+        self.qmp_socket.unlink(missing_ok=True)
+
+        # 5. Restart swtpm if needed
+        if self.use_tpm:
+            if self._swtpm_proc and self._swtpm_proc.poll() is None:
+                self._swtpm_proc.kill()
+                self._swtpm_proc = None
+            tpm_state = self.disk_img.parent / f"{self.vm_name}-tpm"
+            tpm_sock = self.disk_img.parent / f"{self.vm_name}-tpm.sock"
+            tpm_sock.unlink(missing_ok=True)
+            self._swtpm_proc = await asyncio.to_thread(
+                self._start_swtpm, tpm_state, tpm_sock
+            )
+
+        # 6. Reboot from clean base disk
+        await self.start(background=True)
+
+        # 7. Wait for SSH
+        _is_windows = bool(self.windows_install_iso or self.windows_boot_only)
+        ssh_timeout = 120 if _is_windows else 60
+        ssh_ready = await ProvisionEngine._wait_for_ssh(
+            port=10022, timeout=ssh_timeout, interval=5.0,
+        )
+        if not ssh_ready:
+            logger.error("VM did not come back after overlay restore (timeout=%ds)", ssh_timeout)
+            raise RuntimeError("VM failed to boot after snapshot restore")
+        logger.info("Snapshot restored: tag=%s (overlay discarded, VM rebooted)", tag)
 
     async def _ssh_poweroff(self) -> None:
         """Send poweroff to the running guest over SSH (fallback)."""
@@ -479,8 +591,8 @@ class QEMUProcess:
             return
         _is_windows = bool(self.windows_install_iso or self.windows_boot_only)
         _cmd = "shutdown /s /t 0" if _is_windows else "poweroff"
-        async with asyncssh.connect("localhost", port=10022, username="vmuser",
-                                    password="vmuser123", known_hosts=None) as conn:
+        async with asyncssh.connect("localhost", port=self.ssh_port, username=self.vm_user,
+                                    password=self.vm_pass, known_hosts=None) as conn:
             await conn.run(_cmd, check=True)
 
     def destroy(self) -> None:
@@ -554,18 +666,18 @@ class VMInstance:
                 await sftp.put(local_path, remote_path)
 
     async def save_snapshot(self, tag: str = "clean_state") -> None:
-        """Save a live snapshot of this VM instance (no-op for pre-existing VMs)."""
+        """Create a disk overlay snapshot (no-op for pre-existing VMs without QEMU handle)."""
         if self.qemu:
             await self.qemu.save_snapshot(tag)
 
     async def restore_snapshot(self, tag: str = "clean_state") -> None:
-        """Restore VM to a saved snapshot. All changes since save are discarded.
+        """Restore VM by discarding overlay, rebooting, and waiting for SSH.
 
-        Waits 2 s after restore to let the guest stabilise before the next SSH command.
+        The underlying QEMUProcess handles the full shutdown→discard→reboot cycle.
         """
         if self.qemu:
             await self.qemu.restore_snapshot(tag)
-            await asyncio.sleep(2)
+            self.status = "running"
 
     def get_status(self) -> dict:
         """Return current status dictionary."""
@@ -600,6 +712,8 @@ class ProvisionEngine:
         self.base_dir = Path(base_dir) if base_dir else Path("/tmp/vm_provision")
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.instances: dict[str, VMInstance] = {}
+        import atexit
+        atexit.register(self._atexit_cleanup)
 
     # ---------------------------------------------------------------
     # public API
@@ -698,23 +812,28 @@ class ProvisionEngine:
 
         # 2. Disk setup — Linux gets a COW snapshot; Windows gets a fresh empty disk
         #    because qemu-img can't use a Windows ISO as a qcow2 backing file.
+        #    For Windows: reuse existing COW disk if present (avoids 15+ min reinstall).
         _is_windows = config.os_type in (TargetOS.WINDOWS_11, TargetOS.WINDOWS_10)
-        config.cow_img.unlink(missing_ok=True)
-        if not _is_windows:
-            subprocess.run(
-                ["qemu-img", "create", "-f", "qcow2",
-                 "-b", str(config.base_img), "-F", "qcow2",
-                 str(config.cow_img)],
-                check=True, capture_output=True,
-            )
-            logger.info("COW disk created: %s", config.cow_img)
+        if _is_windows and config.cow_img.exists() and config.cow_img.stat().st_size > 1_000_000_000:
+            logger.info("Reusing existing Windows disk: %s (%.1f GB)",
+                        config.cow_img, config.cow_img.stat().st_size / 1e9)
         else:
-            _disk_gb = config.resources.disk_GB
-            subprocess.run(
-                ["qemu-img", "create", "-f", "qcow2", str(config.cow_img), f"{_disk_gb}G"],
-                check=True, capture_output=True,
-            )
-            logger.info("Empty Windows disk created: %s (%d GB)", config.cow_img, _disk_gb)
+            config.cow_img.unlink(missing_ok=True)
+            if not _is_windows:
+                subprocess.run(
+                    ["qemu-img", "create", "-f", "qcow2",
+                     "-b", str(config.base_img), "-F", "qcow2",
+                     str(config.cow_img)],
+                    check=True, capture_output=True,
+                )
+                logger.info("COW disk created: %s", config.cow_img)
+            else:
+                _disk_gb = config.resources.disk_GB
+                subprocess.run(
+                    ["qemu-img", "create", "-f", "qcow2", str(config.cow_img), f"{_disk_gb}G"],
+                    check=True, capture_output=True,
+                )
+                logger.info("Empty Windows disk created: %s (%d GB)", config.cow_img, _disk_gb)
             # Always start with a fresh OVMF vars — stale vars from a previous
             # failed provision attempt contain bad boot entries that would cause
             # the same UEFI timeout on the next run.
@@ -757,6 +876,9 @@ class ProvisionEngine:
             windows_install_iso=config.base_img if _is_windows else None,
             windows_virtio_iso=_virtio_iso_path,
             use_tpm=_is_windows,
+            ssh_port=_ssh_port,
+            vm_user=_username,
+            vm_pass=_password,
         )
         vm = VMInstance(qemu, vm_user=_username, vm_pass=_password,
                         ssh_port=_ssh_port)
@@ -776,11 +898,171 @@ class ProvisionEngine:
             await vm.stop()
             raise TimeoutError(f"VM did not become ready in {_ssh_timeout_label}")
 
-        vm.status = "ready"
+        vm.status = "running"
         key = f"{config.os_type.value}_{config.cow_img.name}"
         self.instances[key] = vm
         logger.info("Provisioned: %s (ready at localhost:%d)", key, vm.ssh_port)
         return vm
+
+    async def install_edr_on_vm(
+        self,
+        vm: "VMInstance",
+        edr_config,
+        server_ip: str = "",
+    ) -> bool:
+        """Install an EDR agent on an already-running VM.
+
+        Works with both provisioned and pre-existing VMs.  Substitutes
+        {server_ip}, {token}, {hostname} placeholders in install_command.
+        For agent-only EDRs (OpenEDR), no server_ip is needed.
+        """
+        install_cmd = getattr(edr_config, "install_command", "")
+        if not install_cmd:
+            logger.warning("No install_command for EDR %s", edr_config.name)
+            return False
+
+        if not server_ip:
+            server_ip = _get_host_ip()
+
+        install_cmd = install_cmd.replace("{server_ip}", server_ip)
+        install_cmd = install_cmd.replace("{fleet_url}", f"https://{server_ip}:8220")
+        install_cmd = install_cmd.replace("{token}", edr_config.token or "")
+
+        try:
+            hostname_out = await vm.execute_command("hostname", timeout=10)
+            install_cmd = install_cmd.replace("{hostname}", hostname_out.strip())
+        except Exception:
+            pass
+
+        if edr_config.setup_script:
+            logger.info("EDR %s: running setup script...", edr_config.name)
+            try:
+                await vm.execute_command(edr_config.setup_script, timeout=120)
+            except Exception as exc:
+                logger.warning("EDR %s setup script failed: %s", edr_config.name, exc)
+
+        logger.info("EDR %s: installing agent — %s", edr_config.name, install_cmd[:200])
+        try:
+            output = await vm.execute_command(install_cmd, timeout=300)
+            logger.info("EDR %s install output: %s", edr_config.name, output[:500])
+        except Exception as exc:
+            logger.error("EDR %s install failed: %s", edr_config.name, exc)
+            return False
+
+        return True
+
+    async def create_edr_overlay(
+        self,
+        base_cow: Path,
+        edr_config,
+        ssh_port: int = 10022,
+        username: str = "vmuser",
+        password: str = "vmuser123",
+        server_ip: str = "",
+    ) -> Path:
+        """Create a VM overlay with an EDR agent pre-installed.
+
+        Boots from a COW snapshot of base_cow, installs the EDR agent via SSH,
+        shuts down cleanly, and returns the overlay path.  The overlay can then
+        be swapped in for testing against that specific EDR.
+        """
+        overlay_path = self.base_dir / f"edr_{edr_config.name}_overlay.qcow2"
+        if overlay_path.exists() and overlay_path.stat().st_size > 500_000_000:
+            logger.info("EDR overlay already exists for %s: %s (%.1f GB)",
+                        edr_config.name, overlay_path, overlay_path.stat().st_size / 1e9)
+            edr_config.vm_overlay = overlay_path
+            return overlay_path
+
+        subprocess.run(
+            ["qemu-img", "create", "-f", "qcow2",
+             "-b", str(base_cow), "-F", "qcow2",
+             str(overlay_path)],
+            check=True, capture_output=True,
+        )
+        logger.info("EDR overlay COW created for %s: %s", edr_config.name, overlay_path)
+
+        install_cmd = getattr(edr_config, "install_command", "")
+        if not install_cmd:
+            logger.warning("No install_command for EDR %s — overlay created but agent not installed",
+                           edr_config.name)
+            edr_config.vm_overlay = overlay_path
+            return overlay_path
+
+        # Boot the overlay VM, install the agent, shut down
+        qemu = QEMUProcess(
+            vm_name=f"edr-{edr_config.name}",
+            qmp_socket=self.base_dir / f"edr-{edr_config.name}.qmp",
+            disk_img=overlay_path,
+            cpu_cores=2,
+            ram_mb=4096,
+            windows_boot_only=True,
+            use_tpm=True,
+            ssh_port=ssh_port,
+            vm_user=username,
+            vm_pass=password,
+        )
+        vm = VMInstance(qemu, vm_user=username, vm_pass=password, ssh_port=ssh_port)
+
+        try:
+            await vm.start(background=True)
+            ssh_ready = await self._wait_for_ssh(
+                ssh_port, timeout=300, username=username, password=password,
+            )
+            if not ssh_ready:
+                raise TimeoutError(f"VM for EDR {edr_config.name} did not become SSH-ready")
+            vm.status = "running"
+
+            installed = await self.install_edr_on_vm(vm, edr_config, server_ip=server_ip)
+            if not installed:
+                logger.error("EDR %s agent installation failed on overlay", edr_config.name)
+
+            # Graceful shutdown to commit changes to overlay
+            try:
+                await vm.execute_command("shutdown /s /t 5", timeout=10)
+                await asyncio.sleep(30)
+            except Exception:
+                pass
+            await vm.stop(wait=True)
+
+        except Exception as exc:
+            logger.error("EDR overlay provisioning failed for %s: %s", edr_config.name, exc)
+            await vm.stop(wait=True)
+            raise
+
+        edr_config.vm_overlay = overlay_path
+        logger.info("EDR %s overlay ready at %s", edr_config.name, overlay_path)
+        return overlay_path
+
+    async def provision_edr_overlays(
+        self,
+        config: VMProvisionConfig,
+        edr_configs: list = None,
+    ) -> dict[str, Path]:
+        """Create EDR overlays for all requested EDRs.
+
+        Returns dict mapping EDR name → overlay path.
+        """
+        from .config_models import BUILTIN_EDRS
+        if edr_configs is None:
+            edr_configs = list(BUILTIN_EDRS.values())
+
+        if not config.cow_img or not config.cow_img.exists():
+            logger.warning("Base COW disk not found — cannot create EDR overlays")
+            return {}
+
+        results = {}
+        for edr_cfg in edr_configs:
+            try:
+                path = await self.create_edr_overlay(
+                    base_cow=config.cow_img,
+                    edr_config=edr_cfg,
+                    ssh_port=config.network.port_fwd_ssh,
+                )
+                results[edr_cfg.name] = path
+            except Exception as exc:
+                logger.error("Failed to create EDR overlay for %s: %s", edr_cfg.name, exc)
+
+        return results
 
     async def shutdown_all(self, wait: bool = True) -> None:
         """Stop every tracked instance."""
@@ -789,6 +1071,17 @@ class ProvisionEngine:
                 await vm.stop(wait)
             except Exception as exc:
                 logger.error("Error stopping %s: %s", key, exc)
+        self.instances.clear()
+
+    def _atexit_cleanup(self) -> None:
+        """Kill any QEMU processes we launched (atexit handler)."""
+        for key, vm in list(self.instances.items()):
+            if hasattr(vm, '_qemu') and vm._qemu.process and vm._qemu.process.poll() is None:
+                try:
+                    vm._qemu.process.kill()
+                    logger.info("atexit: killed VM %s (pid %d)", key, vm._qemu.process.pid)
+                except Exception:
+                    pass
         self.instances.clear()
 
     # ---------------------------------------------------------------

@@ -41,6 +41,11 @@ _EDR_ALIASES: dict[str, str] = {
     "trendmicro": "trend_micro",
     "tm": "trend_micro",
     "elastic": "elastic_security",
+    "wazuh": "wazuh",
+    "elastic_security": "elastic",
+    "openedr": "openedr",
+    "velociraptor": "velociraptor",
+    "whids": "whids",
 }
 
 
@@ -171,6 +176,10 @@ def _auto_complete(data: dict[str, Any]) -> None:
     # -- sandbox detectors default -------------------------------------------
     if not data.get("sandbox_detectors"):
         data["sandbox_detectors"] = []
+
+    # -- os_details default ---------------------------------------------------
+    if "os_details" not in data:
+        data["os_details"] = ""
 
     # -- malware type default ------------------------------------------------
     if not data.get("malware_type"):
