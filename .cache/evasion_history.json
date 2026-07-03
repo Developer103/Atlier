@@ -1,0 +1,381 @@
+{
+  "runs": [
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "peb_walk",
+        "execution": "callback_abuse",
+        "process": "dll_sideload",
+        "timing": "triggered",
+        "data_obfuscation": "aes_encrypt",
+        "anti_analysis": "full",
+        "exfil": "dns_exfil",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "peb_walk",
+        "execution": "callback_abuse",
+        "process": "dll_sideload",
+        "timing": "triggered",
+        "data_obfuscation": "aes_encrypt",
+        "anti_analysis": "full",
+        "exfil": "dns_exfil",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "standalone",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "http_post",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "ppid_spoof",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_vm",
+        "exfil": "http_post",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "ppid_spoof",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_vm",
+        "exfil": "http_post",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "ppid_spoof",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_vm",
+        "exfil": "http_post",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "ppid_spoof",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_vm",
+        "exfil": "http_post",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "peb_walk",
+        "execution": "callback_abuse",
+        "process": "dll_sideload",
+        "timing": "triggered",
+        "data_obfuscation": "aes_encrypt",
+        "anti_analysis": "full",
+        "exfil": "dns_exfil",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "peb_walk",
+        "execution": "callback_abuse",
+        "process": "dll_sideload",
+        "timing": "triggered",
+        "data_obfuscation": "aes_encrypt",
+        "anti_analysis": "full",
+        "exfil": "dns_exfil",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "standalone",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_debug",
+        "exfil": "http_post",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    },
+    {
+      "config": {
+        "api_resolve": "api_hash_djb2",
+        "execution": "callback_abuse",
+        "process": "ppid_spoof",
+        "timing": "staged_jitter",
+        "data_obfuscation": "xor_encrypt",
+        "anti_analysis": "anti_vm",
+        "exfil": "http_post",
+        "persistence": "registry_run"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": false
+    }
+  ],
+  "detections": [],
+  "successes": []
+}

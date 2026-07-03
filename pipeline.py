@@ -448,7 +448,7 @@ class MalwarePipeline:
             logger.info("Provisioning VM...")
             try:
                 from .provision_engine import ProvisionEngine
-                engine = ProvisionEngine()
+                engine = ProvisionEngine(daemonize=True)
                 vm_instance = await engine.provision(vm_config, background=True)
                 result.vm_status = "running"
                 result.ssh_port = vm_instance.ssh_port if vm_instance else None
@@ -716,54 +716,49 @@ class MalwarePipeline:
                         BehaviourCheck.FUNCTIONAL_GOAL_MET
                     )
                     if vresult.is_undetected and _compile_ok and _exec_ok:
+                        _llm_passed = None
                         if _validation_plan is not None:
                             try:
-                                _func_passed = await verifier.run_validation_checks(_validation_plan)
-                                if not _func_passed and _hardcoded_goal:
+                                _llm_passed = await verifier.run_validation_checks(_validation_plan)
+                            except Exception as fve:
+                                logger.warning("LLM behavioral validation error: %s", fve)
+
+                        # Hardcoded type-specific checks are AUTHORITATIVE (canary-based ground truth).
+                        # LLM checks only matter for types without hardcoded checks.
+                        if _hardcoded_goal is not None:
+                            if not _hardcoded_goal:
+                                result_dict["functional_failed"] = True
+                                vresult.functional_validation_passed = False
+                                if _llm_passed:
                                     logger.warning(
-                                        "LLM validation FAILED but hardcoded behavioral checks PASSED — "
-                                        "trusting LLM validation (more granular checks)"
+                                        "Hardcoded behavioral check FAILED (canary files unchanged) — "
+                                        "overriding LLM validation PASS. Malware did not accomplish its goal."
                                     )
-                                result_dict["functional_failed"] = not _func_passed
-                                vresult.functional_validation_passed = _func_passed
-                                if not _func_passed:
+                                else:
                                     logger.warning(
                                         "Behavioral validation FAILED — malware ran but produced no observable effect"
                                     )
-                                    if self._debug and self._debug.enabled:
-                                        self._debug.fail("Behavioral validation: FAIL (malware did nothing)")
-                                else:
-                                    logger.info("Behavioral validation: PASS")
-                                    if self._debug and self._debug.enabled:
-                                        self._debug.ok("Behavioral validation: PASS")
-                                    # Detect privilege level after successful execution
-                                    try:
-                                        _priv_out = await vm_instance.execute_command(
-                                            r'net session >NUL 2>&1 && echo ADMIN || echo USER', timeout=10
-                                        )
-                                        if "ADMIN" in _priv_out.upper():
-                                            _state["current_permissions"] = "admin"
-                                            logger.info("Privilege check: ADMIN (elevated)")
-                                        elif "SYSTEM" in (await vm_instance.execute_command(
-                                            r'whoami 2>&1', timeout=5
-                                        )).upper():
-                                            _state["current_permissions"] = "system"
-                                            logger.info("Privilege check: SYSTEM")
-                                        else:
-                                            _state["current_permissions"] = "user"
-                                            logger.info("Privilege check: user (standard)")
-                                    except Exception:
-                                        pass
-                            except Exception as fve:
-                                logger.warning("Behavioral validation error: %s", fve)
-                        elif _hardcoded_goal:
-                            result_dict["functional_failed"] = False
-                            vresult.functional_validation_passed = True
-                            logger.info(
-                                "Behavioral validation: PASS (type-specific checks confirmed goal, no LLM plan needed)"
-                            )
-                            if self._debug and self._debug.enabled:
-                                self._debug.ok("Behavioral validation: PASS (hardcoded checks)")
+                                if self._debug and self._debug.enabled:
+                                    self._debug.fail("Behavioral validation: FAIL (hardcoded ground truth)")
+                            else:
+                                result_dict["functional_failed"] = False
+                                vresult.functional_validation_passed = True
+                                logger.info("Behavioral validation: PASS (hardcoded canary checks confirmed)")
+                                if self._debug and self._debug.enabled:
+                                    self._debug.ok("Behavioral validation: PASS (ground truth)")
+                        elif _llm_passed is not None:
+                            result_dict["functional_failed"] = not _llm_passed
+                            vresult.functional_validation_passed = _llm_passed
+                            if not _llm_passed:
+                                logger.warning(
+                                    "Behavioral validation FAILED (LLM checks, no hardcoded ground truth)"
+                                )
+                                if self._debug and self._debug.enabled:
+                                    self._debug.fail("Behavioral validation: FAIL (LLM checks)")
+                            else:
+                                logger.info("Behavioral validation: PASS (LLM checks, no hardcoded ground truth)")
+                                if self._debug and self._debug.enabled:
+                                    self._debug.ok("Behavioral validation: PASS (LLM)")
                         else:
                             result_dict["functional_failed"] = True
                             logger.warning(
@@ -771,7 +766,27 @@ class MalwarePipeline:
                                 "— marking as functional failure."
                             )
                             if self._debug and self._debug.enabled:
-                                self._debug.fail("Behavioral validation: SKIPPED — no plan, counting as failure")
+                                self._debug.fail("Behavioral validation: SKIPPED — no checks, counting as failure")
+
+                        # Privilege detection after confirmed functional success
+                        if not result_dict["functional_failed"]:
+                            try:
+                                _priv_out = await vm_instance.execute_command(
+                                    r'net session >NUL 2>&1 && echo ADMIN || echo USER', timeout=10
+                                )
+                                if "ADMIN" in _priv_out.upper():
+                                    _state["current_permissions"] = "admin"
+                                    logger.info("Privilege check: ADMIN (elevated)")
+                                elif "SYSTEM" in (await vm_instance.execute_command(
+                                    r'whoami 2>&1', timeout=5
+                                )).upper():
+                                    _state["current_permissions"] = "system"
+                                    logger.info("Privilege check: SYSTEM")
+                                else:
+                                    _state["current_permissions"] = "user"
+                                    logger.info("Privilege check: user (standard)")
+                            except Exception:
+                                pass
 
                     _is_failure = (
                         result_dict["compilation_failed"]

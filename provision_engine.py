@@ -708,12 +708,14 @@ class ProvisionEngine:
       6. Return active VMInstance
     """
 
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Optional[Path] = None, daemonize: bool = False):
         self.base_dir = Path(base_dir) if base_dir else Path("/tmp/vm_provision")
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.instances: dict[str, VMInstance] = {}
-        import atexit
-        atexit.register(self._atexit_cleanup)
+        self.daemonize = daemonize
+        if not daemonize:
+            import atexit
+            atexit.register(self._atexit_cleanup)
 
     # ---------------------------------------------------------------
     # public API
@@ -902,6 +904,12 @@ class ProvisionEngine:
         key = f"{config.os_type.value}_{config.cow_img.name}"
         self.instances[key] = vm
         logger.info("Provisioned: %s (ready at localhost:%d)", key, vm.ssh_port)
+
+        if self.daemonize and qemu.process:
+            pidfile = self.base_dir / f"{_vm_name}.pid"
+            pidfile.write_text(str(qemu.process.pid))
+            logger.info("Daemon PID file written: %s (pid=%d)", pidfile, qemu.process.pid)
+
         return vm
 
     async def install_edr_on_vm(
@@ -1065,7 +1073,10 @@ class ProvisionEngine:
         return results
 
     async def shutdown_all(self, wait: bool = True) -> None:
-        """Stop every tracked instance."""
+        """Stop every tracked instance (skipped for daemonized VMs)."""
+        if self.daemonize:
+            logger.info("Daemonize mode — leaving %d VM(s) running", len(self.instances))
+            return
         for key, vm in list(self.instances.items()):
             try:
                 await vm.stop(wait)
@@ -1083,6 +1094,21 @@ class ProvisionEngine:
                 except Exception:
                     pass
         self.instances.clear()
+
+    @staticmethod
+    def find_running_vm(base_dir: Optional[Path] = None, vm_name: str = "vm-windows-11") -> Optional[int]:
+        """Check if a daemonized VM is still running. Returns PID or None."""
+        base = Path(base_dir) if base_dir else Path("/tmp/vm_provision")
+        pidfile = base / f"{vm_name}.pid"
+        if not pidfile.exists():
+            return None
+        try:
+            pid = int(pidfile.read_text().strip())
+            os.kill(pid, 0)
+            return pid
+        except (ValueError, ProcessLookupError):
+            pidfile.unlink(missing_ok=True)
+            return None
 
     # ---------------------------------------------------------------
     # internal helpers

@@ -412,8 +412,14 @@ class Verifier:
             await self._setup_infostealer_canaries(spec)
 
         # Step 2c: run pre-execution setup commands from validation plan
+        # Skip commands that would overwrite canary files the verifier already created —
+        # those would poison the hash baseline and cause false positive "content changed"
+        _canary_paths = {"canary_doc", "canary_sheet", "canary_photo", "root_canary", "canary_files"}
         if validation_plan and validation_plan.setup_commands:
             for setup_cmd in validation_plan.setup_commands:
+                if _pre_hashes and any(cp in setup_cmd for cp in _canary_paths):
+                    logger.info("Skipping LLM setup command (would overwrite verifier canary): %s", setup_cmd[:120])
+                    continue
                 try:
                     await self._vm.execute_command(setup_cmd, timeout=15)
                     logger.info("Pre-execution setup: %s", setup_cmd[:120])
@@ -422,29 +428,40 @@ class Verifier:
 
         # Step 2d: start a C2 listener on the host for connection-back malware
         _c2_proc = None
+        _c2_data_file: Optional[Path] = None
         if _malware_type in ("infostealer", "keylogger"):
             _c2_port = getattr(spec, "c2_port", 9001)
+            _c2_data_file = Path("/tmp/c2_received_data.bin")
+            _c2_data_file.unlink(missing_ok=True)
             _c2_script = (
-                "import socket,threading,sys\n"
+                "import socket,threading,sys,os\n"
+                "outf=sys.argv[2]\n"
                 "s=socket.socket(socket.AF_INET,socket.SOCK_STREAM)\n"
                 "s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)\n"
                 "s.bind(('0.0.0.0',int(sys.argv[1])))\n"
                 "s.listen(5)\n"
                 "def h(c,a):\n"
+                " data=b''\n"
                 " try:\n"
-                "  while c.recv(4096):pass\n"
+                "  while True:\n"
+                "   chunk=c.recv(65536)\n"
+                "   if not chunk:break\n"
+                "   data+=chunk\n"
                 " except:pass\n"
                 " c.close()\n"
+                " if data:\n"
+                "  with open(outf,'ab') as f:f.write(data)\n"
                 "while True:\n"
                 " c,a=s.accept()\n"
                 " threading.Thread(target=h,args=(c,a),daemon=True).start()\n"
             )
             try:
                 _c2_proc = subprocess.Popen(
-                    ["python3", "-c", _c2_script, str(_c2_port)],
+                    ["python3", "-c", _c2_script, str(_c2_port), str(_c2_data_file)],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
-                logger.info("C2 listener started on port %d (PID %d)", _c2_port, _c2_proc.pid)
+                logger.info("C2 listener started on port %d (PID %d), data -> %s",
+                            _c2_port, _c2_proc.pid, _c2_data_file)
             except Exception as exc:
                 logger.warning("Could not start C2 listener: %s", exc)
 
@@ -504,12 +521,13 @@ class Verifier:
         else:
             _exe_name = PureWindowsPath(remote_binary).name
             exec_cmd = (
-                f'start /B "" "{remote_binary}" & '
-                f'timeout /t 3 /nobreak >NUL & '
-                f'tasklist /fi "imagename eq {_exe_name}" /fo csv 2>NUL '
-                f'| find /i "{_exe_name}" >NUL '
-                f'&& (echo PROCESS_ALIVE & timeout /t 12 /nobreak >NUL & echo LAUNCHED) '
-                f'|| echo PROCESS_DEAD_EARLY'
+                f'powershell -NoProfile -Command "'
+                f'Start-Process -FilePath \'{remote_binary}\' -WindowStyle Hidden; '
+                f'Start-Sleep -Seconds 3; '
+                f'$p = Get-Process -Name \'{_exe_name.replace(".exe","")}\' -ErrorAction SilentlyContinue; '
+                f'if ($p) {{ Write-Output PROCESS_ALIVE; Start-Sleep -Seconds 20; Write-Output LAUNCHED }} '
+                f'else {{ Write-Output PROCESS_DEAD_EARLY }}'
+                f'"'
             )
         try:
             exec_out = await self._vm.execute_command(exec_cmd, timeout=timeout)
@@ -539,7 +557,7 @@ class Verifier:
             elif _malware_type == "keylogger":
                 await self._check_keylogger_behaviour(result, spec)
             elif _malware_type == "infostealer":
-                await self._check_infostealer_behaviour(result, spec)
+                await self._check_infostealer_behaviour(result, spec, c2_data_file=_c2_data_file)
             else:
                 logger.info("No type-specific behavioral check for '%s' — relying on validation plan",
                             getattr(spec, "malware_type", "unknown"))
@@ -606,9 +624,22 @@ class Verifier:
                         if len(_hlines) >= 2 and pre_hash:
                             post_hash = _hlines[1].replace(" ", "").lower()
                             if post_hash != pre_hash:
-                                _strong_evidence.append(f"canary_modified:{fpath}")
-                                logger.info("Canary %s content changed (hash %s→%s)",
-                                            fpath, pre_hash[:8], post_hash[:8])
+                                _plaintext_gone = False
+                                try:
+                                    _probe = f'findstr /c:"canary" "{fpath}" 2>NUL'
+                                    _probe_out = (await self._vm.execute_command(_probe, timeout=8)).strip()
+                                    _plaintext_gone = ("canary" not in _probe_out.lower())
+                                except Exception:
+                                    _plaintext_gone = True
+                                if _plaintext_gone:
+                                    _strong_evidence.append(f"canary_modified:{fpath}")
+                                    logger.info("Canary %s encrypted (hash %s→%s, plaintext gone)",
+                                                fpath, pre_hash[:8], post_hash[:8])
+                                else:
+                                    logger.warning(
+                                        "Canary %s hash changed (%s→%s) but plaintext still readable "
+                                        "— NOT counting as encryption (likely overwritten by setup)",
+                                        fpath, pre_hash[:8], post_hash[:8])
                             else:
                                 logger.debug("Canary %s unchanged (hash matches pre-execution)", fpath)
                         result.execution_output += f"\n[CANARY] {fpath} hash: {hash_out}"
@@ -883,25 +914,48 @@ class Verifier:
                 result.execution_output += f" (weak only: {', '.join(_weak_evidence)})"
             logger.warning("Keylogger behaviour NOT confirmed — no keylog files or network exfil detected")
 
-    async def _check_infostealer_behaviour(self, result: VerificationResult, spec):
+    async def _check_infostealer_behaviour(self, result: VerificationResult, spec,
+                                            c2_data_file: Optional[Path] = None):
         """Post-execution checks for infostealer: did it collect/exfiltrate data?
 
-        Checks for:
-        - Collection files (aggregated stolen data written to disk)
-        - Access to planted credential files (file access timestamps changed)
-        - Network exfiltration to C2
-        - Registry queries for credential stores
+        Ground truth check: the C2 listener saved received data to c2_data_file.
+        We check if that file contains our planted canary credentials.
+        Also checks for on-disk collection artifacts and credential file access.
         """
         _strong_evidence = []
         _weak_evidence = []
         c2_addr = getattr(spec, "c2_address", "10.0.2.2")
         c2_port = getattr(spec, "c2_port", 9001)
 
-        # 1. Check if planted credential files were accessed/modified/deleted
+        # -- Ground truth: check C2 received data for canary strings --
+        _CANARY_MARKERS = [
+            b"SuperSecret123",
+            b"AKIA_FAKE_KEY",
+            b"CANARY_BROWSER_DATA",
+        ]
+        _c2_data = b""
+        if c2_data_file and c2_data_file.exists():
+            _c2_data = c2_data_file.read_bytes()
+            _c2_size = len(_c2_data)
+            logger.info("C2 received %d bytes of exfiltrated data", _c2_size)
+            if _c2_size > 0:
+                _weak_evidence.append(f"c2_data_received:{_c2_size}b")
+            _canary_hits = 0
+            for marker in _CANARY_MARKERS:
+                if marker in _c2_data:
+                    _canary_hits += 1
+                    _strong_evidence.append(f"c2_contains_canary:{marker.decode()}")
+                    logger.info("C2 data contains planted canary: %s", marker.decode())
+            if _canary_hits == 0 and _c2_size > 10:
+                _weak_evidence.append("c2_data_no_canary_match")
+                logger.info("C2 received data but no canary markers found (may be encrypted/encoded)")
+        else:
+            logger.info("No C2 data received (file missing or empty)")
+
+        # -- Check if planted credential files were accessed/modified/deleted --
         _CRED_PATHS = [
             r"C:\Users\vmuser\Documents\credentials\passwords.txt",
             r"C:\Users\vmuser\AppData\Local\Google\Chrome\User Data\Default\Login Data",
-            r"C:\Users\vmuser\AppData\Roaming\Mozilla\Firefox\Profiles\test.default\logins.json",
             r"C:\Users\vmuser\Documents\credentials\wallet.dat",
         ]
         for cred_path in _CRED_PATHS:
@@ -916,76 +970,49 @@ class Verifier:
             except Exception:
                 pass
 
-        # 2. Check for collected/exfiltrated data files
+        # -- Check for on-disk collection artifacts --
         collect_cmd = (
-            'cmd /c "dir /s /b C:\\Users\\vmuser\\*.zip C:\\Users\\vmuser\\*.rar '
-            'C:\\Users\\vmuser\\*.7z C:\\Users\\vmuser\\*stolen* '
-            'C:\\Users\\vmuser\\*exfil* C:\\Users\\vmuser\\*loot* '
-            'C:\\Users\\vmuser\\*collected* C:\\Users\\vmuser\\*dump* '
-            'C:\\Users\\vmuser\\*sysinfo* C:\\Users\\vmuser\\*grab* 2>NUL"'
+            'cmd /c "dir /s /b C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.txt '
+            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.dat '
+            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.log '
+            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.tmp 2>NUL '
+            '| findstr /v /i /c:\"canary\""'
         )
         try:
             out = (await self._vm.execute_command(collect_cmd, timeout=10)).strip()
             if out and "File Not Found" not in out:
                 for f in out.splitlines()[:3]:
-                    _strong_evidence.append(f"collection_file:{f.strip().split(chr(92))[-1]}")
-                logger.info("Collection/exfil files found: %s", out[:300])
+                    fname = f.strip().split("\\")[-1] if "\\" in f else f.strip()
+                    _weak_evidence.append(f"temp_artifact:{fname}")
+                logger.info("Temp collection files found: %s", out[:300])
         except Exception:
             pass
 
-        # 3. Check for network connection to C2
+        # -- Check hostname/username in C2 data (system info was gathered) --
+        if _c2_data:
+            try:
+                hostname_out = (await self._vm.execute_command("hostname", timeout=5)).strip()
+                if hostname_out.encode() in _c2_data:
+                    _strong_evidence.append(f"c2_contains_hostname:{hostname_out}")
+                    logger.info("C2 data contains hostname: %s", hostname_out)
+                username_out = (await self._vm.execute_command("whoami", timeout=5)).strip()
+                if username_out.encode() in _c2_data or b"vmuser" in _c2_data:
+                    _strong_evidence.append("c2_contains_username")
+                    logger.info("C2 data contains username")
+            except Exception:
+                pass
+
+        # -- Check for network connection evidence to C2 --
         try:
-            net_cmd = (
-                f'powershell -NoProfile -Command "'
-                f'Get-NetTCPConnection -RemoteAddress {c2_addr} -ErrorAction SilentlyContinue '
-                f'| Select-Object -Property RemoteAddress,RemotePort,State -First 5 '
-                f'| Format-Table -AutoSize"'
-            )
+            net_cmd = f'netstat -an | findstr "{c2_addr}" | findstr "{c2_port}"'
             net_out = (await self._vm.execute_command(net_cmd, timeout=10)).strip()
-            if c2_addr in net_out:
-                _strong_evidence.append(f"network_exfil:{c2_addr}:{c2_port}")
+            if net_out:
+                _weak_evidence.append(f"network_connection:{c2_addr}:{c2_port}")
                 logger.info("Network connection to C2 detected: %s", net_out[:200])
         except Exception:
             pass
 
-        # 4. Check for clipboard access or screenshot files
-        try:
-            ss_cmd = (
-                'cmd /c "dir /s /b C:\\Users\\vmuser\\*.png C:\\Users\\vmuser\\*.bmp '
-                'C:\\Users\\vmuser\\*.jpg 2>NUL '
-                '| findstr /i /c:\"screen\" /c:\"capture\" /c:\"clip\""'
-            )
-            ss_out = (await self._vm.execute_command(ss_cmd, timeout=8)).strip()
-            if ss_out:
-                _weak_evidence.append(f"screenshot:{ss_out.splitlines()[0].strip().split(chr(92))[-1]}")
-        except Exception:
-            pass
-
-        # 5. Check for environment variable harvesting or system enumeration
-        try:
-            enum_cmd = (
-                'cmd /c "dir /s /b C:\\Users\\vmuser\\*env* C:\\Users\\vmuser\\*system* '
-                'C:\\Users\\vmuser\\*host* C:\\Users\\vmuser\\*info* 2>NUL '
-                '| findstr /v /i /c:\"canary\" /c:\"NTUSER\" /c:\"desktop.ini\" /c:\".lnk\""'
-            )
-            enum_out = (await self._vm.execute_command(enum_cmd, timeout=8)).strip()
-            if enum_out:
-                for f in enum_out.splitlines()[:2]:
-                    _weak_evidence.append(f"enum_file:{f.strip().split(chr(92))[-1]}")
-        except Exception:
-            pass
-
-        # 6. Registry queries for stored credentials
-        try:
-            reg_out = (await self._vm.execute_command(
-                'reg query "HKCU\\Software" /s /f "password" 2>NUL | find /c "REG_"',
-                timeout=10
-            )).strip()
-            if reg_out.isdigit() and int(reg_out) > 0:
-                _weak_evidence.append("registry_cred_query")
-        except Exception:
-            pass
-
+        # -- Verdict --
         if _strong_evidence:
             result.behaviour_checks[BehaviourCheck.FUNCTIONAL_GOAL_MET] = True
             result.execution_output += f"\n[BEHAVIOUR] CONFIRMED: {', '.join(_strong_evidence)}"
@@ -998,8 +1025,8 @@ class Verifier:
             if _weak_evidence:
                 result.execution_output += f" (weak only: {', '.join(_weak_evidence)})"
             logger.warning(
-                "Infostealer behaviour NOT confirmed — no stolen files, no network exfil, "
-                "no collection artifacts. Process ran but did not steal anything."
+                "Infostealer behaviour NOT confirmed — no canary data in C2 stream, "
+                "no stolen credential files, no collection artifacts."
             )
 
     def _extract_mingw_flags(self, compiler_instructions: str) -> str:

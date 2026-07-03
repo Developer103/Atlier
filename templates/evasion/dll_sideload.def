@@ -1,0 +1,17 @@
+EXPORTS
+  GetFileVersionInfoA = real_version.GetFileVersionInfoA
+  GetFileVersionInfoW = real_version.GetFileVersionInfoW
+  GetFileVersionInfoSizeA = real_version.GetFileVersionInfoSizeA
+  GetFileVersionInfoSizeW = real_version.GetFileVersionInfoSizeW
+  GetFileVersionInfoExA = real_version.GetFileVersionInfoExA
+  GetFileVersionInfoExW = real_version.GetFileVersionInfoExW
+  GetFileVersionInfoSizeExA = real_version.GetFileVersionInfoSizeExA
+  GetFileVersionInfoSizeExW = real_version.GetFileVersionInfoSizeExW
+  VerFindFileA = real_version.VerFindFileA
+  VerFindFileW = real_version.VerFindFileW
+  VerInstallFileA = real_version.VerInstallFileA
+  VerInstallFileW = real_version.VerInstallFileW
+  VerQueryValueA = real_version.VerQueryValueA
+  VerQueryValueW = real_version.VerQueryValueW
+  VerLanguageNameA = real_version.VerLanguageNameA
+  VerLanguageNameW = real_version.VerLanguageNameW

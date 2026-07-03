@@ -52,7 +52,12 @@ _HEADER_CORRECTIONS = {
     "kernel32.h": "windows.h",
     "user32.h": "windows.h",
     "ntdll.h": "winternl.h",
-    "unistd.h": None,  # Linux-only, remove for Windows
+    "netapi.h": "lm.h",
+    "netapi32.h": "lm.h",
+    "thelp32.h": "tlhelp32.h",
+    "toolhelp32.h": "tlhelp32.h",
+    "toolhelp.h": "tlhelp32.h",
+    "unistd.h": None,
     "sys/socket.h": None,
     "sys/wait.h": None,
     "netinet/in.h": None,
@@ -76,12 +81,42 @@ def _sanitize_includes(source: str, os_platform: str = "windows") -> str:
     rest = []
     first_include_pos = -1
 
+    _KNOWN_HEADERS = {
+        "winsock2.h", "windows.h", "ws2tcpip.h", "winternl.h", "stdio.h",
+        "stdlib.h", "string.h", "wininet.h", "tlhelp32.h", "psapi.h",
+        "shellapi.h", "shlobj.h", "winreg.h", "wincrypt.h", "iphlpapi.h",
+        "winnetwk.h", "lm.h", "stdbool.h", "stdint.h", "math.h",
+        "time.h", "assert.h", "errno.h", "signal.h", "stdarg.h",
+    }
+
     for i, line in enumerate(lines):
         m = re.match(r'#\s*include\s*[<"]([^>"]+)[>"]', line.strip())
         if not m:
             rest.append((i, line))
             continue
         header = m.group(1)
+        if is_windows and header not in _KNOWN_HEADERS and "." in header.replace(".h", "", 1):
+            parts = re.split(r'\.(?!h$)', header)
+            expanded = [p if p.endswith(".h") else p + ".h" for p in parts if p]
+            for eh in expanded:
+                corrected = _HEADER_CORRECTIONS.get(eh, eh)
+                if corrected is not None:
+                    includes.append((i, corrected))
+            if first_include_pos == -1:
+                first_include_pos = i
+            continue
+        if is_windows and header not in _KNOWN_HEADERS and header not in _HEADER_CORRECTIONS:
+            _h = header.lower()
+            if re.match(r't.{0,4}(?:help|lp|lb|lhelp|lib)32\.h$', _h):
+                header = "tlhelp32.h"
+            elif re.match(r'ip(?:h|hl|help|rt)(?:p|)api\.h$', _h):
+                header = "iphlpapi.h"
+            elif re.match(r'win(?:cryp?t|cyrpt)\.h$', _h):
+                header = "wincrypt.h"
+            elif re.match(r'(?:net|lm)(?:api|access)(?:32)?\.h$', _h):
+                header = "lm.h"
+            elif re.match(r'shell(?:32|Api|api)\.h$', _h):
+                header = "shellapi.h"
         if is_windows and header in _HEADER_CORRECTIONS:
             replacement = _HEADER_CORRECTIONS[header]
             if replacement is None:
@@ -316,6 +351,9 @@ def _encrypt_string_literals(source: str) -> str:
             nonlocal enc_id
             raw = m.group(1)
             if not _should_encrypt(raw):
+                return m.group(0)
+            start = m.start()
+            if start > 0 and line[start - 1] == "'":
                 return m.group(0)
             try:
                 decoded = raw.encode('utf-8').decode('unicode_escape')
@@ -572,7 +610,7 @@ static int _chk_dbg(void) {
         volatile int _v = 0;
         for (int i = 0; i < 100; i++) _v += i;
         QueryPerformanceCounter(&_e);
-        if ((_e.QuadPart - _s.QuadPart) > _f.QuadPart / 10) return 1;
+        if ((_e.QuadPart - _s.QuadPart) > _f.QuadPart) return 1;
     }
     return 0;
 }
@@ -788,10 +826,11 @@ def _inject_seh_in_main(source: str) -> str:
         "}\n"
     )
 
+    worker_body = re.sub(r'\s*\(void\)\s*arg[cv]\s*;', '', main_body)
     worker_fn = (
         "\nDWORD WINAPI _worker_thread(LPVOID _unused) {\n"
         "    (void)_unused;\n"
-        + main_body
+        + worker_body
         + "\n    return 0;\n}\n\n"
     )
 

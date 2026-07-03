@@ -124,6 +124,16 @@ class QueryPlan:
                 "LSASS memory dump credential harvesting",
                 "clipboard monitor cryptocurrency wallet",
             ],
+            "infostealer": [
+                "browser credential theft Chrome Edge Login Data DPAPI",
+                "CryptUnprotectData DPAPI decrypt saved passwords",
+                "WiFi password netsh wlan show profile key clear",
+                "CreateProcessA CreatePipe stdout capture child process",
+                "Chrome Local State encrypted_key master key AES-GCM",
+                "SHGetFolderPathA CSIDL_LOCAL_APPDATA browser data path",
+                "CopyFileA locked database file temporary copy",
+                "exfiltrate stolen data TCP socket winsock send",
+            ],
         }
         for term in _TYPE_QUERIES.get(malware_type, []):
             plan.malware_queries.append({

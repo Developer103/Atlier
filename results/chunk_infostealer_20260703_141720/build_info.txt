@@ -1,0 +1,8 @@
+type: infostealer
+recipe: infostealer_full.yaml
+obfuscation: heavy
+timestamp: 20260703_141720
+source_chars: 44549
+binary_size: 293107
+vm_test: PASS
+exfil: exfil_20260703_141735.bin (510647 bytes)

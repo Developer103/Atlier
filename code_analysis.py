@@ -12,6 +12,35 @@ from .llm_client import _strip_thinking
 
 logger = logging.getLogger(__name__)
 
+_PROSE_LINE_RE = re.compile(
+    r'^\s*[-•]\s+'
+    r'(?:'
+    r'\*\*'             # bold markdown: "- **Word..."
+    r'|`'               # backtick immediately after bullet: "- `code..."
+    r'|[A-Z][a-z]+[^;{}\n]*[:`]' # Capitalized word then colon or backtick, no C terminator
+    r'|(?:API|Call|Globals?|Signature|Constraints?|Dependencies|Implementation|Return)\b'
+    r').*$',
+    re.MULTILINE,
+)
+
+_BACKTICK_BULLET_RE = re.compile(
+    r'^\s*[-•]\s+.*`.*$',
+    re.MULTILINE,
+)
+
+
+def strip_prose_leaks(source: str) -> str:
+    """Strip LLM plan/prompt prose that leaked into generated C source.
+
+    Catches bullet points with markdown bold, backticks, or prompt keywords.
+    Safe for C: these patterns never appear in valid C source code.
+    """
+    source = _PROSE_LINE_RE.sub('', source)
+    source = _BACKTICK_BULLET_RE.sub('', source)
+    source = re.sub(r'^\s*[-•]\s+\*\*\w+.*$', '', source, flags=re.MULTILINE)
+    source = re.sub(r'\n{3,}', '\n\n', source)
+    return source
+
 
 # ---------------------------------------------------------------------------
 # NT struct definitions for MinGW compatibility
@@ -410,9 +439,8 @@ def _clean_c_source(raw: str, func_name: str = "", language: str = "c") -> str:
             continue
 
         # Markdown bullet points: "   - some prose text" or "   * ..."
-        # Valid C lines never start with a bare hyphen/asterisk followed by a space
-        # (pointer decls are like `int *p;` not `* pointer`; unary minus is never at line start)
-        if re.match(r"^\s*[-*]\s+\w", s):
+        # Also catches bold bullets: "- **Constraints:**" and backtick bullets: "- `func`"
+        if re.match(r"^\s*[-*]\s+[\w*`]", s):
             continue
 
         # Lines with multiple inline-backtick spans mixed with English prose:
@@ -468,7 +496,10 @@ def _clean_c_source(raw: str, func_name: str = "", language: str = "c") -> str:
 
         # Lines containing backtick-quoted code references are LLM reasoning, not C.
         # e.g. "Call: `connect_c2_server(&c2_sock)` -> OK." or "Let's check `func(...)`"
+        # Also catches prompt-leak lines like: "- Globals provided: `const char* x = ...;"
         if "`" in s and ";" not in s and "{" not in s and "}" not in s:
+            continue
+        if "`" in s and re.match(r"^\s*[-*]\s+", s):
             continue
 
         # Numbered reasoning steps: "1. **Analyze..." or "   2.  Foo bar" or "3. `func`:"
@@ -513,6 +544,8 @@ def _clean_c_source(raw: str, func_name: str = "", language: str = "c") -> str:
         if re.match(r"^\s*->\s*[A-Za-z]", s) and ";" not in s and "{" not in s:
             continue
 
+        if "`" in line and language == "c":
+            line = line.replace("`", "")
         out.append(line)
 
     result = "\n".join(out).strip()
@@ -526,6 +559,7 @@ def _clean_c_source(raw: str, func_name: str = "", language: str = "c") -> str:
         if trailing and not trailing.startswith("#") and not trailing.startswith("//"):
             result = result[:last_brace + 2]
 
+    result = strip_prose_leaks(result)
     return result
 
 
@@ -1169,6 +1203,42 @@ def _fix_common_compile_errors(source: str) -> str:
     # Strip inline backticks wrapping C statements (backticks are never valid in C)
     source = re.sub(r'^`', '', source, flags=re.MULTILINE)
     source = re.sub(r'`$', '', source, flags=re.MULTILINE)
+    # Strip lines that are clearly LLM prompt/plan prose leaked into code:
+    # Markdown bold: "- **Constraints:**" or "  - **Signature:** `int main..."
+    # These have **word** pairs which don't occur in valid C (** in C is pointer deref,
+    # always followed by identifier not word-boundary-word-boundary)
+    source = re.sub(r'^\s*[-•]\s+\*\*\w+.*$', '', source, flags=re.MULTILINE)
+    # Bullet lines with backtick-quoted code: "  - Globals provided: `const char*..."
+    source = re.sub(r'^\s*[-•]\s+\w[^;{]*`[^`]*`.*$', '', source, flags=re.MULTILINE)
+    # Lines starting with "- API" or "- Call" or "- Globals" (prompt instructions)
+    source = re.sub(r'^\s*[-•]\s+(?:API|Call|Globals?|Signature|Constraints?|Dependencies|Implementation|Return)\b.*$', '', source, flags=re.MULTILINE)
+
+    # ── Fix comma-separated multi-type global declarations ──
+    # LLM generates e.g. `BYTE g_key[64], DWORD g_key_len = 0, char g_note[]`
+    # which is invalid C (can't mix types in a comma-separated declaration).
+    # Split into separate declarations.
+    _MULTI_TYPE_GLOBAL = re.compile(
+        r'^(\s*)((?:BYTE|DWORD|BOOL|HANDLE|HKEY|HCRYPTPROV|HCRYPTHASH|HCRYPTKEY|'
+        r'char|int|unsigned|LONG|ULONG|UINT|SOCKET|SIZE_T|LPSTR|LPVOID|PVOID|void)'
+        r'\s+\w+(?:\s*\[[^\]]*\])?\s*(?:=\s*[^,;]+)?)'
+        r'((?:\s*,\s*(?:BYTE|DWORD|BOOL|HANDLE|HKEY|HCRYPTPROV|HCRYPTHASH|HCRYPTKEY|'
+        r'char|int|unsigned|LONG|ULONG|UINT|SOCKET|SIZE_T|LPSTR|LPVOID|PVOID|void)'
+        r'\s+\w+(?:\s*\[[^\]]*\])?\s*(?:=\s*[^,;]+)?)+)\s*;',
+        re.MULTILINE,
+    )
+    def _split_multi_type(m: re.Match) -> str:
+        indent = m.group(1)
+        first_decl = m.group(2).strip()
+        rest = m.group(3)
+        parts = [first_decl]
+        for sub in re.findall(
+            r',\s*((?:BYTE|DWORD|BOOL|HANDLE|HKEY|HCRYPTPROV|HCRYPTHASH|HCRYPTKEY|'
+            r'char|int|unsigned|LONG|ULONG|UINT|SOCKET|SIZE_T|LPSTR|LPVOID|PVOID|void)'
+            r'\s+\w+(?:\s*\[[^\]]*\])?\s*(?:=\s*[^,;]+)?)', rest
+        ):
+            parts.append(sub.strip())
+        return "\n".join(f"{indent}{p};" for p in parts)
+    source = _MULTI_TYPE_GLOBAL.sub(_split_multi_type, source)
 
     # ── Fix missing ')' before '{' in function signatures ──
     # LLM generates e.g. `BOOL init_buffer(int min {` instead of `BOOL init_buffer(int min) {`
@@ -1200,6 +1270,23 @@ def _fix_common_compile_errors(source: str) -> str:
             return m.group(0)
         return m.group(1) + '(void) ' + m.group(3)
     source = _NO_PARENS_SIG.sub(_fix_no_parens, source)
+
+    # ── Fix bare identifiers on their own line (truncated function calls) ──
+    # LLM generates e.g. `        drop_ransom` instead of `drop_ransom_note();`
+    # These are bare identifiers with no parens, semicolons, operators, or braces.
+    # Inside a function body they cause "unknown type name" errors.
+    _BARE_IDENT = re.compile(r'^(\s+)([a-z_]\w{3,})\s*$', re.MULTILINE)
+    _C_TYPES_KW = frozenset(("int", "char", "void", "long", "short", "unsigned",
+                              "signed", "float", "double", "static", "extern",
+                              "const", "volatile", "auto", "register", "struct",
+                              "enum", "union", "typedef", "goto", "continue",
+                              "break", "default", "case"))
+    def _fix_bare_ident(m: re.Match) -> str:
+        indent, name = m.group(1), m.group(2)
+        if name in _C_TYPES_KW:
+            return m.group(0)
+        return f"{indent}{name}();"
+    source = _BARE_IDENT.sub(_fix_bare_ident, source)
 
     # ── Fix common header name typos from LLM ──
     _HEADER_FIXES = {
@@ -1277,6 +1364,11 @@ def _fix_common_compile_errors(source: str) -> str:
         "RANSOM_NOTE_SIZE": 4096,
         "MAX_HASH": 64,
         "MAX_HASH_LEN": 64,
+        "MAX_FOLDERS": 64,
+        "MAX_TARGETS": 256,
+        "MAX_THREADS": 16,
+        "ENCRYPT_BUFFER_SIZE": 65536,
+        "MAX_DEPTH": 16,
     }
     for const_name, const_val in _MISSING_CONSTS.items():
         if re.search(r'\b' + const_name + r'\b', source) and f'#define {const_name}' not in source:
@@ -1401,6 +1493,21 @@ def _fix_common_compile_errors(source: str) -> str:
     source = re.sub(r'\bCloseHandleA\b', 'CloseHandle', source)
     source = re.sub(r'\bGetLastErrorA\b', 'GetLastError', source)
     source = re.sub(r'\bSetLastErrorA\b', 'SetLastError', source)
+
+    # ── Winsock / IP helper functions have NO A/W suffix ──
+    source = re.sub(r'\binet_pton[AW]\b', 'inet_pton', source)
+    source = re.sub(r'\binet_ntop[AW]\b', 'inet_ntop', source)
+    source = re.sub(r'\bgetaddrinfo[AW]\b', 'getaddrinfo', source)
+    source = re.sub(r'\bfreeaddrinfo[AW]\b', 'freeaddrinfo', source)
+    source = re.sub(r'\bsocket[AW]\b', 'socket', source)
+    source = re.sub(r'\bconnect[AW]\b', 'connect', source)
+    source = re.sub(r'\bsend[AW]\b', 'send', source)
+    source = re.sub(r'\brecv[AW]\b', 'recv', source)
+    source = re.sub(r'\bclosesocket[AW]\b', 'closesocket', source)
+    source = re.sub(r'\bWSAStartup[AW]\b', 'WSAStartup', source)
+    source = re.sub(r'\bWSACleanup[AW]\b', 'WSACleanup', source)
+    source = re.sub(r'\bhtons[AW]\b', 'htons', source)
+    source = re.sub(r'\bntohs[AW]\b', 'ntohs', source)
 
     # ── Wide (W) → ANSI (A) for ANSI build ──
     source = re.sub(r'\bFindFirstFileW\b', 'FindFirstFileA', source)

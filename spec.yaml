@@ -1,14 +1,14 @@
 os_platform: windows
 os_version: windows-11
-os_details: ''
-malware_type: info stealer
+os_details: 'Windows 11 23H2, x86_64, standard corporate workstation'
+malware_type: infostealer
 source_language: c
 output_format: exe
 c2_address: 10.0.2.2
 c2_port: 9001
 edrs:
 - ''
-antivirus: null
+antivirus: Defender
 patch_level: null
 installed_compilers:
 - ''
@@ -23,3 +23,11 @@ custom_gates:
 - ''
 - no console window
 notes: null
+behavior_spec: >
+  Steal browser saved passwords from Chrome and Edge (Login Data SQLite databases).
+  Collect saved WiFi passwords via netsh.
+  Gather system information (hostname, username, OS version, IP addresses).
+  Exfiltrate all collected data to the C2 server via raw TCP socket connection.
+  Use CryptUnprotectData (DPAPI) to decrypt Chrome/Edge saved passwords.
+  Target the current user's profile only — do not attempt privilege escalation.
+  Write collected data to a temporary file, send it to C2, then delete the temp file.

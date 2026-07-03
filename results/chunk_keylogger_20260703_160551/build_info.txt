@@ -1,0 +1,8 @@
+type: keylogger
+recipe: keylogger.yaml
+obfuscation: none
+timestamp: 20260703_160551
+source_chars: 13481
+binary_size: 270121
+vm_test: PASS
+exfil: exfil_20260703_160552.bin (3076690 bytes)

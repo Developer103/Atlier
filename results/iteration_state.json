@@ -1,0 +1,59 @@
+{
+  "total_attempts": 60,
+  "detection_history": [
+    {
+      "iteration": 1,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 8,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 18,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 28,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 33,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 40,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    },
+    {
+      "iteration": 42,
+      "edr": "windows_defender",
+      "rule_name": "HackTool:Win64/AmsiDisable.A",
+      "category": "",
+      "message": "Pre-execution scan: HackTool:Win64/AmsiDisable.A"
+    }
+  ],
+  "techniques_tried": [],
+  "evasion_strategies_exhausted": [],
+  "successful_evasions": [],
+  "precheck_failures": [],
+  "notes_for_next_iteration": ""
+}

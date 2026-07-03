@@ -126,10 +126,14 @@ class C2Listener:
             except Exception:
                 pass
 
-        logger.info(
-            "C2: %s:%d disconnected — %d bytes saved to %s",
-            addr, port, conn.bytes_received, data_file.name,
-        )
+        if conn.bytes_received == 0:
+            data_file.unlink(missing_ok=True)
+            logger.info("C2: %s:%d disconnected — 0 bytes (empty file removed)", addr, port)
+        else:
+            logger.info(
+                "C2: %s:%d disconnected — %d bytes saved to %s",
+                addr, port, conn.bytes_received, data_file.name,
+            )
 
 
 listener = C2Listener()

