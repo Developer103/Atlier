@@ -458,3 +458,49 @@ Four new evasion chunks implemented and VM-tested. Total: **19 evasion chunks**,
 - Standard `FileDispositionInformation` (class 13) fails with `STATUS_CANNOT_DELETE` (0xC0000121) because image section is mapped.
 - `FileDispositionInformationEx` (class 64) with `FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS` (0x03) bypasses mapped section check — removes directory entry immediately, data persists until process exits.
 - Retry loop needed because Defender may hold a read handle during scan; `FILE_SHARE_READ | FILE_SHARE_DELETE` sharing mode allows concurrent access.
+
+### AD Recon (SharpHound replacement) — replaces infostealer
+
+The `infostealer` malware type now produces AD recon payloads instead of credential/file theft. SharpHound-style LDAP enumeration outputs BloodHound v6 JSON — strictly superior to generic infostealers on domain-joined networks.
+
+**Architecture**: `ad/json_builder.c` + `ad/ldap_client.c` + `ad/sid_resolver.c` → `ad_collectors/*.c` → `arch/ad_recon.c`
+
+**Key design decisions**:
+- Uses `wldap32.dll` (Windows built-in) for LDAP, `DsGetDcNameA` for DC discovery, `LDAP_AUTH_NEGOTIATE` for Kerberos auth
+- Streams JSON directly via `jb_*` helpers (no struct-then-serialize)
+- C2 exfil uses `===FILE:type.json:size===` framing to multiplex per-entity-type JSON files
+- Must run as a domain user (evasion_selector uses schtasks with domain creds)
+- MinGW note: `ldap_value_free_len` has no `A` suffix — use unsuffixed version
+- Add `-lwldap32 -lnetapi32` to compile flags
+
+**Collectors** (all LDAP-only, zero SMB/RPC): ad_users, ad_groups, ad_computers, ad_domains, ad_ous, ad_gpos
+
+**Recipes**: `ad_recon_dconly` (no evasion), `ad_recon_default` (behavioral pacing), `ad_recon_stealth` (anti-sandbox + deferred)
+
+**LDAP auth**: ETW patching and PE header stomping MUST happen AFTER `ad_ldap_init()`, not before — SSPI/Kerberos depends on intact ETW/PE headers. `ldap_client.c` tries NEGOTIATE (implicit) first; falls back to explicit `SEC_WINNT_AUTH_IDENTITY_A` creds, then simple bind.
+
+**Schtasks escaping**: In Python `subprocess(shell=True)` through SSH, quote the domain user: `/ru "MALWARE\it.admin"` — unquoted backslash causes SID lookup failure.
+
+**Validated**: 40-44KB binary (64KB with heavy obfuscation), 55KB BloodHound JSON (93 entities), 0 Defender detections, against Samba AD (malware.lab, 38 users, 44 groups). All 3 AD recon recipes + evasion_selector adaptive recipe pass.
+
+## Chunk Framework Expansion (2026-07-07)
+
+### Sigma Integration into Evasion Loop
+Sigma/Chainsaw scoring now runs inside `evasion_selector.py`'s validation loop (not just `edr_score.sh`). `check_sigma_rules()` pulls Sysmon EVTX from the VM via wevtutil+scp, runs Chainsaw against all 4 Sigma rule directories (2,997 rules including 462 emerging-threats rules). Medium+ detections fail the run. All 3 types pass against full detection stack (Defender + Wazuh + Sigma).
+
+### EDR Management
+Portal (`app.py`) exposes live EDR toggle switches for Defender, Sysmon, Wazuh via `/api/edr/manage/*` endpoints. Presets: All On, Defender Only, Wazuh Only, All Off. Chunk tab uses live EDR toggles instead of static dropdown. `evasion_selector.py` reads `MALGEN_ACTIVE_EDRS` env var for detection commands.
+
+### Within-Technique Variants (4.32M combinations)
+Expanded from 108K to 4.32M unique combinations via fine-grained variants:
+
+**Process variants (9):** standalone, ppid_spoof (explorer), ppid_spoof_svchost, ppid_spoof_runtimebroker, ppid_spoof_sihost, ppid_spoof_taskhostw, ppid_spoof_dllhost, dll_sideload, process_hollow
+
+**Execution variants (10):** sequential, threaded, staged, fiber, callback_abuse (CreateTimerQueueTimer), callback_enumwindows, callback_certenumsystem, callback_copyfile2, callback_enumrestype, apc_self
+
+**Exfil variants (16):** tcp_direct, http_post, https_post, winhttp_get, winhttp_api, dns_exfil, dns_txt, smb_write, http_get_chunks, named_pipe, certutil_lolbin, bitsadmin_lolbin, powershell_lolbin, cscript_lolbin, mshta_lolbin, curl_lolbin
+
+Key insight: EDR vendors patch behavioral signatures (combinations), not primitives. Recombining "patched" primitives with different surrounding layers evades the patch. See `research/chunk_vs_malgen_analysis.md` for full analysis.
+
+### Telemetry Dependency Map
+`templates/chunks/telemetry_map.py` connects evasion chunks to detection telemetry sources (ETW-TI, usermode hooks, Sysmon events, kernel callbacks, minifilter, AMSI). Functions: `get_blind_spots(evasion_list)`, `recommend_evasion_for(technique)`, `score_combination(evasion_list, technique_list)`. Suppressing ETW-TI (`etw_patch`) blinds process_hollow, APC, fiber, DLL sideload simultaneously. Integration path: wire `score_combination()` into Tier 1 selector to prefer combinations with minimal remaining telemetry coverage.

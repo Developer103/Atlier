@@ -679,11 +679,10 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
         return web.json_response({"error": "invalid JSON body"}, status=400)
     malware_type = data.get("malware_type", "infostealer")
     dry_run = data.get("dry_run", False)
-    av_type = data.get("av_type", "defender")
+    active_edrs = data.get("active_edrs", ["defender"])
     max_algorithmic = data.get("max_algorithmic", 5)
     max_llm = data.get("max_llm", 3)
     max_cloud = data.get("max_cloud", 2)
-    custom_cmd = data.get("custom_cmd", "")
     job_id = uuid.uuid4().hex[:8]
 
     cmd = [
@@ -694,13 +693,11 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
         cmd.append("--dry-run")
 
     env_extra = {
-        "MALGEN_AV_TYPE": av_type,
+        "MALGEN_ACTIVE_EDRS": ",".join(active_edrs) if isinstance(active_edrs, list) else str(active_edrs),
         "MALGEN_MAX_ALGORITHMIC": str(max_algorithmic),
         "MALGEN_MAX_LLM": str(max_llm),
         "MALGEN_MAX_CLOUD": str(max_cloud),
     }
-    if custom_cmd:
-        env_extra["MALGEN_DETECTION_CMD"] = custom_cmd
     obf_level = data.get("obfuscation", "heavy")
     env_extra["MALGEN_OBFUSCATION"] = obf_level
     llm_url = data.get("llm_url", "").strip()
@@ -836,6 +833,147 @@ async def handle_edr_score_file(request: web.Request) -> web.Response:
         text=filepath.read_text(errors="replace"),
         content_type="text/plain",
     )
+
+
+# ---------------------------------------------------------------------------
+# EDR management
+# ---------------------------------------------------------------------------
+
+async def _ssh_run(cmd: str, port: int = 10022, user: str = "vmuser",
+                   pwd: str = "vmuser123", timeout: int = 15) -> str:
+    async with asyncssh.connect(
+        "localhost", port=port, username=user, password=pwd,
+        known_hosts=None, connect_timeout=5,
+    ) as conn:
+        r = await conn.run(cmd, check=False, timeout=timeout)
+        return (r.stdout or "").replace("\r", "").strip()
+
+
+async def handle_edr_status(request: web.Request) -> web.Response:
+    """Get status of all EDR components."""
+    edrs = {}
+    try:
+        # Defender
+        out = await _ssh_run(
+            'powershell -Command "'
+            'Get-MpPreference | Select-Object DisableRealtimeMonitoring | Format-List"'
+        )
+        rt_disabled = "True" in out
+        edrs["defender"] = {
+            "name": "Windows Defender",
+            "enabled": not rt_disabled,
+            "detail": "RealTimeProtection " + ("OFF" if rt_disabled else "ON"),
+        }
+    except Exception as e:
+        edrs["defender"] = {"name": "Windows Defender", "enabled": None, "detail": str(e)}
+
+    try:
+        # Sysmon
+        out = await _ssh_run('sc query Sysmon64')
+        running = "RUNNING" in out
+        edrs["sysmon"] = {
+            "name": "Sysmon",
+            "enabled": running,
+            "detail": "RUNNING" if running else "STOPPED",
+        }
+    except Exception as e:
+        edrs["sysmon"] = {"name": "Sysmon", "enabled": None, "detail": str(e)}
+
+    try:
+        # Wazuh agent
+        out = await _ssh_run('sc query WazuhSvc')
+        running = "RUNNING" in out
+        edrs["wazuh"] = {
+            "name": "Wazuh Agent",
+            "enabled": running,
+            "detail": "RUNNING" if running else "STOPPED",
+        }
+    except Exception as e:
+        edrs["wazuh"] = {"name": "Wazuh Agent", "enabled": None, "detail": str(e)}
+
+    # Wazuh manager (host-side)
+    try:
+        import urllib.request
+        url = "http://localhost:9201/_cluster/health"
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            health = json.loads(resp.read())
+            edrs["wazuh_indexer"] = {
+                "name": "Wazuh Indexer",
+                "enabled": health.get("status") in ("green", "yellow"),
+                "detail": health.get("status", "unknown"),
+            }
+    except Exception as e:
+        edrs["wazuh_indexer"] = {"name": "Wazuh Indexer", "enabled": False, "detail": str(e)}
+
+    return web.json_response(edrs)
+
+
+async def handle_edr_toggle(request: web.Request) -> web.Response:
+    """Toggle an EDR component on/off."""
+    data = await request.json()
+    component = data.get("component", "")
+    enable = data.get("enable", True)
+
+    cmds = {
+        "defender": (
+            'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $false"'
+            if enable else
+            'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $true"'
+        ),
+        "sysmon": (
+            'net start Sysmon64' if enable else 'net stop Sysmon64'
+        ),
+        "wazuh": (
+            'net start WazuhSvc' if enable else 'net stop WazuhSvc'
+        ),
+    }
+
+    if component not in cmds:
+        return web.json_response({"error": f"Unknown component: {component}"}, status=400)
+
+    try:
+        out = await _ssh_run(cmds[component], timeout=30)
+        return web.json_response({"ok": True, "component": component, "enable": enable, "output": out})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_edr_preset(request: web.Request) -> web.Response:
+    """Apply an EDR preset (all-on, defender-only, none)."""
+    data = await request.json()
+    preset = data.get("preset", "all")
+
+    presets = {
+        "all":            {"defender": True,  "sysmon": True,  "wazuh": True},
+        "defender-only":  {"defender": True,  "sysmon": False, "wazuh": False},
+        "wazuh-only":     {"defender": False, "sysmon": True,  "wazuh": True},
+        "none":           {"defender": False, "sysmon": False, "wazuh": False},
+    }
+
+    if preset not in presets:
+        return web.json_response({"error": f"Unknown preset: {preset}"}, status=400)
+
+    results = {}
+    for component, enable in presets[preset].items():
+        try:
+            body = json.dumps({"component": component, "enable": enable}).encode()
+            # Reuse the toggle logic directly
+            cmds = {
+                "defender": (
+                    'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $false"'
+                    if enable else
+                    'powershell -Command "Set-MpPreference -DisableRealtimeMonitoring $true"'
+                ),
+                "sysmon": ('net start Sysmon64' if enable else 'net stop Sysmon64'),
+                "wazuh": ('net start WazuhSvc' if enable else 'net stop WazuhSvc'),
+            }
+            out = await _ssh_run(cmds[component], timeout=30)
+            results[component] = {"ok": True, "enabled": enable}
+        except Exception as e:
+            results[component] = {"ok": False, "error": str(e)}
+
+    return web.json_response({"preset": preset, "results": results})
 
 
 # ---------------------------------------------------------------------------
@@ -1294,6 +1432,9 @@ def create_app() -> web.Application:
     app.router.add_post("/api/c2/start", handle_c2_start)
     app.router.add_post("/api/c2/stop", handle_c2_stop)
     app.router.add_get("/api/c2/data/{filename}", handle_c2_data)
+    app.router.add_get("/api/edr/manage/status", handle_edr_status)
+    app.router.add_post("/api/edr/manage/toggle", handle_edr_toggle)
+    app.router.add_post("/api/edr/manage/preset", handle_edr_preset)
     app.router.add_post("/api/edr/run", handle_edr_run)
     app.router.add_post("/api/edr/score-only", handle_edr_score_only)
     app.router.add_get("/api/edr/scores", handle_edr_scores)

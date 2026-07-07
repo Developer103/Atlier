@@ -14,6 +14,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CHAINSAW="$PROJECT_DIR/tools/chainsaw/chainsaw"
 SIGMA_RULES="$PROJECT_DIR/tools/sigma/rules/windows"
 SIGMA_HUNTING="$PROJECT_DIR/tools/sigma/rules-threat-hunting/windows"
+SIGMA_EMERGING="$PROJECT_DIR/tools/sigma/rules-emerging-threats"
 SIGMA_CUSTOM="$PROJECT_DIR/tools/sigma/rules/custom"
 MAPPINGS="$PROJECT_DIR/tools/chainsaw/mappings/sigma-event-logs-all.yml"
 RESULTS_DIR="$PROJECT_DIR/results/edr_scores"
@@ -56,6 +57,7 @@ run_score() {
     "$CHAINSAW" hunt "$evtx_file" \
         -s "$SIGMA_RULES" \
         -s "$SIGMA_HUNTING" \
+        -s "$SIGMA_EMERGING" \
         -s "$SIGMA_CUSTOM" \
         --mapping "$MAPPINGS" \
         --skip-errors \
@@ -66,6 +68,7 @@ run_score() {
     "$CHAINSAW" hunt "$evtx_file" \
         -s "$SIGMA_RULES" \
         -s "$SIGMA_HUNTING" \
+        -s "$SIGMA_EMERGING" \
         -s "$SIGMA_CUSTOM" \
         --mapping "$MAPPINGS" \
         --skip-errors \

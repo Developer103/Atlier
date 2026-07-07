@@ -129,11 +129,12 @@ def _llm_obfuscate(source: str, llm_url: str, max_attempts: int = 3, model: str 
     for attempt in range(1, max_attempts + 1):
         logger.info("LLM obfuscation attempt %d/%d", attempt, max_attempts)
         try:
-            resp = requests.post(
-                f"{llm_url}/v1/chat/completions",
-                json=req_body,
-                timeout=300,
-            )
+            url = llm_url.rstrip("/")
+            if url.endswith("/v1"):
+                url = f"{url}/chat/completions"
+            else:
+                url = f"{url}/v1/chat/completions"
+            resp = requests.post(url, json=req_body, timeout=300)
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"]
 

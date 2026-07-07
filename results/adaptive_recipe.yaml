@@ -1,0 +1,29 @@
+name: infostealer_adaptive
+description: Adaptive AD recon — layers selected by evasion_selector
+
+core:
+  - ad/json_builder
+  - ad/ldap_client
+  - ad/sid_resolver
+  - ad_collectors/ad_domains
+
+collectors:
+  - ad_collectors/ad_users
+  - ad_collectors/ad_groups
+  - ad_collectors/ad_computers
+  - ad_collectors/ad_ous
+  - ad_collectors/ad_gpos
+
+arch: arch/ad_recon
+
+evasion:
+  - evasion/etw_patch
+  - evasion/header_stomp
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  LDAP_USER: "it.admin"
+  LDAP_DOMAIN: "MALWARE"
+  LDAP_PASS: "Adm1nP@ss!"

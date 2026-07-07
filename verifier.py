@@ -793,34 +793,19 @@ class Verifier:
         logger.info("Keylogger canaries set up — will simulate keystrokes after exe launch")
 
     async def _setup_infostealer_canaries(self, spec):
-        """Plant fake credentials and sensitive data for infostealer verification.
+        """Verify AD domain membership for AD recon validation.
 
-        Creates fake browser password files, credential text files, and env vars
-        that an infostealer should discover and exfiltrate.
+        AD recon requires a domain-joined machine with LDAP access to the DC.
         """
-        c2_addr = getattr(spec, "c2_address", "10.0.2.2")
-        c2_port = getattr(spec, "c2_port", 9001)
-
-        setup_cmds = [
-            r'mkdir "C:\Users\vmuser\Documents\credentials" 2>NUL',
-            r'echo username=admin > "C:\Users\vmuser\Documents\credentials\passwords.txt"',
-            r'echo password=SuperSecret123! >> "C:\Users\vmuser\Documents\credentials\passwords.txt"',
-            r'echo api_key=AKIA_FAKE_KEY_FOR_TESTING >> "C:\Users\vmuser\Documents\credentials\passwords.txt"',
-            r'echo aws_secret=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY >> "C:\Users\vmuser\Documents\credentials\passwords.txt"',
-            r'mkdir "C:\Users\vmuser\AppData\Local\Google\Chrome\User Data\Default" 2>NUL',
-            r'echo CANARY_BROWSER_DATA > "C:\Users\vmuser\AppData\Local\Google\Chrome\User Data\Default\Login Data"',
-            r'mkdir "C:\Users\vmuser\AppData\Roaming\Mozilla\Firefox\Profiles\test.default" 2>NUL',
-            r'echo CANARY_FF_DATA > "C:\Users\vmuser\AppData\Roaming\Mozilla\Firefox\Profiles\test.default\logins.json"',
-            r'setx CANARY_SECRET "infostealer_test_token_12345" 2>NUL',
-            r'echo CANARY_WALLET_DATA > "C:\Users\vmuser\Documents\credentials\wallet.dat"',
-        ]
-        for cmd in setup_cmds:
-            try:
-                await self._vm.execute_command(cmd, timeout=10)
-            except Exception:
-                pass
-        logger.info("Infostealer canaries planted (fake creds, browser data, env vars) — C2 target: %s:%d",
-                    c2_addr, c2_port)
+        try:
+            out = (await self._vm.execute_command(
+                'systeminfo | findstr Domain', timeout=15)).strip()
+            if "malware.lab" in out.lower():
+                logger.info("AD recon canary: VM is domain-joined to malware.lab")
+            else:
+                logger.warning("AD recon canary: VM may not be domain-joined: %s", out)
+        except Exception as exc:
+            logger.warning("Failed to verify domain membership: %s", exc)
 
     # ------------------------------------------------------------------
     # Per-type behavioral checks
@@ -923,118 +908,64 @@ class Verifier:
 
     async def _check_infostealer_behaviour(self, result: VerificationResult, spec,
                                             c2_data_file: Optional[Path] = None):
-        """Post-execution checks for infostealer: did it collect/exfiltrate data?
+        """Post-execution checks for infostealer (AD recon): validates BloodHound JSON.
 
         Ground truth check: the C2 listener saved received data to c2_data_file.
-        We check if that file contains our planted canary credentials.
-        Also checks for on-disk collection artifacts and credential file access.
+        We check if that file contains valid BloodHound v6 JSON with AD entities.
         """
+        import json as _json
+        import re as _re
+
         _strong_evidence = []
         _weak_evidence = []
-        c2_addr = getattr(spec, "c2_address", "10.0.2.2")
-        c2_port = getattr(spec, "c2_port", 9001)
 
-        # -- Ground truth: check C2 received data for canary strings --
-        _CANARY_MARKERS = [
-            b"SuperSecret123",
-            b"AKIA_FAKE_KEY",
-            b"CANARY_BROWSER_DATA",
-        ]
         _c2_data = b""
         if c2_data_file and c2_data_file.exists():
             _c2_data = c2_data_file.read_bytes()
             _c2_size = len(_c2_data)
-            logger.info("C2 received %d bytes of exfiltrated data", _c2_size)
+            logger.info("C2 received %d bytes of AD recon data", _c2_size)
             if _c2_size > 0:
                 _weak_evidence.append(f"c2_data_received:{_c2_size}b")
-            _canary_hits = 0
-            for marker in _CANARY_MARKERS:
-                if marker in _c2_data:
-                    _canary_hits += 1
-                    _strong_evidence.append(f"c2_contains_canary:{marker.decode()}")
-                    logger.info("C2 data contains planted canary: %s", marker.decode())
-            if _canary_hits == 0 and _c2_size > 10:
-                _weak_evidence.append("c2_data_no_canary_match")
-                logger.info("C2 received data but no canary markers found (may be encrypted/encoded)")
         else:
             logger.info("No C2 data received (file missing or empty)")
 
-        # -- Check if planted credential files were accessed/modified/deleted --
-        _CRED_PATHS = [
-            r"C:\Users\vmuser\Documents\credentials\passwords.txt",
-            r"C:\Users\vmuser\AppData\Local\Google\Chrome\User Data\Default\Login Data",
-            r"C:\Users\vmuser\Documents\credentials\wallet.dat",
-        ]
-        for cred_path in _CRED_PATHS:
-            try:
-                out = (await self._vm.execute_command(
-                    f'cmd /c "if exist ""{cred_path}"" (echo EXISTS) else (echo GONE)"',
-                    timeout=8
-                )).strip()
-                if "GONE" in out:
-                    _strong_evidence.append(f"cred_stolen:{cred_path.split(chr(92))[-1]}")
-                    logger.info("Credential file removed (exfiltrated): %s", cred_path)
-            except Exception:
-                pass
-
-        # -- Check for on-disk collection artifacts --
-        collect_cmd = (
-            'cmd /c "dir /s /b C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.txt '
-            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.dat '
-            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.log '
-            'C:\\Users\\vmuser\\AppData\\Local\\Temp\\*.tmp 2>NUL '
-            '| findstr /v /i /c:\"canary\""'
-        )
-        try:
-            out = (await self._vm.execute_command(collect_cmd, timeout=10)).strip()
-            if out and "File Not Found" not in out:
-                for f in out.splitlines()[:3]:
-                    fname = f.strip().split("\\")[-1] if "\\" in f else f.strip()
-                    _weak_evidence.append(f"temp_artifact:{fname}")
-                logger.info("Temp collection files found: %s", out[:300])
-        except Exception:
-            pass
-
-        # -- Check hostname/username in C2 data (system info was gathered) --
         if _c2_data:
-            try:
-                hostname_out = (await self._vm.execute_command("hostname", timeout=5)).strip()
-                if hostname_out.encode() in _c2_data:
-                    _strong_evidence.append(f"c2_contains_hostname:{hostname_out}")
-                    logger.info("C2 data contains hostname: %s", hostname_out)
-                username_out = (await self._vm.execute_command("whoami", timeout=5)).strip()
-                if username_out.encode() in _c2_data or b"vmuser" in _c2_data:
-                    _strong_evidence.append("c2_contains_username")
-                    logger.info("C2 data contains username")
-            except Exception:
-                pass
+            _text = _c2_data.decode("utf-8", errors="ignore")
+            _markers = list(_re.finditer(r'===FILE:(\w+\.json):(\d+)===', _text))
+            _total_entities = 0
+            _valid_files = 0
 
-        # -- Check for network connection evidence to C2 --
-        try:
-            net_cmd = f'netstat -an | findstr "{c2_addr}" | findstr "{c2_port}"'
-            net_out = (await self._vm.execute_command(net_cmd, timeout=10)).strip()
-            if net_out:
-                _weak_evidence.append(f"network_connection:{c2_addr}:{c2_port}")
-                logger.info("Network connection to C2 detected: %s", net_out[:200])
-        except Exception:
-            pass
+            for _m in _markers:
+                _fname = _m.group(1)
+                _fsize = int(_m.group(2))
+                _jdata = _text[_m.end():_m.end() + _fsize]
+                try:
+                    _parsed = _json.loads(_jdata)
+                    _count = _parsed.get("meta", {}).get("count", 0)
+                    _total_entities += _count
+                    _valid_files += 1
+                    _strong_evidence.append(f"bh_json:{_fname}:{_count}")
+                    logger.info("BloodHound JSON %s: %d entities", _fname, _count)
+                except _json.JSONDecodeError:
+                    _weak_evidence.append(f"invalid_json:{_fname}")
 
-        # -- Verdict --
+            if _total_entities >= 10:
+                _strong_evidence.append(f"ad_entities_total:{_total_entities}")
+            if b"MALWARE.LAB" in _c2_data or b"malware.lab" in _c2_data:
+                _strong_evidence.append("domain_name_present")
+
         if _strong_evidence:
             result.behaviour_checks[BehaviourCheck.FUNCTIONAL_GOAL_MET] = True
             result.execution_output += f"\n[BEHAVIOUR] CONFIRMED: {', '.join(_strong_evidence)}"
             if _weak_evidence:
                 result.execution_output += f" (also: {', '.join(_weak_evidence)})"
-            logger.info("Infostealer behaviour CONFIRMED: %s", _strong_evidence)
+            logger.info("AD recon behaviour CONFIRMED: %s", _strong_evidence)
         else:
             result.behaviour_checks[BehaviourCheck.FUNCTIONAL_GOAL_MET] = False
-            result.execution_output += "\n[BEHAVIOUR] FAILED: No data theft evidence detected"
+            result.execution_output += "\n[BEHAVIOUR] FAILED: No AD recon data detected"
             if _weak_evidence:
                 result.execution_output += f" (weak only: {', '.join(_weak_evidence)})"
-            logger.warning(
-                "Infostealer behaviour NOT confirmed — no canary data in C2 stream, "
-                "no stolen credential files, no collection artifacts."
-            )
+            logger.warning("AD recon behaviour NOT confirmed — no BloodHound JSON in C2 stream.")
 
     async def _setup_backdoor_canaries(self):
         """Create test artifacts the backdoor can be commanded to read/list."""

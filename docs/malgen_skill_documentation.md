@@ -34,7 +34,7 @@ Complete operational guide for the malware generation framework's chunk assemble
 
 The framework generates Windows malware binaries (PE executables) from modular C source code templates. It supports three malware types:
 
-- **Infostealer**: One-shot data collection (system info, browser creds, screenshots, files) → exfil → exit
+- **Infostealer (AD Recon)**: One-shot AD enumeration via LDAP (users, groups, computers, OUs, GPOs, ACLs) → BloodHound v6 JSON exfil → exit. Replaces the legacy credential/file theft infostealer with SharpHound-style domain reconnaissance.
 - **Keylogger**: Persistent keystroke capture → periodic exfil → runs until killed
 - **Backdoor**: Persistent C2 beacon → receive commands → execute → send results → loop
 
@@ -1098,3 +1098,56 @@ Framework 2 is an alternative path where a local LLM (Qwen 35B) generates the C 
 | **Total** | **42** | **42/42** | **42/42** | **0 det** | **ALL PASS** |
 
 Unit tests: 160/162 passed (2 failures in Framework 2 API obfuscation ordering — not chunk assembler).
+
+## Appendix: Chunk Framework Expansion (2026-07-07)
+
+### Evasion Selector Enhancements
+
+**Sigma/Chainsaw integration**: `evasion_selector.py` now runs `check_sigma_rules()` inside the validation loop — pulls Sysmon EVTX from VM, runs Chainsaw against 2,997 Sigma rules (including 462 emerging-threats). Medium+ hits fail the run.
+
+**EDR management**: Portal exposes live toggle switches for Defender/Sysmon/Wazuh. Evasion selector reads `MALGEN_ACTIVE_EDRS` env var for per-run detection configuration.
+
+**Progress bars**: Per-tier progress display shows immediately (T1: Algo, T2: Local, T3: Cloud).
+
+### Combination Space: 4.32M (was 108K)
+
+Layer expansion to 4.32 million unique behavioral combinations:
+
+| Layer | Options | Key additions |
+|-------|---------|---------------|
+| api_resolve | 6 | peb_walk, indirect_syscall |
+| execution | 10 | callback_enumwindows, callback_certenumsystem, callback_copyfile2, callback_enumrestype |
+| process | 9 | ppid_spoof_svchost/runtimebroker/sihost/taskhostw/dllhost |
+| timing | 5 | (unchanged) |
+| data_obfuscation | 4 | (unchanged) |
+| anti_analysis | 5 | (unchanged) |
+| exfil | 16 | https_post, http_get_chunks, named_pipe, smb_write, 6 LOLBin methods |
+| persistence | 5 | (unchanged) |
+
+### Telemetry Dependency Map
+
+`templates/chunks/telemetry_map.py` maps evasion chunks → detection telemetry sources:
+
+```python
+from telemetry_map import get_blind_spots, recommend_evasion_for, score_combination
+
+# What goes dark with ETW patch + ntdll unhook?
+blind = get_blind_spots(["etw_patch", "unhook_ntdll"])
+# → suppresses ETW-TI, AMSI, ETW Process, usermode hooks
+# → process_hollow, APC, fiber, DLL sideload become invisible
+
+# What evasion helps process_hollow?
+recs = recommend_evasion_for("process_hollow")
+# → etw_patch (suppresses ETW-TI), unhook_ntdll (suppresses hooks)
+
+# Score a combination (0.0=blind, 1.0=fully observed)
+score = score_combination(["etw_patch"], ["callback_abuse", "https_post"])
+```
+
+### Strategic Analysis
+
+See `research/chunk_vs_malgen_analysis.md` for:
+- Chunk framework (breadth/speed/cost) vs malgen skill (depth/creativity)
+- Flywheel model: framework stores knowledge, malgen discovers knowledge
+- Recombination defeats patch cycles (EDR vendors patch combinations, not primitives)
+- Telemetry-aware composition (target shared telemetry roots, not individual rules)

