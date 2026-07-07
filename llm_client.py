@@ -49,10 +49,12 @@ def _extract_code_from_reasoning(reasoning: str) -> str:
 # ---------------------------------------------------------------------------
 
 _LLM_SERVER_LABELS: dict[str, str] = {
+    "11235": "Blackwell",
+    "11234": "Blackwell-alt",
     "1234": "local",
-    "11234": "Blackwell",
-    "11235": "T",
 }
+
+_LLM_PORT_PRIORITY = [11235, 11234, 1234]
 
 
 def _llm_label(url: str) -> str:
@@ -64,19 +66,33 @@ def _llm_label(url: str) -> str:
         return "local LLM"
 
 
+def _discover_llm_url() -> str:
+    """Probe ports 11235 → 11234 → 1234 and return the first responding URL."""
+    import urllib.request
+    for port in _LLM_PORT_PRIORITY:
+        try:
+            req = urllib.request.Request(f"http://localhost:{port}/v1/models")
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    return f"http://localhost:{port}"
+        except Exception:
+            continue
+    return f"http://localhost:{_LLM_PORT_PRIORITY[0]}"
+
+
 class SubprocessLLMClient:
     """Default LLM client — invokes llama.cpp via subprocess."""
 
     def __init__(
         self,
         model_path: Optional[str] = None,
-        llm_api_url: str = "http://localhost:1234",
+        llm_api_url: str = "",
         llm_model_name: str = "qwen3.6-35b-a3b-uncensored-hauhaucs-aggressiv",
         max_tokens: int = 8192,
         temperature: float = 0.7,
     ):
         self.model_path = model_path or self._find_model()
-        self.llm_api_url = llm_api_url.rstrip("/")
+        self.llm_api_url = (llm_api_url or _discover_llm_url()).rstrip("/")
         self.llm_model_name = llm_model_name
         self.max_tokens = max_tokens
         self.temperature = temperature

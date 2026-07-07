@@ -12,6 +12,7 @@ static SERVICE_STATUS g_svc_status;
 static SERVICE_STATUS_HANDLE g_svc_handle;
 
 static void do_collection(void) {
+{{EVASION_INIT}}
     init_buffer();
     if (!g_data) return;
 

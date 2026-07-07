@@ -11,6 +11,55 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
+SSH_BASE = [
+    "sshpass", "-pvmuser123", "ssh", "-p", "10022",
+    "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+    "vmuser@localhost",
+]
+
+
+def _ssh(cmd, timeout=15):
+    ret = subprocess.run(SSH_BASE + [cmd], capture_output=True, text=True, timeout=timeout)
+    return ret.stdout.strip().replace("\r", "")
+
+
+def _create_ransomware_canaries():
+    cmds = [
+        r'mkdir "C:\Users\vmuser\Documents\canary_files" 2>NUL',
+        r'echo This is a canary document for verification. > "C:\Users\vmuser\Documents\canary_files\canary_doc.txt"',
+        r'echo This is a canary spreadsheet for verification. > "C:\Users\vmuser\Documents\canary_files\canary_sheet.xlsx"',
+        r'echo This is a canary image for verification. > "C:\Users\vmuser\Documents\canary_files\canary_photo.jpg"',
+    ]
+    for c in cmds:
+        _ssh(c)
+    hashes = {}
+    for name in ("canary_doc.txt", "canary_sheet.xlsx", "canary_photo.jpg"):
+        out = _ssh(rf'certutil -hashfile "C:\Users\vmuser\Documents\canary_files\{name}" MD5 2>NUL')
+        lines = [l.strip() for l in out.splitlines() if l.strip()]
+        if len(lines) >= 2:
+            hashes[name] = lines[1].replace(" ", "").lower()
+    return hashes
+
+
+def _create_infostealer_canaries():
+    cmds = [
+        r'mkdir "C:\Users\vmuser\Documents\credentials" 2>NUL',
+        r'echo admin:SuperSecret123 > "C:\Users\vmuser\Documents\credentials\passwords.txt"',
+        r'echo aws_access_key_id=AKIAIOSFODNN7EXAMPLE > "C:\Users\vmuser\Documents\credentials\aws_creds.txt"',
+    ]
+    for c in cmds:
+        _ssh(c)
+
+
+def check_defender_alerts():
+    out = _ssh(
+        'powershell -Command "Get-MpThreatDetection | Select-Object -Last 5 | Format-List"',
+        timeout=20,
+    )
+    msgs = [l.strip() for l in out.splitlines() if l.strip()]
+    count = out.count("ThreatID")
+    return count, msgs
+
 
 # ---------------------------------------------------------------------------
 # Basic connectivity
@@ -48,9 +97,6 @@ def test_vm_scp_upload_download(vm_ssh_ready, tmp_path):
 
 @pytest.mark.vm
 def test_vm_canary_creation_ransomware(vm_ssh_ready):
-    sys.path.insert(0, str(RESULTS_DIR))
-    from validate import _create_ransomware_canaries
-
     hashes = _create_ransomware_canaries()
     assert len(hashes) >= 3
 
@@ -64,9 +110,6 @@ def test_vm_canary_creation_ransomware(vm_ssh_ready):
 
 @pytest.mark.vm
 def test_vm_canary_creation_infostealer(vm_ssh_ready):
-    sys.path.insert(0, str(RESULTS_DIR))
-    from validate import _create_infostealer_canaries
-
     _create_infostealer_canaries()
 
     # Verify credential files exist
@@ -83,9 +126,6 @@ def test_vm_canary_creation_infostealer(vm_ssh_ready):
 
 @pytest.mark.vm
 def test_vm_defender_query(vm_ssh_ready):
-    sys.path.insert(0, str(RESULTS_DIR))
-    from validate import check_defender_alerts
-
     count, msgs = check_defender_alerts()
     # Should not error — count may be 0 or more
     assert isinstance(count, int)

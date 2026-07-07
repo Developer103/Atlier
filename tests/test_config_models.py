@@ -189,7 +189,7 @@ def test_checkpoint_save_load():
             output_dir="/tmp/results",
             created_at="2026-06-28T00:00:00",
             run_mode="run",
-            llm_url="http://localhost:1234",
+            llm_url="http://localhost:11235",
             llm_model="qwen",
             max_iterations=5,
             completed_iterations=2,
@@ -282,8 +282,9 @@ def test_strip_thinking_multiline():
 
 def test_llm_label():
     from malware_gen_framework.llm_client import _llm_label
+    assert _llm_label("http://localhost:11235") == "Blackwell"
+    assert _llm_label("http://localhost:11234") == "Blackwell-alt"
     assert _llm_label("http://localhost:1234") == "local"
-    assert _llm_label("http://localhost:11234") == "Blackwell"
     assert "9999" in _llm_label("http://localhost:9999") or "LLM" in _llm_label("http://localhost:9999")
 
 

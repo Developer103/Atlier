@@ -15,6 +15,8 @@ from aiohttp import web, WSMsgType
 
 FRAMEWORK_ROOT = Path(__file__).parent.parent
 RESULTS_DIR = FRAMEWORK_ROOT / "results"
+EDR_SCORES_DIR = RESULTS_DIR / "edr_scores"
+SCRIPTS_DIR = FRAMEWORK_ROOT / "scripts"
 CHUNKS_DIR = FRAMEWORK_ROOT / "templates" / "chunks"
 RECIPES_DIR = CHUNKS_DIR / "recipes"
 
@@ -56,7 +58,7 @@ def build_command(data: dict) -> list[str]:
 
     if command in ("run", "generate", "verify"):
         llm_url = data.get("llm_url", "").strip()
-        if llm_url and llm_url != "http://localhost:1234":
+        if llm_url:
             cmd += ["--llm-url", llm_url]
         llm_model = data.get("llm_model", "").strip()
         if llm_model:
@@ -105,11 +107,6 @@ def build_command(data: dict) -> list[str]:
             cmd += ["--vm-user", vm_user]
         if vm_pass and vm_pass != "vmuser123":
             cmd += ["--vm-pass", vm_pass]
-
-    elif command == "provision":
-        cmd += ["--os", data.get("os") or "windows-11"]
-        if data.get("boot_existing"):
-            cmd.append("--boot-existing")
 
     elif command == "verify":
         if data.get("source"):
@@ -683,7 +680,9 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
     malware_type = data.get("malware_type", "infostealer")
     dry_run = data.get("dry_run", False)
     av_type = data.get("av_type", "defender")
-    max_runs = data.get("max_runs", 10)
+    max_algorithmic = data.get("max_algorithmic", 5)
+    max_llm = data.get("max_llm", 3)
+    max_cloud = data.get("max_cloud", 2)
     custom_cmd = data.get("custom_cmd", "")
     job_id = uuid.uuid4().hex[:8]
 
@@ -694,10 +693,11 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
     if dry_run:
         cmd.append("--dry-run")
 
-    # Pass AV type and max runs via environment
     env_extra = {
         "MALGEN_AV_TYPE": av_type,
-        "MALGEN_MAX_RUNS": str(max_runs),
+        "MALGEN_MAX_ALGORITHMIC": str(max_algorithmic),
+        "MALGEN_MAX_LLM": str(max_llm),
+        "MALGEN_MAX_CLOUD": str(max_cloud),
     }
     if custom_cmd:
         env_extra["MALGEN_DETECTION_CMD"] = custom_cmd
@@ -747,6 +747,276 @@ async def handle_chunk_history(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# EDR Score endpoints
+# ---------------------------------------------------------------------------
+
+async def handle_edr_run(request: web.Request) -> web.Response:
+    """Start an EDR score job: deploy payload to VM, capture Sysmon, score."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    payload_path = data.get("payload", "").strip()
+    payload_type = data.get("type", "infostealer")
+    if not payload_path:
+        return web.json_response({"error": "payload path required"}, status=400)
+
+    job_id = uuid.uuid4().hex[:8]
+    script = str(SCRIPTS_DIR / "edr_score.sh")
+    cmd = [script, payload_path, "--type", payload_type]
+
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": cmd,
+        "cmd_str": " ".join(cmd),
+        "command": "edr-score",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
+
+
+async def handle_edr_score_only(request: web.Request) -> web.Response:
+    """Score an existing .evtx file without deploying."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON body"}, status=400)
+    evtx_path = data.get("evtx", "").strip()
+    if not evtx_path:
+        return web.json_response({"error": "evtx path required"}, status=400)
+
+    job_id = uuid.uuid4().hex[:8]
+    script = str(SCRIPTS_DIR / "edr_score.sh")
+    cmd = [script, "--score-only", evtx_path]
+
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": cmd,
+        "cmd_str": " ".join(cmd),
+        "command": "edr-score",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
+
+
+async def handle_edr_scores(request: web.Request) -> web.Response:
+    """List EDR score reports."""
+    if not EDR_SCORES_DIR.exists():
+        return web.json_response([])
+    files = sorted(
+        [f.name for f in EDR_SCORES_DIR.iterdir()
+         if f.is_file() and (f.name.startswith("score_") or f.name.startswith("sysmon_"))],
+        key=lambda n: EDR_SCORES_DIR.joinpath(n).stat().st_mtime,
+        reverse=True,
+    )
+    return web.json_response(files)
+
+
+async def handle_edr_score_file(request: web.Request) -> web.Response:
+    """View a specific EDR score report."""
+    filename = request.match_info["filename"]
+    if "/" in filename or ".." in filename:
+        raise web.HTTPBadRequest()
+    filepath = EDR_SCORES_DIR / filename
+    if not filepath.exists():
+        raise web.HTTPNotFound()
+    return web.Response(
+        text=filepath.read_text(errors="replace"),
+        content_type="text/plain",
+    )
+
+
+# ---------------------------------------------------------------------------
+# VM management
+# ---------------------------------------------------------------------------
+
+_vm_qemu: "QEMUProcess | None" = None
+
+
+def _vm_paths(os_name: str = "windows-11"):
+    """Return (cow_img, qmp_socket, vm_name) for the given OS."""
+    base_dir = Path("/tmp/vm_provision")
+    cow = base_dir / f"base_{os_name}.cow.qcow2"
+    qmp = base_dir / f"vm-{os_name}.qmp"
+    name = f"vm-{os_name}"
+    return cow, qmp, name
+
+
+def _qemu_running(qmp: Path, vm_name: str) -> bool:
+    """Check if a QEMU process for this VM is alive."""
+    import subprocess as _sp
+    for pattern in [str(qmp), f"-name {vm_name}"]:
+        try:
+            _sp.check_output(
+                ["pgrep", "-f", f"qemu-system-x86_64.*{pattern}"],
+                text=True, stderr=_sp.DEVNULL, timeout=5,
+            )
+            return True
+        except (_sp.CalledProcessError, FileNotFoundError):
+            pass
+    return False
+
+
+async def _ssh_reachable(port: int = 10022, user: str = "vmuser",
+                         pwd: str = "vmuser123") -> bool:
+    try:
+        async with asyncssh.connect(
+            "localhost", port=port, username=user, password=pwd,
+            known_hosts=None, connect_timeout=5,
+        ) as conn:
+            r = await conn.run("echo ok", check=False, timeout=5)
+            return r.exit_status == 0
+    except Exception:
+        return False
+
+
+async def handle_vm_status(request: web.Request) -> web.Response:
+    """Return VM status: qemu running, ssh reachable, disk exists."""
+    data = dict(request.query)
+    os_name = data.get("os", "windows-11")
+    cow, qmp, vm_name = _vm_paths(os_name)
+    qemu_up = await asyncio.to_thread(_qemu_running, qmp, vm_name)
+    ssh_up = False
+    if qemu_up:
+        ssh_up = await _ssh_reachable()
+    return web.json_response({
+        "os": os_name,
+        "disk_exists": cow.exists() or qemu_up,
+        "qemu_running": qemu_up,
+        "ssh_reachable": ssh_up,
+    })
+
+
+async def handle_vm_boot(request: web.Request) -> web.Response:
+    """Boot an existing VM disk."""
+    global _vm_qemu
+    data = await request.json() if request.content_length else {}
+    os_name = data.get("os", "windows-11")
+    cow, qmp, vm_name = _vm_paths(os_name)
+
+    if not cow.exists():
+        return web.json_response(
+            {"error": f"No disk at {cow}. Install the VM first."}, status=400)
+
+    if _qemu_running(qmp, vm_name):
+        return web.json_response(
+            {"error": "VM is already running."}, status=409)
+
+    from .provision_engine import QEMUProcess, ProvisionEngine
+
+    qemu = QEMUProcess(
+        vm_name=vm_name, qmp_socket=qmp, disk_img=cow,
+        cpu_cores=4, ram_mb=8192, windows_boot_only=True,
+    )
+    try:
+        await qemu.start()
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=500)
+
+    _vm_qemu = qemu
+
+    ssh_ok = await ProvisionEngine._wait_for_ssh(
+        10022, timeout=180, username="vmuser", password="vmuser123")
+
+    return web.json_response({
+        "ok": True,
+        "pid": qemu.process.pid if qemu.process else None,
+        "ssh_ready": ssh_ok,
+    })
+
+
+async def handle_vm_shutdown(request: web.Request) -> web.Response:
+    """Gracefully shut down the VM."""
+    global _vm_qemu
+    data = await request.json() if request.content_length else {}
+    os_name = data.get("os", "windows-11")
+    cow, qmp, vm_name = _vm_paths(os_name)
+
+    if not _qemu_running(qmp, vm_name):
+        return web.json_response({"error": "VM is not running."}, status=400)
+
+    if _vm_qemu and _vm_qemu.process and _vm_qemu.process.poll() is None:
+        await _vm_qemu.stop(wait=True)
+        _vm_qemu = None
+        return web.json_response({"ok": True})
+
+    # Fallback: SSH shutdown then kill stale QEMU
+    try:
+        await _ssh_reachable()
+        async with asyncssh.connect(
+            "localhost", port=10022, username="vmuser", password="vmuser123",
+            known_hosts=None, connect_timeout=5,
+        ) as conn:
+            await conn.run("shutdown /s /t 0", check=False, timeout=10)
+    except Exception:
+        pass
+
+    # Wait up to 30s for QEMU to exit, then force kill
+    import time
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if not _qemu_running(qmp, vm_name):
+            _vm_qemu = None
+            return web.json_response({"ok": True})
+        await asyncio.sleep(1)
+
+    # Force kill
+    from .provision_engine import QEMUProcess
+    await asyncio.to_thread(QEMUProcess._kill_stale_qemu, vm_name, qmp)
+    _vm_qemu = None
+    return web.json_response({"ok": True, "forced": True})
+
+
+async def handle_vm_snapshot(request: web.Request) -> web.Response:
+    """Run a VM snapshot save/restore."""
+    data = await request.json() if request.content_length else {}
+    action = data.get("action", "save")
+    tag = data.get("tag", "portal_snapshot")
+    if action not in ("save", "restore", "list"):
+        return web.json_response({"error": "action must be save, restore, or list"}, status=400)
+    script = str(SCRIPTS_DIR / "vm_snapshot.sh")
+    job_id = uuid.uuid4().hex[:8]
+    cmd = [script, action, tag]
+    jobs[job_id] = {
+        "id": job_id, "status": "running", "cmd": cmd,
+        "cmd_str": " ".join(cmd), "command": "vm-snapshot",
+        "output": [], "listeners": [], "proc": None,
+        "exit_code": None, "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
+
+
+async def handle_vm_install(request: web.Request) -> web.Response:
+    """Start a fresh VM installation (provision) as a background job."""
+    data = await request.json() if request.content_length else {}
+    os_name = data.get("os", "windows-11")
+    job_id = uuid.uuid4().hex[:8]
+    cmd = [sys.executable, "-m", "malware_gen_framework", "provision",
+           "--os", os_name]
+    jobs[job_id] = {
+        "id": job_id, "status": "running", "cmd": cmd,
+        "cmd_str": " ".join(cmd), "command": "provision",
+        "output": [], "listeners": [], "proc": None,
+        "exit_code": None, "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
+
+
+# ---------------------------------------------------------------------------
 # C2 listener management
 # ---------------------------------------------------------------------------
 
@@ -774,7 +1044,7 @@ async def handle_c2_data(request: web.Request) -> web.Response:
     filename = request.match_info["filename"]
     if "/" in filename or ".." in filename:
         raise web.HTTPBadRequest()
-    filepath = RESULTS_DIR / filename
+    filepath = RESULTS_DIR / "c2_data" / filename
     if not filepath.exists() or not filename.startswith("c2_received_"):
         raise web.HTTPNotFound()
     content = filepath.read_bytes()
@@ -783,6 +1053,218 @@ async def handle_c2_data(request: web.Request) -> web.Response:
     except Exception:
         text = content.hex()
     return web.Response(text=text, content_type="text/plain")
+
+
+# ---------------------------------------------------------------------------
+# Detection engines: Wazuh + Elastic + Defender
+# ---------------------------------------------------------------------------
+
+WAZUH_API = "https://localhost:55000"
+WAZUH_USER = "wazuh-wui"
+WAZUH_PASS = "MyS3cr3tP4ssw0rd*"
+ELASTIC_URL = "http://localhost:9201"
+
+
+async def _wazuh_token() -> str | None:
+    import aiohttp as _aio
+    try:
+        conn = _aio.TCPConnector(ssl=False)
+        async with _aio.ClientSession(connector=conn) as s:
+            async with s.post(
+                f"{WAZUH_API}/security/user/authenticate",
+                auth=_aio.BasicAuth(WAZUH_USER, WAZUH_PASS),
+                timeout=_aio.ClientTimeout(total=5),
+            ) as r:
+                data = await r.json()
+                return data.get("data", {}).get("token")
+    except Exception:
+        return None
+
+
+async def _wazuh_request(path: str, params: dict = None) -> dict | None:
+    import aiohttp as _aio
+    token = await _wazuh_token()
+    if not token:
+        return None
+    try:
+        conn = _aio.TCPConnector(ssl=False)
+        async with _aio.ClientSession(connector=conn) as s:
+            async with s.get(
+                f"{WAZUH_API}{path}",
+                headers={"Authorization": f"Bearer {token}"},
+                params=params or {},
+                timeout=_aio.ClientTimeout(total=10),
+            ) as r:
+                return await r.json()
+    except Exception:
+        return None
+
+
+async def handle_detection_status(request: web.Request) -> web.Response:
+    """Combined status of all detection engines."""
+    import aiohttp as _aio
+
+    result = {
+        "wazuh": {"online": False, "agent_id": None, "agent_status": None},
+        "elastic": {"online": False, "alert_index_exists": False},
+        "defender": {"online": False, "realtime": False},
+    }
+
+    # Wazuh
+    agents = await _wazuh_request("/agents", {"pretty": "true", "status": "active"})
+    if agents and "data" in agents:
+        result["wazuh"]["online"] = True
+        for a in agents["data"].get("affected_items", []):
+            if a.get("id") != "000":
+                result["wazuh"]["agent_id"] = a["id"]
+                result["wazuh"]["agent_status"] = a.get("status", "unknown")
+                result["wazuh"]["agent_name"] = a.get("name", "")
+                result["wazuh"]["agent_os"] = a.get("os", {}).get("name", "")
+                break
+
+    # Elastic / Wazuh Indexer
+    try:
+        conn = _aio.TCPConnector(ssl=False)
+        async with _aio.ClientSession(connector=conn) as s:
+            async with s.get(
+                f"{ELASTIC_URL}/_cluster/health",
+                timeout=_aio.ClientTimeout(total=5),
+            ) as r:
+                health = await r.json()
+                result["elastic"]["online"] = True
+                result["elastic"]["cluster_status"] = health.get("status", "unknown")
+            async with s.get(
+                f"{ELASTIC_URL}/_cat/indices/wazuh-alerts-*?format=json",
+                timeout=_aio.ClientTimeout(total=5),
+            ) as r:
+                indices = await r.json()
+                if isinstance(indices, list) and indices:
+                    result["elastic"]["alert_index_exists"] = True
+                    total_docs = sum(int(i.get("docs.count", 0)) for i in indices)
+                    result["elastic"]["total_alerts"] = total_docs
+    except Exception:
+        pass
+
+    # Defender (via VM SSH)
+    ssh_up = await _ssh_reachable()
+    if ssh_up:
+        try:
+            async with asyncssh.connect(
+                "localhost", port=10022, username="vmuser", password="vmuser123",
+                known_hosts=None, connect_timeout=5,
+            ) as conn:
+                r = await conn.run(
+                    'powershell -Command "Get-MpComputerStatus | Select-Object '
+                    'AMServiceEnabled,RealTimeProtectionEnabled,AntivirusEnabled '
+                    '| ConvertTo-Json"',
+                    check=False, timeout=10,
+                )
+                if r.exit_status == 0:
+                    import re
+                    cleaned = re.sub(r'\r', '', r.stdout.strip())
+                    dstatus = json.loads(cleaned)
+                    result["defender"]["online"] = True
+                    result["defender"]["realtime"] = bool(
+                        dstatus.get("RealTimeProtectionEnabled", False)
+                    )
+                    result["defender"]["antivirus"] = bool(
+                        dstatus.get("AntivirusEnabled", False)
+                    )
+        except Exception:
+            pass
+
+    return web.json_response(result)
+
+
+async def handle_detection_alerts(request: web.Request) -> web.Response:
+    """Recent alerts from Wazuh, Elastic, and Defender."""
+    import aiohttp as _aio
+
+    minutes = int(request.query.get("minutes", "10"))
+    min_level = int(request.query.get("min_level", "1"))
+    result = {"wazuh": [], "defender": []}
+
+    # Wazuh alerts via indexer (faster than API)
+    try:
+        conn = _aio.TCPConnector(ssl=False)
+        async with _aio.ClientSession(connector=conn) as s:
+            body = {
+                "size": 50,
+                "sort": [{"timestamp": "desc"}],
+                "query": {
+                    "bool": {
+                        "must": [
+                            {"term": {"agent.id": "001"}},
+                            {"range": {"rule.level": {"gte": min_level}}},
+                            {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+                        ]
+                    }
+                },
+            }
+            async with s.post(
+                f"{ELASTIC_URL}/wazuh-alerts-*/_search",
+                json=body,
+                headers={"Content-Type": "application/json"},
+                timeout=_aio.ClientTimeout(total=10),
+            ) as r:
+                data = await r.json()
+                for hit in data.get("hits", {}).get("hits", []):
+                    src = hit["_source"]
+                    rule = src.get("rule", {})
+                    result["wazuh"].append({
+                        "timestamp": src.get("timestamp", ""),
+                        "level": rule.get("level", 0),
+                        "rule_id": rule.get("id", ""),
+                        "description": rule.get("description", ""),
+                        "groups": rule.get("groups", []),
+                        "mitre": rule.get("mitre", {}),
+                    })
+    except Exception:
+        pass
+
+    # Defender recent threats
+    ssh_up = await _ssh_reachable()
+    if ssh_up:
+        try:
+            async with asyncssh.connect(
+                "localhost", port=10022, username="vmuser", password="vmuser123",
+                known_hosts=None, connect_timeout=5,
+            ) as conn:
+                r = await conn.run(
+                    'powershell -Command "Get-MpThreatDetection | '
+                    f'Where-Object {{ $_.InitialDetectionTime -gt (Get-Date).AddMinutes(-{minutes}) }} | '
+                    'Select-Object ThreatID,Resources,InitialDetectionTime | '
+                    'ConvertTo-Json"',
+                    check=False, timeout=15,
+                )
+                if r.exit_status == 0 and r.stdout.strip():
+                    import re
+                    cleaned = re.sub(r'\r', '', r.stdout.strip())
+                    threats = json.loads(cleaned)
+                    if isinstance(threats, dict):
+                        threats = [threats]
+                    for t in threats:
+                        result["defender"].append({
+                            "threat_id": str(t.get("ThreatID", "")),
+                            "resources": t.get("Resources", []),
+                            "time": str(t.get("InitialDetectionTime", "")),
+                        })
+        except Exception:
+            pass
+
+    # Summary counts
+    wazuh_high = sum(1 for a in result["wazuh"] if a["level"] >= 8)
+    wazuh_med = sum(1 for a in result["wazuh"] if 5 <= a["level"] < 8)
+    wazuh_low = sum(1 for a in result["wazuh"] if a["level"] < 5)
+    result["summary"] = {
+        "wazuh_total": len(result["wazuh"]),
+        "wazuh_high": wazuh_high,
+        "wazuh_medium": wazuh_med,
+        "wazuh_low": wazuh_low,
+        "defender_total": len(result["defender"]),
+    }
+
+    return web.json_response(result)
 
 
 # ---------------------------------------------------------------------------
@@ -803,16 +1285,27 @@ def create_app() -> web.Application:
     app.router.add_post("/api/spec/merge", handle_merge_spec)
     app.router.add_get("/api/results", handle_get_results)
     app.router.add_get("/api/results/{filename}", handle_get_result_file)
+    app.router.add_get("/api/vm/status", handle_vm_status)
+    app.router.add_post("/api/vm/boot", handle_vm_boot)
+    app.router.add_post("/api/vm/shutdown", handle_vm_shutdown)
+    app.router.add_post("/api/vm/install", handle_vm_install)
+    app.router.add_post("/api/vm/snapshot", handle_vm_snapshot)
     app.router.add_get("/api/c2", handle_c2_status)
     app.router.add_post("/api/c2/start", handle_c2_start)
     app.router.add_post("/api/c2/stop", handle_c2_stop)
     app.router.add_get("/api/c2/data/{filename}", handle_c2_data)
+    app.router.add_post("/api/edr/run", handle_edr_run)
+    app.router.add_post("/api/edr/score-only", handle_edr_score_only)
+    app.router.add_get("/api/edr/scores", handle_edr_scores)
+    app.router.add_get("/api/edr/scores/{filename}", handle_edr_score_file)
     app.router.add_get("/api/chunk/recipes", handle_chunk_recipes)
     app.router.add_get("/api/chunk/layers", handle_chunk_layers)
     app.router.add_post("/api/chunk/auto-select", handle_chunk_auto_select)
     app.router.add_post("/api/chunk/build", handle_chunk_build)
     app.router.add_post("/api/chunk/hybrid", handle_chunk_hybrid)
     app.router.add_get("/api/chunk/history", handle_chunk_history)
+    app.router.add_get("/api/detection/status", handle_detection_status)
+    app.router.add_get("/api/detection/alerts", handle_detection_alerts)
     app.router.add_get("/ws/ssh", handle_ssh_ws)
     app.router.add_get("/ws/{job_id}", handle_ws)
     return app

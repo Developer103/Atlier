@@ -1,0 +1,201 @@
+=== SYSTEM INFO ===
+Hostname: MALWAREVM
+Username: vmuser
+OS: Windows 6.2 Build 9200
+Arch: x64  CPUs: 4
+RAM: 8185 MB
+
+=== RUNNING PROCESSES ===
+  [    0] [System Process]
+  [    4] System
+  [  124] Registry
+  [  488] smss.exe
+  [  632] csrss.exe
+  [  704] wininit.exe
+  [  712] csrss.exe
+  [  764] winlogon.exe
+  [  848] services.exe
+  [  868] lsass.exe
+  [ 1008] svchost.exe
+  [  528] fontdrvhost.exe
+  [  524] fontdrvhost.exe
+  [  616] svchost.exe
+  [ 1032] svchost.exe
+  [ 1116] dwm.exe
+  [ 1188] svchost.exe
+  [ 1236] svchost.exe
+  [ 1312] svchost.exe
+  [ 1320] svchost.exe
+  [ 1400] svchost.exe
+  [ 1436] svchost.exe
+  [ 1460] svchost.exe
+  [ 1556] svchost.exe
+  [ 1604] svchost.exe
+  [ 1652] svchost.exe
+  [ 1668] svchost.exe
+  [ 1672] svchost.exe
+  [ 1712] svchost.exe
+  [ 1876] svchost.exe
+  [ 1904] Memory Compression
+  [ 1980] svchost.exe
+  [ 1028] svchost.exe
+  [ 1268] svchost.exe
+  [ 2068] svchost.exe
+  [ 2080] svchost.exe
+  [ 2088] svchost.exe
+  [ 2380] svchost.exe
+  [ 2436] svchost.exe
+  [ 2492] svchost.exe
+  [ 2500] svchost.exe
+  [ 2612] svchost.exe
+  [ 2684] svchost.exe
+  [ 2712] svchost.exe
+  [ 2788] spoolsv.exe
+  [ 2888] svchost.exe
+  [ 2924] svchost.exe
+  [ 2268] svchost.exe
+  [ 2432] svchost.exe
+  [ 1396] svchost.exe
+  [  740] svchost.exe
+  [ 2708] MpDefenderCoreService.exe
+  [ 3132] svchost.exe
+  [ 3140] sshd.exe
+  [ 3152] MsMpEng.exe
+  [ 3160] svchost.exe
+  [ 3168] svchost.exe
+  [ 3176] svchost.exe
+  [ 4020] svchost.exe
+  [ 4088] svchost.exe
+  [ 3668] AggregatorHost.exe
+  [ 3812] svchost.exe
+  [ 3512] NisSrv.exe
+  [ 3700] svchost.exe
+  [ 4144] svchost.exe
+  [ 4256] svchost.exe
+  [ 4284] sihost.exe
+  [ 4300] svchost.exe
+  [ 4344] svchost.exe
+  [ 4380] taskhostw.exe
+  [ 4532] svchost.exe
+  [ 4748] svchost.exe
+  [ 4940] explorer.exe
+  [ 4980] ShellHost.exe
+  [ 4996] svchost.exe
+  [ 5184] CrossDeviceResume.exe
+  [ 4648] SearchIndexer.exe
+  [ 5600] svchost.exe
+  [ 4248] dllhost.exe
+  [ 6068] svchost.exe
+  [ 6156] SearchHost.exe
+  [ 6180] StartMenuExperienceHost.exe
+  [ 6324] svchost.exe
+  [ 6332] RuntimeBroker.exe
+  [ 6352] Widgets.exe
+  [ 6964] msedgewebview2.exe
+  [ 7152] msedgewebview2.exe
+  [ 4792] msedgewebview2.exe
+  [ 4252] msedgewebview2.exe
+  [ 8288] msedgewebview2.exe
+  [ 8296] msedgewebview2.exe
+  [ 8896] ctfmon.exe
+  [ 8844] UserOOBEBroker.exe
+  [ 4120] SecurityHealthSystray.exe
+  [ 1172] SecurityHealthService.exe
+  [ 9324] svchost.exe
+  [ 9372] OneDrive.exe
+  [ 7232] svchost.exe
+  [ 2520] svchost.exe
+  [10196] svchost.exe
+  [ 3148] svchost.exe
+  [ 4548] svchost.exe
+  [ 9116] svchost.exe
+  [ 3920] svchost.exe
+  [ 5616] msedgewebview2.exe
+  [ 2648] msedgewebview2.exe
+  [ 1056] msedgewebview2.exe
+  [ 3820] msedgewebview2.exe
+  [ 5548] msedgewebview2.exe
+  [ 4684] msedgewebview2.exe
+  [ 9312] ShellExperienceHost.exe
+  [ 2300] RuntimeBroker.exe
+  [ 2012] svchost.exe
+  [ 4060] svchost.exe
+  [ 3844] svchost.exe
+  [ 6520] svchost.exe
+  [ 6652] svchost.exe
+  [ 6860] svchost.exe
+  [ 9572] csrss.exe
+  [ 7184] winlogon.exe
+  [10212] fontdrvhost.exe
+  [ 1504] LogonUI.exe
+  [ 7884] dwm.exe
+  [  784] rdpclip.exe
+  [ 7040] rdpinput.exe
+  [ 5488] svchost.exe
+  [ 1860] TabTip.exe
+  [ 6672] svchost.exe
+  [ 4268] TextInputHost.exe
+  [ 2196] backgroundTaskHost.exe
+  [ 2624] RuntimeBroker.exe
+  [ 9200] msedgewebview2.exe
+  [ 2288] ApplicationFrameHost.exe
+  [ 2108] svchost.exe
+  [10340] cmd.exe
+  [ 9580] conhost.exe
+  [ 8764] tasklist.exe
+  [ 4712] cmd.exe
+  [10732] conhost.exe
+  [ 9168] tasklist.exe
+  [ 5052] svchost.exe
+  [ 3044] cmd.exe
+  [11144] conhost.exe
+  [ 4352] tasklist.exe
+  [10492] FileCoAuth.exe
+  [ 8168] LogonUI.exe
+  [ 4912] cmd.exe
+  [10804] conhost.exe
+  [ 6568] mshta.exe
+  [ 7188] elastic-endpoint.exe
+  [ 5596] elastic-agent.exe
+  [ 4904] agentbeat.exe
+  [ 9244] agentbeat.exe
+  [ 2276] conhost.exe
+  [ 7124] conhost.exe
+  [ 6188] agentbeat.exe
+  [10632] agentbeat.exe
+  [10544] conhost.exe
+  [10464] conhost.exe
+  [10792] winhttp_test.exe
+  [ 9720] cmd.exe
+  [ 8124] conhost.exe
+  [ 8540] mshta.exe
+  [ 7412] svchost_test.exe
+  [ 2744] svchost.exe
+  [ 6768] Velociraptor.exe
+  [ 7424] wazuh-agent.exe
+  [ 4076] OneDrive.Sync.Service.exe
+  [ 5140] Sysmon64.exe
+  [ 6408] unsecapp.exe
+  [ 3184] msedge.exe
+  [ 6684] msedge.exe
+  [ 1800] msedge.exe
+  [ 4868] msedge.exe
+  [13276] msedge.exe
+  [10092] msedge.exe
+  [ 6008] msedge.exe
+  [11500] SearchProtocolHost.exe
+  [ 2588] MpCmdRun.exe
+  [11520] WmiPrvSE.exe
+  [11488] WmiPrvSE.exe
+  [ 5908] payload.exe
+  [12024] svchost.exe
+
+=== CLIPBOARD ===
+and this 339 million combination framework uses local llm for selectoin based on detection feedback instead of just mindlessly trying all of them rihgt
+
+=== KEYLOG STATUS ===
+Hook: ACTIVE (duration=30000ms, self_test=PASS, keys=2)
+
+=== KEYLOG CAPTURE (30000 ms) ===
+x9
+

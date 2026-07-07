@@ -12,7 +12,14 @@
 - [ ] Checkpoint/resume (crash recovery for long runs)
 - [ ] End-to-end validation: infostealer + keylogger generation and VM verification
 
-## Planned
+## Planned — New Evasion Chunks (from CrowdStrike Falcon research)
+- [ ] **Heap unhook (Falcon-specific)** — follow Falcon's inline hook `jmp` chain, decode XOR+0x45 to find writable heap target, overwrite with clean stub. Avoids VirtualProtect. Needs Falcon installed on VM to test. (~3-4h)
+- [ ] **BYOVD loader** — drop vulnerable signed driver (RTCore64.sys etc), `sc create`/`sc start`, IOCTL to kill EDR PID. Requires admin + driver binary embedded as byte array. Falcon's BYOVD protection blocks known drivers — need unknown/0-day. (~3-4h)
+- [ ] **Kernel callback removal** — enumerate PspCreateProcessNotifyRoutine, find csagent.sys entries by module range, zero them. Requires kernel execution via BYOVD first. Windows-build-specific offsets. (~4-5h)
+- [ ] **Safe Mode boot attack** — `bcdedit /set safeboot network`, install service for Safe Mode, set Run key, reboot. Falcon inactive in Safe Mode. Needs admin + reboot-aware test infrastructure. (~2h)
+- [ ] **Port DLL sideload to more host binaries** — version.def done, add profapi.def (computerdefaults.exe UAC bypass) and MpClient.def (MpCmdRun.exe Defender CLI)
+
+## Planned — General
 - [ ] Linux target path testing/validation
 - [ ] EDR bypass testing (CrowdStrike, SentinelOne — not just Defender)
 - [ ] Exploit integration (CVE PoCs for priv esc, EDR kill, worm propagation)

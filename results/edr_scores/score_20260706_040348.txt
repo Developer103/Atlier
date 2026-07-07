@@ -1,0 +1,342 @@
+[38;5;10m
+[+] Group: Sigma[0m
+┌─────────────────────┬────────────────────────────────┬───────┬──────────────────────────┬──────────┬───────────┬───────────┬──────────────────────────────────────────┐
+│      timestamp      │           detections           │ count │  Event.System.Provider   │ Event ID │ Record ID │ Computer  │                Event Data                │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:37 │ ‣ Program Executed Using       │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 633       │ MalwareVM │ Image: C:\Windows\System32\cmd.exe       │
+│                     │ Proxy/Local Command Via        │       │                          │          │           │           │ RuleName: technique_id=T1059.003,techniq │
+│                     │ SSH.EXE                        │       │                          │          │           │           │ ue_name=Windows Command Shell            │
+│                     │                                │       │                          │          │           │           │ Description: Windows Command Processor   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: Cmd.Exe                │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"C:\WINDOWS\System32 │
+│                     │                                │       │                          │          │           │           │ \OpenSSH\sshd.exe" -z'                   │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 11984                   │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A999-6A4A-963A-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=BBDA5A98051C5238331EAC9A113 │
+│                     │                                │       │                          │          │           │           │ 48A8DE900DBD2,MD5=D87E9FA4C7C878F4C1DC88 │
+│                     │                                │       │                          │          │           │           │ 85CEA7F9F0,SHA256=75320A519959CC6D089EA3 │
+│                     │                                │       │                          │          │           │           │ EBA33C38CACCB7F138A025EA439BC9686CDB79DE │
+│                     │                                │       │                          │          │           │           │ D4,IMPHASH=B0F049C014592B156EB1FA857E99C │
+│                     │                                │       │                          │          │           │           │ EB9                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A999-6A4A-E4 │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 12244                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A999-6A4A-E54D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"c:\windows\system32\cmd.e │
+│                     │                                │       │                          │          │           │           │ xe" /c "wevtutil cl Microsoft-Windows-Sy │
+│                     │                                │       │                          │          │           │           │ smon/Operational"'                       │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x6513a96'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\OpenSSH │
+│                     │                                │       │                          │          │           │           │ \sshd.exe                                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:37.539         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:37 │ ‣ Suspicious Eventlog Clearing │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 635       │ MalwareVM │ Image: C:\Windows\System32\wevtutil.exe  │
+│                     │ or Configuration Change        │       │                          │          │           │           │ RuleName: technique_id=T1070.001,techniq │
+│                     │ Activity                       │       │                          │          │           │           │ ue_name=Clear Windows Event Logs         │
+│                     │                                │       │                          │          │           │           │ Description: Windows Event Log Utility   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: wevtutil.exe           │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"c:\windows\system32 │
+│                     │                                │       │                          │          │           │           │ \cmd.exe" /c "wevtutil cl Microsoft-Wind │
+│                     │                                │       │                          │          │           │           │ ows-Sysmon/Operational"'                 │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 12244                   │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A999-6A4A-963A-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=AB72797558BC464B4CBE93197D5 │
+│                     │                                │       │                          │          │           │           │ 3003856830333,MD5=34FF0D86DF4B0BE24A5F36 │
+│                     │                                │       │                          │          │           │           │ FEF5AEB0E5,SHA256=B97E3F0490A4F7485B6322 │
+│                     │                                │       │                          │          │           │           │ 6AA6CD7ABE1EAA19DDA520B233185BA18BBA5C43 │
+│                     │                                │       │                          │          │           │           │ 28,IMPHASH=9D0B0164498DEE3DA72DF328E7AE8 │
+│                     │                                │       │                          │          │           │           │ C0B                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A999-6A4A-E5 │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 11384                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A999-6A4A-E74D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: wevtutil cl Microsoft-Windo │
+│                     │                                │       │                          │          │           │           │ ws-Sysmon/Operational                    │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x6513a96'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\cmd.exe │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:37.597         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:39 │ ‣ Program Executed Using       │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 656       │ MalwareVM │ Image: C:\Windows\System32\cmd.exe       │
+│                     │ Proxy/Local Command Via        │       │                          │          │           │           │ RuleName: technique_id=T1059.003,techniq │
+│                     │ SSH.EXE                        │       │                          │          │           │           │ ue_name=Windows Command Shell            │
+│                     │                                │       │                          │          │           │           │ Description: Windows Command Processor   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: Cmd.Exe                │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"C:\WINDOWS\System32 │
+│                     │                                │       │                          │          │           │           │ \OpenSSH\sshd.exe" -z'                   │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 9360                    │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A99B-6A4A-AE5E-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=BBDA5A98051C5238331EAC9A113 │
+│                     │                                │       │                          │          │           │           │ 48A8DE900DBD2,MD5=D87E9FA4C7C878F4C1DC88 │
+│                     │                                │       │                          │          │           │           │ 85CEA7F9F0,SHA256=75320A519959CC6D089EA3 │
+│                     │                                │       │                          │          │           │           │ EBA33C38CACCB7F138A025EA439BC9686CDB79DE │
+│                     │                                │       │                          │          │           │           │ D4,IMPHASH=B0F049C014592B156EB1FA857E99C │
+│                     │                                │       │                          │          │           │           │ EB9                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A99B-6A4A-EA │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 10000                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A99B-6A4A-EB4D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"c:\windows\system32\cmd.e │
+│                     │                                │       │                          │          │           │           │ xe" /c "sftp-server.exe "'               │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x6515eae'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\OpenSSH │
+│                     │                                │       │                          │          │           │           │ \sshd.exe                                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:39.913         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:39 │ ‣ Creation of an Executable    │ 1     │ Microsoft-Windows-Sysmon │ 11       │ 658       │ MalwareVM │ Image: C:\WINDOWS\System32\OpenSSH\sftp- │
+│                     │ by an Executable               │       │                          │          │           │           │ server.exe                               │
+│                     │                                │       │                          │          │           │           │ CreationUtcTime: 2026-07-05 18:59:39.989 │
+│                     │                                │       │                          │          │           │           │ RuleName: '-'                            │
+│                     │                                │       │                          │          │           │           │ ProcessId: 11736                         │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A99B-6A4A-ED4D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ TargetFilename: C:\Users\vmuser\Desktop\ │
+│                     │                                │       │                          │          │           │           │ payload.exe                              │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:39.989         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:43 │ ‣ Program Executed Using       │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 690       │ MalwareVM │ Image: C:\Windows\System32\cmd.exe       │
+│                     │ Proxy/Local Command Via        │       │                          │          │           │           │ RuleName: technique_id=T1083,technique_n │
+│                     │ SSH.EXE                        │       │                          │          │           │           │ ame=File and Directory Discovery         │
+│                     │                                │       │                          │          │           │           │ Description: Windows Command Processor   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: Cmd.Exe                │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"C:\WINDOWS\System32 │
+│                     │                                │       │                          │          │           │           │ \OpenSSH\sshd.exe" -z'                   │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 11564                   │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A99F-6A4A-15B1-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=BBDA5A98051C5238331EAC9A113 │
+│                     │                                │       │                          │          │           │           │ 48A8DE900DBD2,MD5=D87E9FA4C7C878F4C1DC88 │
+│                     │                                │       │                          │          │           │           │ 85CEA7F9F0,SHA256=75320A519959CC6D089EA3 │
+│                     │                                │       │                          │          │           │           │ EBA33C38CACCB7F138A025EA439BC9686CDB79DE │
+│                     │                                │       │                          │          │           │           │ D4,IMPHASH=B0F049C014592B156EB1FA857E99C │
+│                     │                                │       │                          │          │           │           │ EB9                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A99F-6A4A-F4 │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 12720                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A99F-6A4A-F54D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"c:\windows\system32\cmd.e │
+│                     │                                │       │                          │          │           │           │ xe" /c "if exist C:\Users\vmuser\Desktop │
+│                     │                                │       │                          │          │           │           │ \payload.exe (echo EXISTS) else (echo GO │
+│                     │                                │       │                          │          │           │           │ NE)"'                                    │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x651b115'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\OpenSSH │
+│                     │                                │       │                          │          │           │           │ \sshd.exe                                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:43.283         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:45 │ ‣ Program Executed Using       │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 710       │ MalwareVM │ Image: C:\Windows\System32\cmd.exe       │
+│                     │ Proxy/Local Command Via        │       │                          │          │           │           │ RuleName: technique_id=T1059.003,techniq │
+│                     │ SSH.EXE                        │       │                          │          │           │           │ ue_name=Windows Command Shell            │
+│                     │                                │       │                          │          │           │           │ Description: Windows Command Processor   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: Cmd.Exe                │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"C:\WINDOWS\System32 │
+│                     │                                │       │                          │          │           │           │ \OpenSSH\sshd.exe" -z'                   │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 2136                    │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A9A1-6A4A-C5D0-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=BBDA5A98051C5238331EAC9A113 │
+│                     │                                │       │                          │          │           │           │ 48A8DE900DBD2,MD5=D87E9FA4C7C878F4C1DC88 │
+│                     │                                │       │                          │          │           │           │ 85CEA7F9F0,SHA256=75320A519959CC6D089EA3 │
+│                     │                                │       │                          │          │           │           │ EBA33C38CACCB7F138A025EA439BC9686CDB79DE │
+│                     │                                │       │                          │          │           │           │ D4,IMPHASH=B0F049C014592B156EB1FA857E99C │
+│                     │                                │       │                          │          │           │           │ EB9                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A9A1-6A4A-F9 │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 9336                          │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A9A1-6A4A-FA4D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"c:\windows\system32\cmd.e │
+│                     │                                │       │                          │          │           │           │ xe" /c "schtasks /create /tn edrtest /tr │
+│                     │                                │       │                          │          │           │           │  "C:\Users\vmuser\Desktop\payload.exe" / │
+│                     │                                │       │                          │          │           │           │ sc once /st 00:00 /f"'                   │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x651d0c5'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\OpenSSH │
+│                     │                                │       │                          │          │           │           │ \sshd.exe                                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:45.668         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:45 │ ‣ Scheduled Task Creation      │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 712       │ MalwareVM │ Image: C:\Windows\System32\schtasks.exe  │
+│                     │ Via Schtasks.EXE               │       │                          │          │           │           │ RuleName: technique_id=T1053.005,techniq │
+│                     │ ‣ Suspicious Schtasks Schedule │       │                          │          │           │           │ ue_name=Scheduled Task/Job               │
+│                     │ Types                          │       │                          │          │           │           │ Description: Task Scheduler Configuratio │
+│                     │                                │       │                          │          │           │           │ n Tool                                   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: schtasks.exe           │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"c:\windows\system32 │
+│                     │                                │       │                          │          │           │           │ \cmd.exe" /c "schtasks /create /tn edrte │
+│                     │                                │       │                          │          │           │           │ st /tr "C:\Users\vmuser\Desktop\payload. │
+│                     │                                │       │                          │          │           │           │ exe" /sc once /st 00:00 /f"'             │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 9336                    │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A9A1-6A4A-C5D0-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=DEE1B9222DA8463EA02CFD76EFD │
+│                     │                                │       │                          │          │           │           │ 4371FEA3F88E3,MD5=0EB0E5987DADDBBCFAB61F │
+│                     │                                │       │                          │          │           │           │ 46FC44ABE0,SHA256=B96AF3066F0B9DE8A460F7 │
+│                     │                                │       │                          │          │           │           │ 7BAAE006C5372A266BE18C561DAA7C7AE8635D39 │
+│                     │                                │       │                          │          │           │           │ 9D,IMPHASH=A7B2338D5533AE221C0EB231BBEC0 │
+│                     │                                │       │                          │          │           │           │ 787                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A9A1-6A4A-FA │
+│                     │                                │       │                          │          │           │           │ 4D-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 13156                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A9A1-6A4A-FC4D-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: schtasks /create /tn edrtes │
+│                     │                                │       │                          │          │           │           │ t /tr "C:\Users\vmuser\Desktop\payload.e │
+│                     │                                │       │                          │          │           │           │ xe" /sc once /st 00:00 /f                │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.6725 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x651d0c5'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\cmd.exe │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:45.721         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:45 │ ‣ Scheduled Task Created       │ 1     │ Microsoft-Windows-Sysmon │ 13       │ 714       │ MalwareVM │ Image: C:\WINDOWS\system32\svchost.exe   │
+│                     │ - Registry                     │       │                          │          │           │           │ TargetObject: HKLM\SOFTWARE\Microsoft\Wi │
+│                     │                                │       │                          │          │           │           │ ndows NT\CurrentVersion\Schedule\TaskCac │
+│                     │                                │       │                          │          │           │           │ he\Tree\edrtest\Index                    │
+│                     │                                │       │                          │          │           │           │ RuleName: technique_id=T1053,technique_n │
+│                     │                                │       │                          │          │           │           │ ame=Scheduled Task                       │
+│                     │                                │       │                          │          │           │           │ EventType: SetValue                      │
+│                     │                                │       │                          │          │           │           │ ProcessId: 1980                          │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-5B31-6A47-2800-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ User: NT AUTHORITY\SYSTEM                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:45.756         │
+│                     │                                │       │                          │          │           │           │ Details: DWORD (0x00000003)              │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:46 │ ‣ Program Executed Using       │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 734       │ MalwareVM │ Image: C:\Windows\System32\cmd.exe       │
+│                     │ Proxy/Local Command Via        │       │                          │          │           │           │ RuleName: technique_id=T1059.003,techniq │
+│                     │ SSH.EXE                        │       │                          │          │           │           │ ue_name=Windows Command Shell            │
+│                     │                                │       │                          │          │           │           │ Description: Windows Command Processor   │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: Cmd.Exe                │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 0                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: '"C:\WINDOWS\System32 │
+│                     │                                │       │                          │          │           │           │ \OpenSSH\sshd.exe" -z'                   │
+│                     │                                │       │                          │          │           │           │ Product: Microsoft® Windows® Operating S │
+│                     │                                │       │                          │          │           │           │ ystem                                    │
+│                     │                                │       │                          │          │           │           │ Company: Microsoft Corporation           │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 11184                   │
+│                     │                                │       │                          │          │           │           │ ParentUser: MALWAREVM\vmuser             │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-A9A1-6A4A-64FE-51060 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=BBDA5A98051C5238331EAC9A113 │
+│                     │                                │       │                          │          │           │           │ 48A8DE900DBD2,MD5=D87E9FA4C7C878F4C1DC88 │
+│                     │                                │       │                          │          │           │           │ 85CEA7F9F0,SHA256=75320A519959CC6D089EA3 │
+│                     │                                │       │                          │          │           │           │ EBA33C38CACCB7F138A025EA439BC9686CDB79DE │
+│                     │                                │       │                          │          │           │           │ D4,IMPHASH=B0F049C014592B156EB1FA857E99C │
+│                     │                                │       │                          │          │           │           │ EB9                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-A9A2-6A4A-00 │
+│                     │                                │       │                          │          │           │           │ 4E-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 2292                          │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\Users\vmuser\       │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A9A2-6A4A-014E-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"c:\windows\system32\cmd.e │
+│                     │                                │       │                          │          │           │           │ xe" /c "schtasks /run /tn edrtest"'      │
+│                     │                                │       │                          │          │           │           │ FileVersion: 10.0.26100.8521 (WinBuild.1 │
+│                     │                                │       │                          │          │           │           │ 60101.0800)                              │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x651fe64'                     │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: High                     │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\OpenSSH │
+│                     │                                │       │                          │          │           │           │ \sshd.exe                                │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:46.049         │
+├─────────────────────┼────────────────────────────────┼───────┼──────────────────────────┼──────────┼───────────┼───────────┼──────────────────────────────────────────┤
+│ 2026-07-05 18:59:46 │ ‣ Execution of Unknown         │ 1     │ Microsoft-Windows-Sysmon │ 1        │ 742       │ MalwareVM │ Image: C:\Users\vmuser\Desktop\payload.e │
+│                     │ Binary from User Desktop       │       │                          │          │           │           │ xe                                       │
+│                     │                                │       │                          │          │           │           │ RuleName: technique_id=T1036,technique_n │
+│                     │                                │       │                          │          │           │           │ ame=Masquerading                         │
+│                     │                                │       │                          │          │           │           │ Description: '-'                         │
+│                     │                                │       │                          │          │           │           │ OriginalFileName: '-'                    │
+│                     │                                │       │                          │          │           │           │ TerminalSessionId: 1                     │
+│                     │                                │       │                          │          │           │           │ ParentCommandLine: C:\WINDOWS\system32\s │
+│                     │                                │       │                          │          │           │           │ vchost.exe -k netsvcs -p -s Schedule     │
+│                     │                                │       │                          │          │           │           │ Product: '-'                             │
+│                     │                                │       │                          │          │           │           │ Company: '-'                             │
+│                     │                                │       │                          │          │           │           │ ParentProcessId: 1980                    │
+│                     │                                │       │                          │          │           │           │ ParentUser: NT AUTHORITY\SYSTEM          │
+│                     │                                │       │                          │          │           │           │ LogonGuid: 0D334C4C-5B3A-6A47-63B6-04000 │
+│                     │                                │       │                          │          │           │           │ 0000000                                  │
+│                     │                                │       │                          │          │           │           │ Hashes: SHA1=01CC27629497B6D01B813FC50A7 │
+│                     │                                │       │                          │          │           │           │ 10AF1B7C2A64E,MD5=395AF72A8404FA47F11224 │
+│                     │                                │       │                          │          │           │           │ D86219BFFD,SHA256=92B5E0EDCA8AF8A0A95A24 │
+│                     │                                │       │                          │          │           │           │ 1F974629C0EF584CB054A8C32928396D6DDEF7AE │
+│                     │                                │       │                          │          │           │           │ 74,IMPHASH=0F69B824C6BD3925BC6D7D2CECA95 │
+│                     │                                │       │                          │          │           │           │ B61                                      │
+│                     │                                │       │                          │          │           │           │ ParentProcessGuid: 0D334C4C-5B31-6A47-28 │
+│                     │                                │       │                          │          │           │           │ 00-000000000500                          │
+│                     │                                │       │                          │          │           │           │ ProcessId: 10944                         │
+│                     │                                │       │                          │          │           │           │ CurrentDirectory: C:\WINDOWS\system32\   │
+│                     │                                │       │                          │          │           │           │ ProcessGuid: 0D334C4C-A9A2-6A4A-044E-000 │
+│                     │                                │       │                          │          │           │           │ 000000500                                │
+│                     │                                │       │                          │          │           │           │ CommandLine: '"C:\Users\vmuser\Desktop\p │
+│                     │                                │       │                          │          │           │           │ ayload.exe"'                             │
+│                     │                                │       │                          │          │           │           │ FileVersion: '-'                         │
+│                     │                                │       │                          │          │           │           │ User: MALWAREVM\vmuser                   │
+│                     │                                │       │                          │          │           │           │ LogonId: '0x4b663'                       │
+│                     │                                │       │                          │          │           │           │ IntegrityLevel: Medium                   │
+│                     │                                │       │                          │          │           │           │ ParentImage: C:\Windows\System32\svchost │
+│                     │                                │       │                          │          │           │           │ .exe                                     │
+│                     │                                │       │                          │          │           │           │ UtcTime: 2026-07-05 18:59:46.625         │
+└─────────────────────┴────────────────────────────────┴───────┴──────────────────────────┴──────────┴───────────┴───────────┴──────────────────────────────────────────┘

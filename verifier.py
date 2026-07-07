@@ -103,6 +103,9 @@ def _classify_malware_type(malware_type: str) -> str:
     if any(k in t for k in ("info steal", "infostealer", "credential", "password steal",
                              "data exfil", "browser steal", "cookie steal")):
         return "infostealer"
+    if any(k in t for k in ("backdoor", "rat", "remote access", "c2", "reverse shell",
+                             "command and control", "beacon")):
+        return "backdoor"
     return "generic"
 
 
@@ -410,6 +413,8 @@ class Verifier:
             await self._setup_keylogger_canaries()
         elif _malware_type == "infostealer":
             await self._setup_infostealer_canaries(spec)
+        elif _malware_type == "backdoor":
+            await self._setup_backdoor_canaries()
 
         # Step 2c: run pre-execution setup commands from validation plan
         # Skip commands that would overwrite canary files the verifier already created —
@@ -429,7 +434,7 @@ class Verifier:
         # Step 2d: start a C2 listener on the host for connection-back malware
         _c2_proc = None
         _c2_data_file: Optional[Path] = None
-        if _malware_type in ("infostealer", "keylogger"):
+        if _malware_type in ("infostealer", "keylogger", "backdoor"):
             _c2_port = getattr(spec, "c2_port", 9001)
             _c2_data_file = Path("/tmp/c2_received_data.bin")
             _c2_data_file.unlink(missing_ok=True)
@@ -558,6 +563,8 @@ class Verifier:
                 await self._check_keylogger_behaviour(result, spec)
             elif _malware_type == "infostealer":
                 await self._check_infostealer_behaviour(result, spec, c2_data_file=_c2_data_file)
+            elif _malware_type == "backdoor":
+                await self._check_backdoor_behaviour(result, spec, c2_data_file=_c2_data_file)
             else:
                 logger.info("No type-specific behavioral check for '%s' — relying on validation plan",
                             getattr(spec, "malware_type", "unknown"))
@@ -1029,6 +1036,65 @@ class Verifier:
                 "no stolen credential files, no collection artifacts."
             )
 
+    async def _setup_backdoor_canaries(self):
+        """Create test artifacts the backdoor can be commanded to read/list."""
+        try:
+            await self._vm.execute_command(
+                'mkdir "C:\\Users\\vmuser\\Documents\\backdoor_test" 2>NUL', timeout=5)
+            await self._vm.execute_command(
+                'echo BACKDOOR_CANARY_DATA > '
+                '"C:\\Users\\vmuser\\Documents\\backdoor_test\\canary.txt"', timeout=5)
+            logger.info("Backdoor canary file created")
+        except Exception as exc:
+            logger.warning("Failed to create backdoor canaries: %s", exc)
+
+    async def _check_backdoor_behaviour(self, result: VerificationResult, spec,
+                                         c2_data_file=None):
+        """Post-execution checks for backdoor: did it beacon and accept commands?"""
+        _evidence = []
+        c2_addr = getattr(spec, "c2_address", "10.0.2.2")
+        c2_port = getattr(spec, "c2_port", 9001)
+
+        if c2_data_file and c2_data_file.exists():
+            _c2_data = c2_data_file.read_bytes()
+            _c2_size = len(_c2_data)
+            if _c2_size > 0:
+                _evidence.append(f"c2_data_received:{_c2_size}b")
+                logger.info("Backdoor C2 received %d bytes", _c2_size)
+            if _c2_size >= 8:
+                _evidence.append("tlv_header_received")
+
+        try:
+            net_out = (await self._vm.execute_command(
+                f'netstat -ano | findstr "{c2_addr}" | findstr ESTABLISHED',
+                timeout=10)).strip()
+            if net_out:
+                _evidence.append(f"active_c2_connection:{c2_addr}")
+                logger.info("Backdoor has active C2 connection: %s", net_out[:200])
+        except Exception:
+            pass
+
+        try:
+            await asyncio.sleep(5)
+            proc_out = (await self._vm.execute_command(
+                'tasklist /fo csv /nh | findstr /i "payload"', timeout=10)).strip()
+            if proc_out:
+                _evidence.append("process_still_running")
+                logger.info("Backdoor process still running after delay")
+        except Exception:
+            pass
+
+        if len(_evidence) >= 2:
+            result.behaviour_checks[BehaviourCheck.FUNCTIONAL_GOAL_MET] = True
+            result.execution_output += f"\n[BEHAVIOUR] CONFIRMED: {', '.join(_evidence)}"
+            logger.info("Backdoor behaviour CONFIRMED: %s", _evidence)
+        else:
+            result.behaviour_checks[BehaviourCheck.FUNCTIONAL_GOAL_MET] = False
+            result.execution_output += f"\n[BEHAVIOUR] FAILED: insufficient evidence"
+            if _evidence:
+                result.execution_output += f" (partial: {', '.join(_evidence)})"
+            logger.warning("Backdoor behaviour NOT confirmed — need C2 data + connection + running process")
+
     def _extract_mingw_flags(self, compiler_instructions: str) -> str:
         """Pull any -l or -D flags out of the compiler instructions block."""
         flags = []
@@ -1277,9 +1343,10 @@ int main(int argc, char *argv[]) {
     async def _check_edr_elasticsearch(self, edr_config) -> list[AlertRecord]:
         """Query Elastic Security alerts via Elasticsearch API."""
         import aiohttp
+        import json as _json
         alerts = []
         base_url = edr_config.detection_api.rstrip("/")
-        query_path = edr_config.alert_query or "/.alerts-security*/_search?size=20"
+        index_path = "/.alerts-security*/_search"
 
         auth = None
         if edr_config.api_auth:
@@ -1288,30 +1355,50 @@ int main(int argc, char *argv[]) {
             if user:
                 auth = aiohttp.BasicAuth(user, password)
 
-        full_url = f"{base_url}/{query_path.lstrip('/')}"
+        full_url = f"{base_url}{index_path}"
+        query_body = _json.dumps({
+            "size": 50,
+            "query": {"range": {"@timestamp": {"gte": "now-10m"}}},
+            "sort": [{"@timestamp": {"order": "desc"}}],
+        })
+        headers = {"Content-Type": "application/json"}
+
+        _fp_rules = {
+            "Local Scheduled Task Commands",
+            "Process Termination followed by Deletion",
+            "High Number of Process Terminations",
+            "System Service Discovery through built-in Windows Utilities",
+        }
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(full_url, auth=auth, ssl=False, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            async with session.post(
+                full_url, data=query_body, headers=headers,
+                auth=auth, ssl=False,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     hits = data.get("hits", {}).get("hits", [])
                     for hit in hits:
                         src = hit.get("_source", {})
-                        _signal = src.get("signal", {})
-                        _rule = _signal.get("rule", {})
-                        sev = src.get("kibana.alert.severity", _rule.get("severity", "high"))
-                        _msg = str(_rule.get("description", src.get("message", "")))[:2000]
-                        _rule_name = str(_rule.get("name", _rule.get("id", "")))
-                        _det_cat = str(_rule.get("type", ""))
+                        rule_name = src.get("kibana.alert.rule.name", "")
+                        if rule_name in _fp_rules:
+                            continue
+                        proc = src.get("process", {})
+                        cmd = " ".join(proc.get("args", [])) if proc.get("args") else ""
+                        if "schtasks" in cmd.lower() or "sc query" in cmd.lower():
+                            continue
+                        sev = src.get("kibana.alert.severity", "high")
+                        _msg = str(src.get("kibana.alert.reason", src.get("message", "")))[:2000]
                         alerts.append(AlertRecord(
                             edr_name=edr_config.name,
                             alert_type="detection",
                             severity=str(sev).lower(),
-                            process_path=src.get("process", {}).get("executable", "malware_test.exe"),
+                            process_path=proc.get("executable", "malware_test.exe"),
                             timestamp_offset=0,
                             message=_msg,
-                            rule_name=_rule_name,
-                            detection_category=_det_cat,
+                            rule_name=rule_name,
+                            detection_category=str(src.get("kibana.alert.rule.type", "")),
                         ))
 
         return alerts

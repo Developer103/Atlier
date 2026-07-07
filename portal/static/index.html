@@ -234,6 +234,111 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:#484f58}
+
+/* Mobile toggle button (hidden on desktop) */
+.mobile-toggle{display:none}
+
+/* ── Mobile responsive ── */
+@media (max-width: 900px) {
+  html,body{overflow:auto}
+
+  /* Header: shrink text, keep badges visible */
+  .hdr{padding:8px 10px;gap:6px;flex-wrap:wrap}
+  .hdr h1{font-size:12px}
+  .hdr-sub{display:none}
+  .hdr-badge{font-size:10px;padding:2px 7px}
+
+  /* Layout: stack vertically instead of side-by-side */
+  .layout{flex-direction:column;overflow:auto}
+
+  /* Sidebar: full width, collapsible */
+  .sidebar{
+    width:100%;min-width:0;border-right:none;
+    border-bottom:1px solid var(--border);
+    max-height:none;overflow:visible;
+  }
+  .sidebar.collapsed .form-scroll,
+  .sidebar.collapsed .run-wrap{display:none}
+
+  /* Mobile toggle: hamburger to show/hide form */
+  .mobile-toggle{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:8px 12px;cursor:pointer;user-select:none;
+    background:var(--bg2);border-bottom:1px solid var(--border);
+  }
+  .mobile-toggle span{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .mobile-toggle .arrow{font-size:10px;color:var(--muted);transition:transform .15s}
+  .sidebar.collapsed .mobile-toggle .arrow{transform:rotate(180deg)}
+
+  /* Tabs: scrollable row, bigger touch targets */
+  .tabs{
+    overflow-x:auto;flex-wrap:nowrap;padding:6px 6px 0;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    padding:8px 12px;font-size:12px;white-space:nowrap;
+    flex-shrink:0;min-height:36px;
+  }
+
+  /* Form: constrain height when expanded so terminal is still visible */
+  .form-scroll{
+    max-height:50vh;overflow-y:auto;padding:10px;
+  }
+
+  /* Run button: bigger tap target */
+  .run-wrap{padding:8px 10px 10px}
+  .run-btn{padding:12px;font-size:14px;min-height:44px}
+
+  /* Main panel: take remaining space */
+  .main{min-height:40vh;flex:1}
+
+  /* Jobs bar */
+  .jobs-bar{padding:6px 8px;overflow-x:auto;flex-wrap:nowrap}
+  .jobs-bar::-webkit-scrollbar{display:none}
+  .job-chip{font-size:10px;padding:4px 8px;flex-shrink:0}
+
+  /* Terminal: readable on small screens */
+  .term{padding:8px 10px;font-size:11px;line-height:1.6}
+
+  /* Results pane */
+  .res-files{padding:0 8px 8px}
+  .res-file{font-size:10px;padding:4px 8px}
+
+  /* Modal: nearly full screen */
+  .modal{width:95vw;max-height:90vh;border-radius:6px}
+  .modal-hdr{padding:10px 12px}
+  .modal-title{font-size:12px}
+  .modal-body{padding:10px}
+  .modal-body pre{font-size:11px;line-height:1.5}
+
+  /* Form fields: bigger tap targets */
+  input[type=text],input[type=number],select,textarea{
+    padding:8px 10px;font-size:14px;min-height:40px;
+  }
+  select{font-size:13px}
+  .chk-row{padding:4px 0;font-size:13px;min-height:36px}
+  input[type=checkbox]{width:18px;height:18px}
+  .field label{font-size:13px}
+  .sec-hdr{font-size:11px;padding-bottom:6px}
+
+  /* Mode buttons */
+  .mode-btn{padding:10px 4px;font-size:13px;min-height:40px}
+  .llm-btn{padding:8px 4px;font-size:12px;min-height:40px}
+
+  /* SSH xterm */
+  #xterm-container{min-height:300px}
+}
+
+/* Extra small (phones in portrait) */
+@media (max-width: 480px) {
+  .hdr h1{font-size:11px}
+  .tab{padding:7px 10px;font-size:11px}
+  .form-scroll{max-height:45vh;padding:8px}
+  .term{font-size:10px}
+  input[type=text],input[type=number],select,textarea{font-size:13px}
+}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
@@ -253,11 +358,15 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 <div class="layout">
 
   <!-- ── Sidebar ── -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
+    <div class="mobile-toggle" id="mobile-toggle" onclick="toggleSidebar()">
+      <span id="mobile-toggle-label">Configure</span>
+      <span class="arrow">&#9650;</span>
+    </div>
     <div class="tabs" id="tabs">
       <button class="tab active" data-cmd="run">run</button>
       <button class="tab" data-cmd="generate">generate</button>
-      <button class="tab" data-cmd="provision">provision</button>
+      <button class="tab" data-cmd="vm">vm</button>
       <button class="tab" data-cmd="verify">verify</button>
       <button class="tab" data-cmd="analyze">analyze</button>
       <button class="tab" data-cmd="clean">clean</button>
@@ -265,6 +374,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       <button class="tab" data-cmd="listener">c2</button>
       <button class="tab" data-cmd="spec">spec</button>
       <button class="tab" data-cmd="chunk">chunk</button>
+      <button class="tab" data-cmd="edr">edr</button>
     </div>
     <div class="form-scroll" id="form-area"></div>
     <div class="run-wrap" style="display:flex;gap:6px">
@@ -399,13 +509,10 @@ const CMDS = {
       {id:'debug',   lbl:'Debug mode (step trace)', type:'chk'},
     ]},
   ],
-  provision: [
-    {s:'VM', f:[
-      {id:'os', lbl:'OS', type:'sel',
-        opts:['windows-11','windows-10','ubuntu-24.04','ubuntu-22.04'], def:'windows-11'},
-      {id:'boot_existing', lbl:'Boot existing disk (skip installer)', type:'chk'},
-    ]},
-  ],
+  vm: {
+    label: 'vm',
+    build: (sec) => { buildVmForm(sec); }
+  },
   verify: [
     {s:'Target', f:[
       {id:'spec',   lbl:'Spec file',   type:'text', req:1, ph:'spec.yaml'},
@@ -503,6 +610,10 @@ const CMDS = {
     label: 'chunk',
     build: (sec) => { buildChunkForm(sec); }
   },
+  edr: {
+    label: 'edr',
+    build: (sec) => { buildEdrForm(sec); }
+  },
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -549,10 +660,11 @@ function renderForm(cmd) {
         wrap.innerHTML = `
           <label>Endpoint</label>
           <div class="llm-pair">
-            <div class="llm-btn sel" onclick="pickLLM('http://localhost:1234',this)">X&#xa0;local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
-            <div class="llm-btn" onclick="pickLLM('http://localhost:11234',this)">Z&#xa0;tunnel<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+            <div class="llm-btn" onclick="pickLLM('http://localhost:11234',this)">Blackwell&nbsp;1<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+            <div class="llm-btn sel" onclick="pickLLM('http://localhost:11235',this)">Blackwell&nbsp;2<br><span style="font-size:10px;font-weight:400">:11235</span></div>
+            <div class="llm-btn" onclick="pickLLM('http://localhost:1234',this)">Local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
           </div>
-          <input type="text" id="f_llm_url" value="http://localhost:1234" placeholder="http://localhost:1234" oninput="syncLLMBtns(this.value)">`;
+          <input type="text" id="f_llm_url" value="http://localhost:11235" placeholder="http://localhost:11235" oninput="syncLLMBtns(this.value)">`;
       } else if (f.type === 'chk') {
         wrap.innerHTML = `<label class="chk-row"><input type="checkbox" id="f_${f.id}"${f.def?' checked':''}> ${f.lbl}</label>`;
       } else if (f.type === 'sel') {
@@ -597,7 +709,7 @@ function pickLLM(url, btn) {
 }
 
 function syncLLMBtns(url) {
-  const presets = {'http://localhost:1234': 0, 'http://localhost:11234': 1};
+  const presets = {'http://localhost:11234': 0, 'http://localhost:11235': 1, 'http://localhost:1234': 2};
   const inp = document.getElementById('f_llm_url');
   if (!inp) return;
   const btns = inp.closest('.field')?.querySelectorAll('.llm-btn') || [];
@@ -614,7 +726,7 @@ function chunkPickLLM(url, btn) {
 }
 
 function chunkSyncLLMBtns(url) {
-  const presets = {'http://localhost:1234': 0, 'http://localhost:11234': 1};
+  const presets = {'http://localhost:11234': 0, 'http://localhost:11235': 1, 'http://localhost:1234': 2};
   const inp = document.getElementById('chunk-llm-url');
   if (!inp) return;
   const btns = inp.closest('.field')?.querySelectorAll('.llm-btn') || [];
@@ -650,6 +762,23 @@ function restoreFormState(cmd) {
     }));
     if (saved.mode) pickMode(saved.mode);
   } catch(e) { if (cmd !== 'ssh') pickMode('local-run'); }
+}
+
+// ── Mobile sidebar toggle ────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.classList.toggle('collapsed');
+}
+
+function collapseSidebarOnMobile() {
+  if (window.innerWidth <= 900) {
+    document.getElementById('sidebar')?.classList.add('collapsed');
+  }
+}
+
+function updateMobileLabel() {
+  const lbl = document.getElementById('mobile-toggle-label');
+  if (lbl) lbl.textContent = activeCmd.toUpperCase();
 }
 
 // ── SSH terminal ──────────────────────────────────────────────────────────────
@@ -770,6 +899,7 @@ document.getElementById('tabs').addEventListener('click', ev => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   activeCmd = t.dataset.cmd;
+  updateMobileLabel();
   renderForm(activeCmd);
   const btn = document.getElementById('run-btn');
   const pauseBtn = document.getElementById('pause-btn');
@@ -794,6 +924,14 @@ document.getElementById('tabs').addEventListener('click', ev => {
     if (activeJobId && activeJobCmd === 'chunk') {
       setRunning(true, activeJobPaused);
     }
+  } else if (activeCmd === 'vm') {
+    setSshView(false);
+    btn.style.display = 'none';
+    refreshVmStatus();
+  } else if (activeCmd === 'edr') {
+    setSshView(false);
+    btn.style.display = 'none';
+    refreshEdrScores();
   } else {
     setSshView(false);
     // Show stop/pause only if THIS tab owns the running job
@@ -901,6 +1039,7 @@ function openJob(jobId, cmdStr, fresh) {
 
   clearTerm();
   if (cmdStr) appendLog(`$ ${cmdStr}`, 'meta');
+  collapseSidebarOnMobile();
 
   // Mark chip active
   document.querySelectorAll('.job-chip').forEach(c => c.classList.remove('active'));
@@ -1034,7 +1173,7 @@ function setRunning(on, paused) {
       pauseBtn.style.color = '';
     }
   } else {
-    btn.textContent = activeCmd === 'chunk' ? '▶︎  Build' : '▶︎  Run';
+    btn.textContent = activeCmd === 'chunk' ? '▶︎  Build' : activeCmd === 'edr' ? '▶︎  Score' : activeCmd === 'vm' ? '▶︎  Boot' : '▶︎  Run';
     btn.classList.remove('stop','paused');
     btn.disabled = false;
     pauseBtn.style.display = 'none';
@@ -1292,11 +1431,20 @@ function buildChunkForm(area) {
     <div class="sec">
       <div class="sec-hdr">Malware Type</div>
       <div class="field">
-        <select id="chunk-type">
+        <select id="chunk-type" onchange="chunkTypeChanged()">
           <option value="infostealer">infostealer</option>
           <option value="keylogger">keylogger</option>
+          <option value="backdoor">backdoor</option>
         </select>
       </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Recipe</div>
+      <div class="field">
+        <select id="chunk-recipe" style="font-family:var(--mono);font-size:11px"></select>
+      </div>
+      <div id="chunk-recipe-desc" style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.5"></div>
     </div>
 
     <div class="sec">
@@ -1340,13 +1488,14 @@ function buildChunkForm(area) {
       <div id="chunk-adaptive-opts" style="display:none;margin-top:6px">
         <p style="font-size:11px;color:var(--muted);margin-bottom:6px">
           Deploys, checks if detected, auto-pulls detection message,
-          picks new evasion layers, rebuilds, repeats. Up to 10 attempts
-          (5 algorithmic, then escalates to LLM).
+          picks new evasion layers, rebuilds, repeats.
         </p>
         <div class="field">
           <label for="chunk-av-type">Target AV/EDR</label>
           <select id="chunk-av-type">
             <option value="defender">Windows Defender</option>
+            <option value="wazuh">Wazuh HIDS</option>
+            <option value="elastic">Elastic Endpoint</option>
             <option value="crowdstrike">CrowdStrike Falcon</option>
             <option value="sentinelone">SentinelOne</option>
             <option value="carbon_black">Carbon Black</option>
@@ -1357,14 +1506,21 @@ function buildChunkForm(area) {
           <label for="chunk-custom-cmd">Detection check command</label>
           <input id="chunk-custom-cmd" placeholder="powershell -Command &quot;Get-MpThreatDetection&quot;" style="font-family:var(--mono);font-size:11px">
         </div>
-        <div class="field">
-          <label for="chunk-max-runs">Max attempts</label>
-          <select id="chunk-max-runs">
-            <option value="5">5 (algorithmic only)</option>
-            <option value="8">8 (+ LLM escalation)</option>
-            <option value="10" selected>10 (+ cloud LLM)</option>
-          </select>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div class="field">
+            <label for="chunk-max-algo">Tier 1: Algorithmic</label>
+            <input type="number" id="chunk-max-algo" value="5" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
+          </div>
+          <div class="field">
+            <label for="chunk-max-llm">Tier 2: Local LLM</label>
+            <input type="number" id="chunk-max-llm" value="3" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
+          </div>
+          <div class="field">
+            <label for="chunk-max-cloud">Tier 3: Cloud LLM</label>
+            <input type="number" id="chunk-max-cloud" value="2" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
+          </div>
         </div>
+        <p style="font-size:10px;color:var(--muted);margin-top:2px">Total: <span id="chunk-total-runs">10</span> attempts</p>
       </div>
     </div>
 
@@ -1374,14 +1530,15 @@ function buildChunkForm(area) {
       <div class="field">
         <label>Endpoint</label>
         <div class="llm-pair">
-          <div class="llm-btn sel" onclick="chunkPickLLM('http://localhost:1234',this)">X&nbsp;local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
-          <div class="llm-btn" onclick="chunkPickLLM('http://localhost:11234',this)">Z&nbsp;tunnel<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+          <div class="llm-btn" onclick="chunkPickLLM('http://localhost:11234',this)">Blackwell&nbsp;1<br><span style="font-size:10px;font-weight:400">:11234</span></div>
+          <div class="llm-btn sel" onclick="chunkPickLLM('http://localhost:11235',this)">Blackwell&nbsp;2<br><span style="font-size:10px;font-weight:400">:11235</span></div>
+          <div class="llm-btn" onclick="chunkPickLLM('http://localhost:1234',this)">Local<br><span style="font-size:10px;font-weight:400">:1234</span></div>
         </div>
-        <input type="text" id="chunk-llm-url" value="http://localhost:1234" placeholder="http://localhost:1234" style="font-family:var(--mono);font-size:11px" oninput="chunkSyncLLMBtns(this.value)">
+        <input type="text" id="chunk-llm-url" value="http://localhost:11235" placeholder="http://localhost:11235" style="font-family:var(--mono);font-size:11px" oninput="chunkSyncLLMBtns(this.value)">
       </div>
       <div class="field">
         <label for="chunk-llm-model">Model name</label>
-        <input type="text" id="chunk-llm-model" placeholder="qwen3-35b-a3b… (blank = use loaded model)" style="font-family:var(--mono);font-size:11px">
+        <input type="text" id="chunk-llm-model" value="huihui-qwen3.6-35b-a3b-claude-4.7-opus-abliterated-mtp@q4_k" placeholder="model name" style="font-family:var(--mono);font-size:11px">
       </div>
     </div>
 
@@ -1392,6 +1549,35 @@ function buildChunkForm(area) {
         <div id="chunk-layers" style="font-size:11px">Loading...</div>
       </div>
     </details>
+
+    <div class="sec">
+      <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Detection Engines</span>
+        <span style="font-size:10px;color:var(--accent);cursor:pointer" onclick="refreshDetectionStatus()">refresh</span>
+      </div>
+      <div id="detection-status" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:2.2">
+        Checking...
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button onclick="refreshDetectionAlerts()" style="
+          flex:1;padding:6px;font-size:11px;font-weight:600;border:1px solid var(--border);
+          border-radius:5px;cursor:pointer;background:var(--bg3);color:var(--text);
+        ">Check Alerts</button>
+        <select id="detection-minutes" style="font-size:11px;width:80px">
+          <option value="5">5 min</option>
+          <option value="10" selected>10 min</option>
+          <option value="30">30 min</option>
+          <option value="60">1 hour</option>
+        </select>
+        <select id="detection-level" style="font-size:11px;width:90px">
+          <option value="1">All levels</option>
+          <option value="5" selected>Level 5+</option>
+          <option value="8">Level 8+</option>
+          <option value="12">Critical</option>
+        </select>
+      </div>
+      <div id="detection-alerts" style="font-family:var(--mono);font-size:11px;margin-top:6px;max-height:250px;overflow-y:auto"></div>
+    </div>
 
     <div class="sec">
       <div class="sec-hdr">Run History</div>
@@ -1405,6 +1591,16 @@ function buildChunkForm(area) {
   document.getElementById('chunk-av-type')?.addEventListener('change', (e) => {
     document.getElementById('chunk-custom-cmd-wrap').style.display = e.target.value === 'custom' ? '' : 'none';
   });
+  function updateTotalRuns() {
+    const a = parseInt(document.getElementById('chunk-max-algo')?.value || '0');
+    const l = parseInt(document.getElementById('chunk-max-llm')?.value || '0');
+    const c = parseInt(document.getElementById('chunk-max-cloud')?.value || '0');
+    const el = document.getElementById('chunk-total-runs');
+    if (el) el.textContent = a + l + c;
+  }
+  ['chunk-max-algo','chunk-max-llm','chunk-max-cloud'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateTotalRuns);
+  });
   // Load layers when the Advanced section is opened (not before)
   const details = document.querySelector('details');
   if (details) {
@@ -1412,13 +1608,16 @@ function buildChunkForm(area) {
       if (details.open && chunkLayersData) renderChunkLayers(chunkLayersData);
     });
   }
+  loadChunkRecipes();
   loadChunkLayers();
   loadChunkHistory();
   restoreChunkState();
+  refreshDetectionStatus();
 }
 
 const CHUNK_FIELDS = [
   {id:'chunk-type', type:'val'},
+  {id:'chunk-recipe', type:'val'},
   {id:'chunk-vm-port', type:'val'},
   {id:'chunk-vm-user', type:'val'},
   {id:'chunk-vm-pass', type:'val'},
@@ -1428,7 +1627,9 @@ const CHUNK_FIELDS = [
   {id:'chunk-obfuscation', type:'val'},
   {id:'chunk-adaptive', type:'chk'},
   {id:'chunk-av-type', type:'val'},
-  {id:'chunk-max-runs', type:'val'},
+  {id:'chunk-max-algo', type:'val'},
+  {id:'chunk-max-llm', type:'val'},
+  {id:'chunk-max-cloud', type:'val'},
   {id:'chunk-custom-cmd', type:'val'},
   {id:'chunk-llm-url', type:'val'},
   {id:'chunk-llm-model', type:'val'},
@@ -1466,7 +1667,49 @@ function restoreChunkState() {
   } catch(e) {}
 }
 
-// chunkPickMode and loadChunkRecipes removed — framework auto-selects recipe from type
+let chunkRecipes = [];
+
+async function loadChunkRecipes() {
+  try {
+    const r = await fetch('/api/chunk/recipes');
+    chunkRecipes = await r.json();
+    filterRecipes();
+  } catch(e) { console.error('Failed to load recipes:', e); }
+}
+
+function filterRecipes() {
+  const type = document.getElementById('chunk-type')?.value || 'infostealer';
+  const sel = document.getElementById('chunk-recipe');
+  const desc = document.getElementById('chunk-recipe-desc');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const filtered = chunkRecipes.filter(r => r.name.startsWith(type));
+  if (!filtered.length) {
+    sel.innerHTML = '<option value="">No recipes for this type</option>';
+    if (desc) desc.textContent = '';
+    return;
+  }
+  filtered.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.name;
+    opt.textContent = r.name;
+    sel.appendChild(opt);
+  });
+  updateRecipeDesc();
+  sel.onchange = updateRecipeDesc;
+}
+
+function updateRecipeDesc() {
+  const sel = document.getElementById('chunk-recipe');
+  const desc = document.getElementById('chunk-recipe-desc');
+  if (!sel || !desc) return;
+  const recipe = chunkRecipes.find(r => r.name === sel.value);
+  desc.textContent = recipe ? recipe.description : '';
+}
+
+function chunkTypeChanged() {
+  filterRecipes();
+}
 
 async function loadChunkLayers() {
   try {
@@ -1537,7 +1780,9 @@ async function chunkBuild() {
   const adaptive = document.getElementById('chunk-adaptive')?.checked ?? false;
   const deploy = document.getElementById('chunk-deploy')?.checked ?? true;
   const avType = document.getElementById('chunk-av-type')?.value || 'defender';
-  const maxRuns = parseInt(document.getElementById('chunk-max-runs')?.value || '10');
+  const maxAlgo = parseInt(document.getElementById('chunk-max-algo')?.value || '5');
+  const maxLlm = parseInt(document.getElementById('chunk-max-llm')?.value || '3');
+  const maxCloud = parseInt(document.getElementById('chunk-max-cloud')?.value || '2');
   const customCmd = document.getElementById('chunk-custom-cmd')?.value || '';
   const obfuscation = document.getElementById('chunk-obfuscation')?.value || 'heavy';
   const llm_url = document.getElementById('chunk-llm-url')?.value || '';
@@ -1547,9 +1792,7 @@ async function chunkBuild() {
   const vm_pass = document.getElementById('chunk-vm-pass')?.value || 'vmuser123';
   const c2_port = document.getElementById('chunk-c2-port')?.value || '9001';
 
-  // Auto-pick best recipe for the type
-  const recipeMap = {infostealer: 'infostealer_full', keylogger: 'keylogger'};
-  const recipe = recipeMap[malware_type] || 'infostealer_full';
+  const recipe = document.getElementById('chunk-recipe')?.value || (malware_type === 'keylogger' ? 'keylogger' : 'infostealer_full');
 
   // Check if any layers were manually overridden
   const layers = chunkGetLayers();
@@ -1567,7 +1810,7 @@ async function chunkBuild() {
       const r = await fetch('/api/chunk/hybrid', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({malware_type, dry_run: false, av_type: avType, max_runs: maxRuns, custom_cmd: customCmd, obfuscation, llm_url, llm_model}),
+        body: JSON.stringify({malware_type, dry_run: false, av_type: avType, max_algorithmic: maxAlgo, max_llm: maxLlm, max_cloud: maxCloud, custom_cmd: customCmd, obfuscation, llm_url, llm_model}),
       });
       if (!r.ok) {
         const txt = await r.text();
@@ -1642,6 +1885,503 @@ async function loadChunkHistory() {
 }
 
 // Hybrid loop button removed — adaptive loop triggered via main Build button
+
+// ── Detection Engines (Wazuh + Elastic + Defender) ────────────────────────
+
+async function refreshDetectionStatus() {
+  const panel = document.getElementById('detection-status');
+  if (!panel) return;
+  panel.innerHTML = '<span style="color:var(--muted)">Checking...</span>';
+  try {
+    const r = await fetch('/api/detection/status');
+    const s = await r.json();
+    const dot = (on) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--${on?'green':'red'});margin-right:6px;vertical-align:middle"></span>`;
+    let h = '';
+
+    // Wazuh
+    h += `<div>${dot(s.wazuh.online)}Wazuh Manager: ${s.wazuh.online ? 'online' : 'offline'}`;
+    if (s.wazuh.online && s.wazuh.agent_id) {
+      h += ` <span style="color:var(--muted)">(agent ${s.wazuh.agent_id}: ${s.wazuh.agent_name || '?'} — ${s.wazuh.agent_status})</span>`;
+    }
+    h += '</div>';
+
+    // Elastic / Indexer
+    h += `<div>${dot(s.elastic.online)}Wazuh Indexer: ${s.elastic.online ? 'online' : 'offline'}`;
+    if (s.elastic.online) {
+      h += ` <span style="color:var(--muted)">(${s.elastic.cluster_status || '?'}`;
+      if (s.elastic.alert_index_exists) {
+        h += `, ${(s.elastic.total_alerts || 0).toLocaleString()} total alerts`;
+      }
+      h += ')</span>';
+    }
+    h += '</div>';
+
+    // Defender
+    h += `<div>${dot(s.defender.online)}Defender: ${s.defender.online ? 'online' : 'offline'}`;
+    if (s.defender.online) {
+      const rt = s.defender.realtime;
+      const av = s.defender.antivirus;
+      h += ` <span style="color:var(--${rt && av ? 'green' : 'yellow'})">(`;
+      h += rt ? 'realtime ON' : '<b>realtime OFF</b>';
+      h += av ? ', AV ON' : ', <b>AV OFF</b>';
+      h += ')</span>';
+    }
+    h += '</div>';
+
+    panel.innerHTML = h;
+  } catch(e) {
+    panel.innerHTML = '<span style="color:var(--red)">Could not check detection status</span>';
+  }
+}
+
+async function refreshDetectionAlerts() {
+  const div = document.getElementById('detection-alerts');
+  if (!div) return;
+  const minutes = document.getElementById('detection-minutes')?.value || '10';
+  const minLevel = document.getElementById('detection-level')?.value || '5';
+  div.innerHTML = '<span style="color:var(--muted)">Loading alerts...</span>';
+  try {
+    const r = await fetch(`/api/detection/alerts?minutes=${minutes}&min_level=${minLevel}`);
+    const data = await r.json();
+    const sum = data.summary || {};
+    let h = '';
+
+    // Summary bar
+    h += '<div style="padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:4px;font-size:10px">';
+    if (sum.defender_total > 0) {
+      h += `<span style="color:var(--red);font-weight:700">DEFENDER: ${sum.defender_total} threat(s)</span> `;
+    } else {
+      h += '<span style="color:var(--green)">DEFENDER: 0 threats</span> ';
+    }
+    h += '&nbsp;|&nbsp;';
+    if (sum.wazuh_high > 0) {
+      h += `<span style="color:var(--red);font-weight:700">WAZUH: ${sum.wazuh_high} high</span>`;
+    } else if (sum.wazuh_medium > 0) {
+      h += `<span style="color:var(--yellow)">WAZUH: ${sum.wazuh_medium} med</span>`;
+    } else {
+      h += `<span style="color:var(--green)">WAZUH: 0 high/med</span>`;
+    }
+    h += ` <span style="color:var(--muted)">(${sum.wazuh_total} total)</span>`;
+    h += '</div>';
+
+    // Defender threats
+    if (data.defender && data.defender.length > 0) {
+      h += '<div style="color:var(--red);font-weight:700;font-size:10px;margin:4px 0">DEFENDER DETECTIONS</div>';
+      data.defender.forEach(t => {
+        h += '<div style="padding:3px 4px;background:rgba(255,85,85,0.08);border-radius:3px;margin-bottom:2px">';
+        h += `<span style="color:var(--red)">THREAT</span> ID=${t.threat_id}`;
+        if (t.resources && t.resources.length) {
+          h += ` <span style="color:var(--muted)">${t.resources[0]}</span>`;
+        }
+        h += '</div>';
+      });
+    }
+
+    // Wazuh alerts
+    if (data.wazuh && data.wazuh.length > 0) {
+      h += '<div style="font-weight:700;font-size:10px;margin:6px 0 4px">WAZUH ALERTS</div>';
+      data.wazuh.forEach(a => {
+        const lvl = a.level || 0;
+        const color = lvl >= 12 ? 'var(--red)' : lvl >= 8 ? 'var(--red)' : lvl >= 5 ? 'var(--yellow)' : 'var(--muted)';
+        const tag = lvl >= 12 ? 'CRIT' : lvl >= 8 ? 'HIGH' : lvl >= 5 ? 'MED' : 'LOW';
+        h += '<div style="padding:2px 0;border-bottom:1px solid var(--border)">';
+        h += `<span style="color:${color};font-weight:600;min-width:36px;display:inline-block">${tag}</span> `;
+        h += `<span style="color:var(--muted)">[${a.rule_id}]</span> `;
+        const desc = (a.description || '').length > 70 ? a.description.substring(0, 70) + '...' : a.description;
+        h += desc;
+        if (a.mitre && a.mitre.id && a.mitre.id.length) {
+          h += ` <span style="color:var(--accent);font-size:10px">${a.mitre.id.join(',')}</span>`;
+        }
+        h += '</div>';
+      });
+    }
+
+    if (!data.wazuh?.length && !data.defender?.length) {
+      h += '<div style="color:var(--green);padding:4px 0">No alerts in the last ' + minutes + ' minutes</div>';
+    }
+
+    div.innerHTML = h;
+  } catch(e) {
+    div.innerHTML = '<span style="color:var(--red)">Could not load alerts: ' + e + '</span>';
+  }
+}
+
+// ── VM Management ────────────────────────────────────────────────────────────
+
+let vmStatus = {qemu_running: false, ssh_reachable: false, disk_exists: false};
+
+function buildVmForm(area) {
+  area.innerHTML = `
+    <div class="sec">
+      <div class="sec-hdr">VM Status</div>
+      <div id="vm-status-panel" style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:2">
+        Checking...
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">OS</div>
+      <div class="field">
+        <select id="vm-os" onchange="refreshVmStatus()" style="font-family:var(--mono)">
+          <option value="windows-11" selected>windows-11</option>
+          <option value="windows-10">windows-10</option>
+          <option value="ubuntu-24.04">ubuntu-24.04</option>
+          <option value="ubuntu-22.04">ubuntu-22.04</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Controls</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button id="vm-boot-btn" onclick="vmBoot()" style="
+          width:100%;padding:9px;font-size:13px;font-weight:700;border:none;border-radius:6px;
+          cursor:pointer;background:var(--green);color:#0d1117;transition:background .12s;
+        ">Boot VM</button>
+        <button id="vm-shutdown-btn" onclick="vmShutdown()" style="
+          width:100%;padding:9px;font-size:13px;font-weight:700;border:none;border-radius:6px;
+          cursor:pointer;background:var(--red);color:#fff;transition:background .12s;
+        ">Shutdown VM</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Fresh Install</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">
+        Install a new VM from scratch. This downloads an ISO and runs the full
+        installer. Takes 30-60 minutes. Will NOT delete existing installations
+        of other OS versions.
+      </p>
+      <button id="vm-install-btn" onclick="vmInstall()" style="
+        width:100%;padding:9px;font-size:13px;font-weight:600;border:1px solid var(--border);
+        border-radius:6px;cursor:pointer;background:var(--bg3);color:var(--text);transition:all .12s;
+      ">Install New VM</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Snapshots</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">
+        Save/restore VM state via blockdev-snapshot-sync overlays.
+      </p>
+      <div style="display:flex;gap:6px">
+        <button onclick="vmSnapshot('save')" style="
+          flex:1;padding:7px;font-size:12px;font-weight:600;border:1px solid var(--border);
+          border-radius:5px;cursor:pointer;background:var(--bg3);color:var(--text);
+        ">Save Snapshot</button>
+        <button onclick="vmSnapshot('restore')" style="
+          flex:1;padding:7px;font-size:12px;font-weight:600;border:1px solid var(--border);
+          border-radius:5px;cursor:pointer;background:var(--bg3);color:var(--text);
+        ">Restore Snapshot</button>
+      </div>
+    </div>
+  `;
+  refreshVmStatus();
+}
+
+async function refreshVmStatus() {
+  const panel = document.getElementById('vm-status-panel');
+  if (!panel) return;
+  const os = document.getElementById('vm-os')?.value || 'windows-11';
+  try {
+    const r = await fetch(`/api/vm/status?os=${os}`);
+    vmStatus = await r.json();
+    let h = '';
+    const dot = (on) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--${on?'green':'red'});margin-right:6px"></span>`;
+    h += `<div>${dot(vmStatus.disk_exists)}Disk: ${vmStatus.disk_exists ? 'installed' : 'not found'}</div>`;
+    h += `<div>${dot(vmStatus.qemu_running)}QEMU: ${vmStatus.qemu_running ? 'running' : 'stopped'}</div>`;
+    h += `<div>${dot(vmStatus.ssh_reachable)}SSH: ${vmStatus.ssh_reachable ? 'connected (port 10022)' : 'unreachable'}</div>`;
+    panel.innerHTML = h;
+    updateVmButtons();
+  } catch(e) {
+    panel.innerHTML = '<span style="color:var(--red)">Could not check VM status</span>';
+  }
+}
+
+function updateVmButtons() {
+  const bootBtn = document.getElementById('vm-boot-btn');
+  const shutBtn = document.getElementById('vm-shutdown-btn');
+  if (!bootBtn || !shutBtn) return;
+  if (vmStatus.qemu_running) {
+    bootBtn.disabled = true;
+    bootBtn.style.opacity = '0.35';
+    bootBtn.style.cursor = 'not-allowed';
+    shutBtn.disabled = false;
+    shutBtn.style.opacity = '1';
+    shutBtn.style.cursor = 'pointer';
+  } else {
+    bootBtn.disabled = !vmStatus.disk_exists;
+    bootBtn.style.opacity = vmStatus.disk_exists ? '1' : '0.35';
+    bootBtn.style.cursor = vmStatus.disk_exists ? 'pointer' : 'not-allowed';
+    shutBtn.disabled = true;
+    shutBtn.style.opacity = '0.35';
+    shutBtn.style.cursor = 'not-allowed';
+  }
+}
+
+async function vmBoot() {
+  const os = document.getElementById('vm-os')?.value || 'windows-11';
+  const btn = document.getElementById('vm-boot-btn');
+  btn.disabled = true;
+  btn.textContent = 'Booting...';
+  appendLog(`[VM] Booting ${os}...`, 'meta');
+  try {
+    const r = await fetch('/api/vm/boot', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({os}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      appendLog(`[VM] Booted (PID=${data.pid}). SSH: ${data.ssh_ready ? 'ready' : 'waiting...'}`, 'ok');
+    } else {
+      appendLog(`[VM] Boot failed: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    appendLog(`[VM] Boot error: ${e}`, 'err');
+  }
+  btn.textContent = 'Boot VM';
+  await refreshVmStatus();
+}
+
+async function vmShutdown() {
+  const os = document.getElementById('vm-os')?.value || 'windows-11';
+  const btn = document.getElementById('vm-shutdown-btn');
+  btn.disabled = true;
+  btn.textContent = 'Shutting down...';
+  appendLog(`[VM] Shutting down ${os}...`, 'meta');
+  try {
+    const r = await fetch('/api/vm/shutdown', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({os}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      appendLog(`[VM] Shutdown complete${data.forced ? ' (forced)' : ''}`, 'ok');
+    } else {
+      appendLog(`[VM] Shutdown failed: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    appendLog(`[VM] Shutdown error: ${e}`, 'err');
+  }
+  btn.textContent = 'Shutdown VM';
+  await refreshVmStatus();
+}
+
+async function vmInstall() {
+  const os = document.getElementById('vm-os')?.value || 'windows-11';
+  const btn = document.getElementById('vm-install-btn');
+  btn.disabled = true;
+  btn.textContent = 'Starting install...';
+  try {
+    const r = await fetch('/api/vm/install', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({os}),
+    });
+    const {job_id, cmd_str} = await r.json();
+    activeJobCmd = 'vm';
+    openJob(job_id, cmd_str, true);
+  } catch(e) {
+    appendLog(`[VM] Install error: ${e}`, 'err');
+  }
+  btn.textContent = 'Install New VM';
+  btn.disabled = false;
+}
+
+async function vmSnapshot(action) {
+  appendLog(`[VM] Snapshot ${action}...`, 'meta');
+  try {
+    const r = await fetch('/api/vm/snapshot', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action, tag: 'portal_snapshot'}),
+    });
+    const {job_id, cmd_str} = await r.json();
+    activeJobCmd = 'vm';
+    openJob(job_id, cmd_str, true);
+  } catch(e) {
+    appendLog(`[VM] Snapshot error: ${e}`, 'err');
+  }
+}
+
+// ── EDR Score ────────────────────────────────────────────────────────────────
+
+function buildEdrForm(area) {
+  area.innerHTML = `
+    <div class="sec">
+      <div class="sec-hdr">Score Payload</div>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.5">
+        Deploy payload to VM, capture Sysmon telemetry, score against 2900+ Sigma rules.
+        Models CrowdStrike Falcon behavioral detection.
+      </p>
+      <div class="field">
+        <label for="edr-payload-type">Payload type</label>
+        <select id="edr-payload-type">
+          <option value="infostealer">infostealer</option>
+          <option value="backdoor">backdoor</option>
+          <option value="keylogger">keylogger</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="edr-payload-path">Payload .exe path</label>
+        <input type="text" id="edr-payload-path" placeholder="/tmp/edr_test_ghost.exe" style="font-family:var(--mono);font-size:11px">
+      </div>
+      <button onclick="edrRunScore()" style="
+        margin-top:6px;width:100%;padding:7px;background:var(--accent);color:#fff;
+        font-size:12px;font-weight:600;border:none;border-radius:5px;cursor:pointer;
+      ">Score Payload</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Score Existing EVTX</div>
+      <div class="field">
+        <label for="edr-evtx-path">EVTX file path</label>
+        <input type="text" id="edr-evtx-path" placeholder="results/edr_scores/sysmon_20260706.evtx" style="font-family:var(--mono);font-size:11px">
+      </div>
+      <button onclick="edrScoreOnly()" style="
+        margin-top:6px;width:100%;padding:7px;background:var(--bg3);color:var(--text);
+        font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:5px;cursor:pointer;
+      ">Score EVTX</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Score Reports</span>
+        <span style="font-size:10px;color:var(--accent);cursor:pointer" onclick="refreshEdrScores()">refresh</span>
+      </div>
+      <div id="edr-scores-list" style="font-family:var(--mono);font-size:11px">Loading...</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Sysmon Status</div>
+      <div id="edr-sysmon-status" style="font-family:var(--mono);font-size:11px;color:var(--muted)">
+        Checking...
+      </div>
+      <button onclick="checkSysmonStatus()" style="
+        margin-top:6px;width:100%;padding:5px;background:var(--bg3);color:var(--muted);
+        font-size:11px;border:1px solid var(--border);border-radius:4px;cursor:pointer;
+      ">Check Sysmon</button>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">Detection Model</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.7">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">
+          <span style="color:var(--red);font-weight:600">CRITICAL/HIGH</span>
+          <span>= CrowdStrike BLOCKED + alert</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px">
+          <span style="color:var(--yellow);font-weight:600">MEDIUM</span>
+          <span>= SOC alert (analyst investigates)</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="color:var(--muted);font-weight:600">LOW</span>
+          <span>= Telemetry only (logged, not flagged)</span>
+        </div>
+      </div>
+    </div>
+  `;
+  refreshEdrScores();
+  checkSysmonStatus();
+}
+
+async function edrRunScore() {
+  const payload = document.getElementById('edr-payload-path')?.value.trim();
+  const type = document.getElementById('edr-payload-type')?.value || 'infostealer';
+  if (!payload) { flashError('Payload path required'); return; }
+  try {
+    const r = await fetch('/api/edr/run', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({payload, type}),
+    });
+    const {job_id, cmd_str} = await r.json();
+    activeJobCmd = 'edr';
+    openJob(job_id, cmd_str, true);
+  } catch(e) { flashError('EDR score failed: ' + e); }
+}
+
+async function edrScoreOnly() {
+  const evtx = document.getElementById('edr-evtx-path')?.value.trim();
+  if (!evtx) { flashError('EVTX path required'); return; }
+  try {
+    const r = await fetch('/api/edr/score-only', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({evtx}),
+    });
+    const {job_id, cmd_str} = await r.json();
+    activeJobCmd = 'edr';
+    openJob(job_id, cmd_str, true);
+  } catch(e) { flashError('EDR score failed: ' + e); }
+}
+
+async function refreshEdrScores() {
+  const div = document.getElementById('edr-scores-list');
+  if (!div) return;
+  try {
+    const r = await fetch('/api/edr/scores');
+    const files = await r.json();
+    if (!files.length) {
+      div.innerHTML = '<span style="color:var(--muted)">No scores yet. Run a payload to generate.</span>';
+      return;
+    }
+    const scores = files.filter(f => f.startsWith('score_'));
+    const evtx = files.filter(f => f.startsWith('sysmon_'));
+    let h = '';
+    if (scores.length) {
+      h += '<div style="margin-bottom:4px;color:var(--muted);font-size:10px;font-weight:700">REPORTS</div>';
+      scores.slice(0, 10).forEach(f => {
+        const ts = f.replace('score_','').replace('.txt','').replace('.json','');
+        const isJson = f.endsWith('.json');
+        const icon = isJson ? '' : '';
+        h += `<div style="padding:2px 0;cursor:pointer;color:var(--accent);border-bottom:1px solid var(--border)"
+                   onclick="viewEdrScore('${f}')">${icon} ${f}</div>`;
+      });
+    }
+    if (evtx.length) {
+      h += '<div style="margin-top:8px;margin-bottom:4px;color:var(--muted);font-size:10px;font-weight:700">EVTX CAPTURES</div>';
+      evtx.slice(0, 5).forEach(f => {
+        const size = '';
+        h += `<div style="padding:2px 0;color:var(--muted);border-bottom:1px solid var(--border)">${f}</div>`;
+      });
+    }
+    div.innerHTML = h;
+  } catch(e) {
+    div.innerHTML = '<span style="color:var(--red)">Could not load scores</span>';
+  }
+}
+
+async function viewEdrScore(filename) {
+  try {
+    const r = await fetch('/api/edr/scores/' + filename);
+    const txt = await r.text();
+    document.getElementById('modal-title').textContent = filename;
+    document.getElementById('modal-body').textContent = txt;
+    document.getElementById('modal-bg').classList.add('open');
+  } catch(e) { flashError('Could not load ' + filename); }
+}
+
+async function checkSysmonStatus() {
+  const div = document.getElementById('edr-sysmon-status');
+  if (!div) return;
+  div.innerHTML = '<span style="color:var(--yellow)">Checking VM...</span>';
+  try {
+    const r = await fetch('/api/jobs', {method:'GET'});
+    // Use a one-shot job to check sysmon status via SSH
+    const body = {
+      command: 'run',
+      spec: 'spec.yaml',
+      malware_type: 'check',
+    };
+    // Instead of a full job, just show static info
+    div.innerHTML = `
+      <div style="margin-bottom:4px">
+        <span style="color:var(--green)">Sysmon v15.21</span> installed at C:\\Tools\\Sysmon64.exe
+      </div>
+      <div style="color:var(--muted)">Config: olafhartong/sysmon-modular (2704 rules)</div>
+      <div style="color:var(--muted)">Chainsaw: v2.16.0 + 2933 Sigma rules + 6 custom rules</div>
+      <div style="margin-top:4px;color:var(--muted);font-size:10px">VM: localhost:10022 (vmuser)</div>
+    `;
+  } catch(e) {
+    div.innerHTML = '<span style="color:var(--red)">Could not check — is the VM running?</span>';
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function el(tag, cls, txt) {

@@ -123,6 +123,11 @@ initial access. Adapt the code to fit the target environment and compile chain.
 {{ behavior_spec }}
 {% endif %}
 
+{% if edr_constraints %}
+# EDR EVASION CONSTRAINTS — CRITICAL
+{{ edr_constraints }}
+{% endif %}
+
 {% if os_platform == "linux" %}
 **IMPORTANT — Target platform is LINUX. Generate POSIX/Linux code ONLY.**
 Use ONLY standard POSIX/Linux headers: stdio.h, stdlib.h, string.h, unistd.h, fcntl.h, dirent.h, sys/stat.h, sys/types.h, sys/socket.h, netinet/in.h, arpa/inet.h, pthread.h, dlfcn.h, signal.h, errno.h
@@ -182,6 +187,7 @@ class PromptTemplates:
         error_context: str = "",
         behavior_spec: Optional[str] = None,
         os_platform: str = "windows",
+        edr_constraints: Optional[str] = None,
     ) -> str:
         """Render the full malware generation prompt.
 
@@ -204,6 +210,7 @@ class PromptTemplates:
             malware_type=malware_type,
             behavior_spec=behavior_spec or "",
             os_platform=os_platform,
+            edr_constraints=edr_constraints or "",
         )
         if error_context:
             rendered += (

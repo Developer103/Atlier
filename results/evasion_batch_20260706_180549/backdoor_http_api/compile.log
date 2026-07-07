@@ -1,0 +1,13 @@
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x132): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x14f): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x1cd): undefined reference to `__imp_WinHttpOpenRequest'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x1fa): undefined reference to `__imp_WinHttpSetOption'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x224): undefined reference to `__imp_WinHttpSendRequest'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x233): undefined reference to `__imp_WinHttpReceiveResponse'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x246): undefined reference to `__imp_WinHttpReadData'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x286): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x2a5): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0xa5): undefined reference to `__imp_WinHttpOpen'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0x112): undefined reference to `__imp_WinHttpConnect'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0x7c0): undefined reference to `__imp_WinHttpCloseHandle'
+collect2: error: ld returned 1 exit status

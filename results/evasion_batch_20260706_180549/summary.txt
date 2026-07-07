@@ -1,0 +1,35 @@
+========================================
+BATCH EVASION TEST — 15 recipes
+2026年  7月  6日 月曜日 18:05:49 JST
+========================================
+infostealer_full: PASS [bin=57344b c2=548733b alerts=0] 
+infostealer_staged: PASS [bin=53248b c2=548664b alerts=0] 
+infostealer_edr_v1: FAIL [bin=60416b c2=0b alerts=0] no C2 data (0b); 
+infostealer_edr_v2: FAIL [bin=59904b c2=0b alerts=0] no C2 data (0b); 
+infostealer_ghost: FAIL [bin=46592b c2=4917b alerts=0] binary removed; 
+infostealer_self_delete: FAIL [bin=46592b c2=4919b alerts=0] binary removed; 
+keylogger: PASS [bin=46592b c2=4971b alerts=0] 
+keylogger_api: PASS [bin=46592b c2=4994b alerts=0] 
+keylogger_stealth: PASS [bin=46080b c2=0b alerts=0] 
+keylogger_edr_bypass: PASS [bin=47104b c2=4948b alerts=0] 
+keylogger_poll: PASS [bin=46592b c2=4948b alerts=0] 
+keylogger_dns: PASS [bin=46080b c2=0b alerts=0] 
+backdoor_tcp_api: PASS [bin=49664b c2=12b alerts=0] 
+backdoor_http_api: FAIL (compile)
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x132): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x14f): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x1cd): undefined reference to `__imp_WinHttpOpenRequest'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x1fa): undefined reference to `__imp_WinHttpSetOption'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x224): undefined reference to `__imp_WinHttpSendRequest'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x233): undefined reference to `__imp_WinHttpReceiveResponse'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x246): undefined reference to `__imp_WinHttpReadData'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x286): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text+0x2a5): undefined reference to `__imp_WinHttpCloseHandle'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0xa5): undefined reference to `__imp_WinHttpOpen'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0x112): undefined reference to `__imp_WinHttpConnect'
+/usr/bin/x86_64-w64-mingw32-ld: /tmp/ccPWpKFr.o:source.c:(.text.startup+0x7c0): undefined reference to `__imp_WinHttpCloseHandle'
+collect2: error: ld returned 1 exit status
+backdoor_tcp_full_evasion: PASS [bin=53248b c2=0b alerts=0] 
+========================================
+RESULTS: 10 PASS, 5 FAIL, 0 SKIP (of 15)
+========================================

@@ -4,7 +4,7 @@ These tests call the framework end-to-end: spec parsing → LLM code generation 
 evasion passes → MinGW cross-compilation → VM deployment → verification.
 
 They are SLOW (minutes per test due to LLM generation) and require:
-  - LM Studio running at localhost:1234
+  - Local LLM running at localhost:11235 (Blackwell)
   - Windows 11 QEMU VM reachable at localhost:10022
 
 Run with: python3 tests/run_all.py e2e
@@ -28,7 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Skip conditions
 # ---------------------------------------------------------------------------
 
-_LLM_PORTS = [11234, 1234]
+_LLM_PORTS = [11235, 11234, 1234]
 _ACTIVE_LLM_URL = ""
 
 def _llm_available():
@@ -59,7 +59,7 @@ def _vm_available():
         return False
 
 
-requires_llm = pytest.mark.skipif(not _llm_available(), reason="LLM not running at localhost:1234 or :11234")
+requires_llm = pytest.mark.skipif(not _llm_available(), reason="LLM not running at localhost:11235, :11234, or :1234")
 requires_vm = pytest.mark.skipif(not _vm_available(), reason="VM not reachable at localhost:10022")
 requires_mingw = pytest.mark.skipif(
     not subprocess.run(["which", "x86_64-w64-mingw32-gcc"], capture_output=True).returncode == 0,
@@ -1407,7 +1407,7 @@ def test_c2_listener_receives_data():
         assert conns[0]["data_file"], "No data file recorded"
 
         from pathlib import Path as _P
-        data_path = _P(__file__).parent.parent / "results" / conns[0]["data_file"]
+        data_path = _P(__file__).parent.parent / "results" / "c2_data" / conns[0]["data_file"]
         assert data_path.exists(), f"Data file not found: {data_path}"
         saved = data_path.read_bytes()
         assert test_data in saved, "Saved data doesn't contain sent payload"

