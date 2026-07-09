@@ -2,7 +2,7 @@
 
 Automated malware generation, evasion testing, and detection validation against live Windows VMs with real EDR products. Two complementary engines:
 
-1. **Chunk Assembler** — deterministic, recipe-based. Pre-written C chunks assembled into complete malware, with an 8-layer evasion selector. ~51.6 trillion infostealer variants, ~22.4 billion backdoor variants, ~272 million AD recon variants, ~8.6 million keylogger variants. Binary in ~5 seconds.
+1. **Chunk Assembler** — deterministic, recipe-based. 130 pre-written C chunks assembled into complete malware, with a 12-layer evasion selector and 5 strategy archetypes per type. 358M base evasion combinations × type-specific multipliers. Binary in ~5 seconds.
 2. **Malgen Skill** — LLM-driven (Claude/local). Generates evasion-hardened code from scratch. Used for novel technique discovery when the chunk matrix hits a wall.
 
 Validated against a full detection stack: Windows Defender + Wazuh SIEM + Sysmon + 3,009 Sigma rules (via Chainsaw). All malware types pass with zero detections.
@@ -51,8 +51,8 @@ python -m malware_gen_framework run --spec spec.yaml --output results --loop
 ### Chunk Assembler Pipeline
 
 ```
-  Recipe YAML                    8-Layer Evasion Selector
-  (54 pre-built)                 (4.3M base × type-specific multipliers)
+  Recipe YAML                    12-Layer Evasion Selector
+  (54 pre-built)                 (358M base × type-specific multipliers)
        |                                |
        v                                v
   +------------+    +------------------------------------------+
@@ -66,8 +66,8 @@ python -m malware_gen_framework run --spec spec.yaml --output results --loop
         v           |   assemble -> obfuscate -> compile ->    |
   +----------+      |   deploy -> execute -> check Defender -> |
   | obfuscate|      |   check Wazuh -> check Sigma (3,009) -> |
-  | (string  |      |   SUCCESS or try next combination        |
-  | encrypt) |      +------------------------------------------+
+  | (poly    |      |   SUCCESS or try next combination        |
+  |  mutate) |      +------------------------------------------+
   +-----+----+
         |
         v
@@ -98,49 +98,53 @@ python -m malware_gen_framework run --spec spec.yaml --output results --loop
 
 ## Chunk Assembler
 
-The primary engine. 123 pre-written, hand-verified C source chunks across 14 categories, wired together by recipe YAML files.
+The primary engine. 130 pre-written, hand-verified C source chunks across 14 categories, wired together by recipe YAML files.
 
 ### Chunk Categories
 
 | Category | Count | Purpose |
 |---|---|---|
-| `collectors/` | 25+ | Data collection (system info, browser, credentials, screenshots, ...) |
+| `collectors/` | 30 | Data collection (system info, browser, credentials, screenshots, ...) |
 | `commands/` | 13 | Backdoor command handlers (API + LOLBin variants) |
-| `evasion/` | 23 | Evasion techniques (ETW patch, indirect syscall, sleep encrypt, ...) |
-| `exfil/` | 16 | Exfiltration (TCP, HTTP, HTTPS, DNS, SMB, LOLBin pipes) |
-| `arch/` | 14 | Execution architecture (sequential, threaded, fiber, callback, backdoor) |
-| `process/` | 6 | Process lineage (PPID spoof for 5 parent processes) |
+| `evasion/` | 24 | Evasion techniques (ETW patch, indirect syscall, sleep obfuscation, module stomp, ...) |
+| `exfil/` | 18 | Exfiltration (TCP, HTTP, HTTPS, DNS, SMB, LOLBin pipes, named pipe) |
+| `arch/` | 18 | Execution architecture (sequential, threaded, fiber, callback, backdoor) |
+| `process/` | 7 | Process lineage (PPID spoof × 6 parents, process ghosting) |
 | `c2/` | 2 | C2 transport (TCP beacon, WinHTTP beacon) |
 | `persist/` | 3 | Persistence (registry, schtask, startup folder) |
-| `api_resolve/` | 2 | API resolution (DJB2 hash, PEB walk) |
+| `api_resolve/` | 3 | API resolution (DJB2 hash, FNV-1a hash, PEB walk) |
 | `ad/` + `ad_collectors/` | 9 | Active Directory reconnaissance (LDAP-based) |
-| `core/` | varies | Shared utilities |
+| `core/` | 3 | Shared utilities (emit_buffer, run_cmd, file_ops) |
 
 ### Evasion Layers
 
-The evasion selector explores combinations across 8 independent layers:
+The evasion selector explores combinations across 12 independent layers:
 
 | Layer | Options | Examples |
 |---|---|---|
-| **api_resolve** | 6 | direct_import, api_hash_djb2, peb_walk, indirect_syscall |
-| **execution** | 10 | sequential, threaded, fiber, callback_abuse, callback_enumwindows, apc_self |
-| **process** | 9 | standalone, ppid_spoof (explorer/svchost/RuntimeBroker/sihost/taskhostw/dllhost) |
+| **api_resolve** | 7 | direct_import, api_hash_djb2, api_hash_fnv1a, api_hash_crc32, peb_walk, indirect_syscall, loadlibrary |
+| **execution** | 10 | sequential, threaded, fiber, callback_abuse, callback_enumwindows, callback_certenumsystem, callback_copyfile2, callback_enumrestype, apc_self, staged |
+| **process** | 10 | standalone, ppid_spoof (explorer/svchost/RuntimeBroker/sihost/taskhostw/dllhost), dll_sideload, process_hollow, process_ghost |
 | **timing** | 5 | immediate, staged_jitter, deferred, triggered, workday |
 | **data_obfuscation** | 4 | plaintext, xor_encrypt, stack_strings, aes_encrypt |
 | **anti_analysis** | 5 | none, anti_debug, anti_vm, anti_sandbox, full |
-| **exfil** | 16 | tcp_direct, http_post, https_post, winhttp_get, winhttp_api, dns_exfil, dns_txt, smb_write, certutil, bitsadmin, powershell, cscript, mshta, curl (LOLBins) |
+| **etw_method** | 4 | none, memory-patch EtwEventWrite, hwbp EtwEventWrite, hwbp ETW+AMSI (patchless) |
+| **memory_residence** | 2 | native (EXE .text), module_stomp (signed DLL .text — image-backed to VAD scanner) |
+| **stack_presentation** | 2 | honest (real return addresses), ret_spoof (return addresses in legitimate DLLs) |
+| **sleep_mode** | 4 | basic, jitter, XOR-encrypt buffers, Ekko ROP (encrypt + PAGE_NOACCESS during sleep) |
+| **exfil** | 16 | tcp_direct, http_post, https_post, winhttp_get, winhttp_api, dns_exfil, dns_txt, smb_write, certutil, bitsadmin, powershell, cscript, mshta, curl (LOLBins), http_get_chunks, named_pipe |
 | **persistence** | 5 | none, registry_run, scheduled_task, startup_folder, service |
 
-**Base evasion: 6 × 10 × 9 × 5 × 4 × 5 × 16 × 5 = 4,320,000 combinations**
+**Base evasion: 7 × 10 × 10 × 5 × 4 × 5 × 4 × 2 × 2 × 4 × 16 × 5 = 358,400,000 combinations**
 
 Per-type totals (base × type-specific multipliers):
 
 | Type | Multiplier | Total Variants |
 |---|---|---|
-| **Infostealer** | 20 collectors (6 with LOLBin/API variants, each on/off) | **~51.6 trillion** |
-| **Backdoor** | 2 C2 transports × 9 cmd handlers (4 with LOLBin/API variants) | **~22.4 billion** |
-| **AD Recon** | 63 collector subsets (6 modules, any non-empty combination) | **~272 million** |
-| **Keylogger** | 2 capture methods (polling, hook) | **~8.6 million** |
+| **Infostealer** | 30 collectors (6 with LOLBin/API variants, each on/off) | **~58.7 quadrillion** |
+| **Backdoor** | 2 C2 transports × 13 cmd handlers (5 with LOLBin/API variants) | **~5.9 trillion** |
+| **AD Recon** | 63 collector subsets (6 modules, any non-empty combination) | **~1.3 trillion** |
+| **Keylogger** | 2 capture methods (polling, hook) | **~8.6 billion** |
 
 ### Recipes
 
@@ -158,12 +162,26 @@ Per-type totals (base × type-specific multipliers):
 The evasion selector runs a tiered loop:
 
 ```
-Tier 1: Algorithmic (5 runs)    — systematic layer swapping, zero LLM cost
-Tier 2: Local LLM (3 runs)     — local model picks creative combinations
-Tier 3: Cloud LLM (2 runs)     — cloud model for novel approaches
+Tier 1: Strategy Archetypes (5 runs) — each run is a fundamentally different evasion
+                                        strategy, not a tweak of the last one. 5 pre-ranked
+                                        strategies per malware type, ordered by success
+                                        probability. Maximum behavioral variance between runs.
+Tier 2: Local LLM (3 runs)          — local model reads detection output and picks
+                                        targeted layer changes.
+Tier 3: Cloud LLM (2 runs)          — cloud model for novel approaches.
 ```
 
 Each run: assemble -> obfuscate -> compile -> deploy -> execute -> validate against full detection stack. First success exits. Progress bars show real-time tier status.
+
+Source-level obfuscation pipeline (applied before compilation):
+- Polymorphic variable renaming + junk code blocks
+- Control-flow junk insertion (opaque predicates + dead API branches)
+- String literal XOR encryption with per-build random keys
+- API call obfuscation (optional, heavy/max levels)
+
+Post-compile transforms applied to every binary:
+- PE timestamp stomping (random date 2020-2023)
+- Section name randomization (defeats `.text`/`.data` YARA rules)
 
 ---
 
@@ -286,7 +304,7 @@ curl -X POST localhost:7070/api/edr/manage/preset \
 
 ### Chunk Tab
 - Recipe selection from 54 pre-built recipes
-- Per-layer evasion customization (8 layers, dropdowns)
+- Per-layer evasion customization (12 layers, dropdowns)
 - Live EDR toggle switches (Defender/Sysmon/Wazuh)
 - Hybrid evasion loop with per-tier progress bars
 - Real-time compilation and detection output

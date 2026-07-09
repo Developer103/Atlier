@@ -175,6 +175,7 @@ async def _run_subprocess(job_id: str, cmd: list[str], env_extra: dict = None) -
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(FRAMEWORK_ROOT),
             env=env,
+            start_new_session=True,
         )
         job["proc"] = proc
 
@@ -185,6 +186,8 @@ async def _run_subprocess(job_id: str, cmd: list[str], env_extra: dict = None) -
                 await q.put(("log", line))
 
         await proc.wait()
+        if job["status"] == "killed":
+            return
         job["exit_code"] = proc.returncode
         job["status"] = "success" if proc.returncode == 0 else "failed"
 
@@ -263,17 +266,29 @@ async def handle_get_job(request: web.Request) -> web.Response:
 
 
 async def handle_kill_job(request: web.Request) -> web.Response:
+    import os, signal
     job_id = request.match_info["job_id"]
     job = jobs.get(job_id)
     if not job:
         raise web.HTTPNotFound()
     if job.get("proc") and job["status"] == "running":
+        proc = job["proc"]
         try:
-            job["proc"].terminate()
-        except ProcessLookupError:
-            pass
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+        except (ProcessLookupError, OSError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
         job["paused"] = False
-    return web.json_response({"ok": True})
+        job["status"] = "killed"
+        job["exit_code"] = -15
+        msg = f"[PORTAL] Job {job_id} killed by user"
+        job["output"].append(msg)
+        for q in list(job["listeners"]):
+            await q.put(("log", msg))
+            await q.put(("done", "killed"))
+    return web.json_response({"ok": True, "status": "killed"})
 
 
 async def handle_pause_job(request: web.Request) -> web.Response:
@@ -1169,7 +1184,8 @@ async def handle_c2_start(request: web.Request) -> web.Response:
     data = await request.json() if request.content_length else {}
     port = int(data.get("port", 9001))
     host = data.get("host", "0.0.0.0")
-    ok = await c2_listener.start(port=port, host=host)
+    is_test_run = bool(data.get("is_test_run", False))
+    ok = await c2_listener.start(port=port, host=host, is_test_run=is_test_run)
     return web.json_response({"ok": ok, **c2_listener.status()})
 
 
@@ -1182,8 +1198,18 @@ async def handle_c2_data(request: web.Request) -> web.Response:
     filename = request.match_info["filename"]
     if "/" in filename or ".." in filename:
         raise web.HTTPBadRequest()
-    filepath = RESULTS_DIR / "c2_data" / filename
-    if not filepath.exists() or not filename.startswith("c2_received_"):
+    if not filename.startswith("c2_received_"):
+        raise web.HTTPNotFound()
+    c2_root = RESULTS_DIR / "c2_data"
+    filepath = c2_root / filename
+    if not filepath.exists():
+        for session_dir in sorted(c2_root.iterdir(), reverse=True):
+            if session_dir.is_dir():
+                candidate = session_dir / filename
+                if candidate.exists():
+                    filepath = candidate
+                    break
+    if not filepath.exists():
         raise web.HTTPNotFound()
     content = filepath.read_bytes()
     try:

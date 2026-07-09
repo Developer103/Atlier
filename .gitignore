@@ -1,10 +1,6 @@
 # Generated outputs
-results/malware_source.c
-results/malware_source.exe
-results/pipeline_report.txt
-results/deploy_and_test.py
-results/c2_data/
-results/chunk_*/
+results/*
+!results/.gitkeep
 
 # Logs
 logs/

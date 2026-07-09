@@ -1,7 +1,7 @@
 os_platform: windows
 os_version: windows-11
-os_details: 'Windows 11 23H2, x86_64, standard corporate workstation'
-malware_type: keylogger
+os_details: Windows 11 23H2, x86_64, standard corporate workstation
+malware_type: ransomware
 source_language: c
 output_format: exe
 c2_address: 10.0.2.2
@@ -23,13 +23,6 @@ custom_gates:
 - ''
 - no console window
 notes: null
-behavior_spec: >
-  Keylogger with ZERO child process spawning — all collection via Win32 API only.
-  Capture keystrokes using GetAsyncKeyState polling (10ms interval, NOT hooks).
-  Collect system info: GetComputerNameA, GetUserNameA, GetVersionExA, GetAdaptersAddresses.
-  Collect running processes: CreateToolhelp32Snapshot + Process32First/Next.
-  Exfiltrate via raw TCP socket (WSAStartup/connect/send) to C2 server.
-  NEVER use cmd.exe, curl.exe, tasklist.exe, powershell, netsh, or ANY LOLBin.
-  Do NOT collect WiFi passwords (requires netsh LOLBin, EDR-detected).
-  FreeConsole() at start, behavioral pacing, decoy API calls for evasion.
-  Must evade Elastic Defend detection rules (process tree analysis).
+behavior_spec: use dummy addresses if you want to add payment option, make it obvious
+  that the machine is encrypted. Our permissions are user-level in the beginning.
+  Don't try to priv esc or exploit vulnerabilities.

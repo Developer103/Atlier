@@ -527,36 +527,6 @@
     },
     {
       "config": {
-        "api_resolve": "api_hash_djb2",
-        "execution": "callback_abuse",
-        "process": "ppid_spoof",
-        "timing": "staged_jitter",
-        "data_obfuscation": "xor_encrypt",
-        "anti_analysis": "anti_vm",
-        "exfil": "http_post",
-        "persistence": "registry_run"
-      },
-      "detected": false,
-      "detection_text": "",
-      "success": false
-    },
-    {
-      "config": {
-        "api_resolve": "api_hash_djb2",
-        "execution": "callback_abuse",
-        "process": "ppid_spoof",
-        "timing": "staged_jitter",
-        "data_obfuscation": "xor_encrypt",
-        "anti_analysis": "anti_vm",
-        "exfil": "http_post",
-        "persistence": "registry_run"
-      },
-      "detected": false,
-      "detection_text": "",
-      "success": false
-    },
-    {
-      "config": {
         "api_resolve": "direct_import",
         "execution": "sequential",
         "process": "standalone",
@@ -743,6 +713,44 @@
         "timing": "immediate",
         "data_obfuscation": "plaintext",
         "anti_analysis": "none",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": true
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "etw_method": "patch",
+        "memory_residence": "native",
+        "stack_presentation": "honest",
+        "sleep_mode": "basic",
+        "exfil": "tcp_direct",
+        "persistence": "none"
+      },
+      "detected": false,
+      "detection_text": "",
+      "success": true
+    },
+    {
+      "config": {
+        "api_resolve": "direct_import",
+        "execution": "sequential",
+        "process": "standalone",
+        "timing": "immediate",
+        "data_obfuscation": "plaintext",
+        "anti_analysis": "none",
+        "etw_method": "patch",
+        "memory_residence": "native",
+        "stack_presentation": "honest",
+        "sleep_mode": "basic",
         "exfil": "tcp_direct",
         "persistence": "none"
       },
@@ -920,6 +928,34 @@
       "timing": "immediate",
       "data_obfuscation": "plaintext",
       "anti_analysis": "none",
+      "exfil": "tcp_direct",
+      "persistence": "none"
+    },
+    {
+      "api_resolve": "direct_import",
+      "execution": "sequential",
+      "process": "standalone",
+      "timing": "immediate",
+      "data_obfuscation": "plaintext",
+      "anti_analysis": "none",
+      "etw_method": "patch",
+      "memory_residence": "native",
+      "stack_presentation": "honest",
+      "sleep_mode": "basic",
+      "exfil": "tcp_direct",
+      "persistence": "none"
+    },
+    {
+      "api_resolve": "direct_import",
+      "execution": "sequential",
+      "process": "standalone",
+      "timing": "immediate",
+      "data_obfuscation": "plaintext",
+      "anti_analysis": "none",
+      "etw_method": "patch",
+      "memory_residence": "native",
+      "stack_presentation": "honest",
+      "sleep_mode": "basic",
       "exfil": "tcp_direct",
       "persistence": "none"
     }

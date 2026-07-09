@@ -26,6 +26,7 @@ if _FRAMEWORK_ROOT not in sys.path:
 from evasion_passes import (
     _encrypt_string_literals,
     _inject_anti_debug,
+    _inject_control_flow_junk,
     _inject_seh_in_main,
     _mutate_source,
     _obfuscate_api_calls,
@@ -55,6 +56,9 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
 
     # 2. Polymorphic mutation — rename local vars, inject junk blocks, split ints
     source = _mutate_source(source, os_platform="windows")
+
+    # 2b. Control-flow junk — bogus branches with opaque predicates
+    source = _inject_control_flow_junk(source)
 
     if level in ("heavy", "max"):
 

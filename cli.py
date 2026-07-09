@@ -457,7 +457,7 @@ async def cmd_chunk(args) -> int:
         print(format_selection_report(config))
         print()
 
-        malware_type = getattr(args, "type", "infostealer") or "infostealer"
+        malware_type = getattr(args, "type", None) or "infostealer"
         recipe_yaml = config_to_recipe(config, malware_type=malware_type)
 
         recipe_path = output_dir / "adaptive_recipe.yaml"
@@ -484,7 +484,15 @@ async def cmd_chunk(args) -> int:
     import shutil
     import time
 
-    malware_type = getattr(args, "type", "infostealer") or "infostealer"
+    malware_type = getattr(args, "type", None) or None
+    if not malware_type:
+        recipe_stem = recipe_path.stem if recipe_path else ""
+        for t in ("infostealer", "keylogger", "backdoor", "ad_recon"):
+            if recipe_stem.startswith(t):
+                malware_type = t
+                break
+        if not malware_type:
+            malware_type = "infostealer"
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     pkg_dir = output_dir / f"chunk_{malware_type}_{timestamp}"
     pkg_dir.mkdir(parents=True, exist_ok=True)
@@ -855,7 +863,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     chunk_parser.add_argument("--recipe", default="ad_recon_default", help="Recipe name (default: ad_recon_default)")
     chunk_parser.add_argument("--adaptive", action="store_true", help="Use evasion_selector to pick layers adaptively")
-    chunk_parser.add_argument("--type", default="infostealer", help="Malware type for adaptive mode (default: infostealer)")
+    chunk_parser.add_argument("--type", default=None, help="Malware type (auto-detected from recipe name if not set)")
     chunk_parser.add_argument("--detection", default="", help="Detection feedback for adaptive mode (e.g. 'Trojan:Win32/Stealer')")
     chunk_parser.add_argument("--compile", action="store_true", help="Also compile with MinGW")
     chunk_parser.add_argument("--test", action="store_true", help="Deploy and test on VM (implies --compile)")

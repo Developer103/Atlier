@@ -1,6 +1,0 @@
-type: keylogger
-recipe: keylogger.yaml
-obfuscation: heavy
-timestamp: 20260703_143002
-source_chars: 21322
-binary_size: 276115

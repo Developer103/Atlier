@@ -274,6 +274,68 @@ def _mutate_source(source: str, os_platform: str = "windows") -> str:
     return source
 
 
+def _inject_control_flow_junk(source: str) -> str:
+    """Insert bogus conditional branches that are always false but disrupt disassembly.
+
+    Creates real branch points in the CFG with dead code that references actual
+    Windows APIs. Conditions are always false but require analysis to prove,
+    defeating pattern-matching disassemblers and ML CFG classifiers.
+    """
+    import random
+
+    rng = random.Random()
+
+    # Opaque predicates — conditions that are always false
+    _PREDICATES = [
+        "(GetTickCount() == 0)",
+        "((GetCurrentProcessId() & 0xFFFF0000) == 0xFFFF0001)",
+        "(sizeof(void*) > 16)",
+        "((GetTickCount() ^ GetTickCount()) != 0)",
+        "(GetCurrentThreadId() == 0)",
+        "((DWORD_PTR)GetModuleHandleA(NULL) == 1)",
+    ]
+
+    # Dead code blocks — reference real APIs but never execute
+    _DEAD_BLOCKS = [
+        'VirtualAlloc(NULL, 0x1000, MEM_COMMIT, PAGE_READWRITE); ExitProcess(99);',
+        'CreateFileA("NUL", GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL); ExitProcess(99);',
+        'GetEnvironmentVariableA("COMPUTERNAME", NULL, 0); Sleep(0xFFFFFFFF);',
+        'LoadLibraryA("advapi32.dll"); ExitProcess(99);',
+        'SetLastError(0); GetLastError(); ExitProcess(99);',
+        'HeapAlloc(GetProcessHeap(), 0, 1); ExitProcess(99);',
+    ]
+
+    lines = source.split('\n')
+    insertions = []
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        # Insert after function-call statements (ending with ');')
+        if (stripped.endswith(');') and not stripped.startswith('//')
+                and not stripped.startswith('#') and not stripped.startswith('typedef')
+                and not stripped.startswith('static') and 'return' not in stripped
+                and '=' not in stripped):
+            if rng.random() < 0.06:  # ~6% of qualifying lines
+                indent = len(line) - len(line.lstrip())
+                pad = ' ' * indent
+                pred = rng.choice(_PREDICATES)
+                dead = rng.choice(_DEAD_BLOCKS)
+                uid = rng.randint(10000, 99999)
+                block = (
+                    f"{pad}{{ volatile int _cf{uid} = {pred}; "
+                    f"if (_cf{uid}) {{ {dead} }} }}"
+                )
+                insertions.append((idx + 1, block))
+
+    for offset, (idx, block) in enumerate(insertions):
+        lines.insert(idx + offset, block)
+
+    if insertions:
+        logger.info("Control-flow junk: %d bogus branches inserted", len(insertions))
+
+    return '\n'.join(lines)
+
+
 def _encrypt_string_literals(source: str) -> str:
     """Replace plaintext string literals with XOR-encrypted byte arrays + runtime decryption.
 

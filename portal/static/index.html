@@ -151,7 +151,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 .job-chip:hover{opacity:.8}
 .job-chip.running{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.08)}
 .job-chip.success{color:var(--accent);border-color:var(--accent);background:rgba(56,139,253,.08)}
-.job-chip.failed,.job-chip.error{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)}
+.job-chip.failed,.job-chip.error,.job-chip.killed{color:var(--red);border-color:var(--red);background:rgba(248,81,73,.08)}
 .job-chip.active{box-shadow:0 0 0 2px rgba(56,139,253,.25)}
 .jobs-empty{font-size:12px;color:var(--muted)}
 
@@ -994,6 +994,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   if (activeCmd === 'chunk') {
     if (btn.classList.contains('stop') && activeJobId) {
       await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
+      appendLog('');
+      appendLog(`── job ${activeJobId}: killed ──`, 'err');
+      updateChip(activeJobId, 'killed');
+      setRunning(false);
+      setBadge('killed', false);
     } else {
       await chunkBuild();
     }
@@ -1003,6 +1008,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   // Stop running job
   if (btn.classList.contains('stop') && activeJobId) {
     await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
+    appendLog('');
+    appendLog(`── job ${activeJobId}: killed ──`, 'err');
+    updateChip(activeJobId, 'killed');
+    setRunning(false);
+    setBadge('killed', false);
     return;
   }
 
@@ -1117,6 +1127,7 @@ async function loadJob(jobId) {
     appendLog(`── job ${jobId}: ${job.status} ──`, ok ? 'ok' : 'err');
     setRunning(false);
     setBadge(job.status, false);
+    updateChip(jobId, job.status);
     return;
   }
 

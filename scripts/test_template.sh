@@ -144,7 +144,9 @@ else
     if [ -L "$PROJ_DIR/results/latest" ] || [ -d "$PROJ_DIR/results/latest" ]; then
         RESULTS_FILE="$(readlink -f "$PROJ_DIR/results/latest")/exfil_${TIMESTAMP}.bin"
     else
-        RESULTS_FILE="$PROJ_DIR/results/exfil_${TIMESTAMP}.bin"
+        TEST_DIR="$PROJ_DIR/results/test_run_${TIMESTAMP}"
+        mkdir -p "$TEST_DIR"
+        RESULTS_FILE="$TEST_DIR/exfil_${TIMESTAMP}.bin"
     fi
 fi
 cp "$C2_OUT" "$RESULTS_FILE"
