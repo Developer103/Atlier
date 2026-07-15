@@ -25,6 +25,8 @@ collectors:
 exfil: exfil/tcp_direct
 arch: arch/sequential
 
+resources: true
+
 evasion: []
 
 vars:

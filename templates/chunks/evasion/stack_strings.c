@@ -1,6 +1,7 @@
 // chunk: evasion/stack_strings
 // depends: (none)
 // provides: ss_build
+// risk: none
 // note: Stack string builder — constructs strings char-by-char on stack at runtime.
 //       Prevents string literals from appearing in .rdata section (defeats static analysis).
 //       Use ss_build(buf, "literal") macro — expands to per-char assignments at compile time.

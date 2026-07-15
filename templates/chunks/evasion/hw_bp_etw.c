@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: hwbp_etw_init, hwbp_etw_cleanup
 // headers: windows.h
+// risk: medium
 // note: Patchless ETW bypass — hardware breakpoint on EtwEventWrite + VEH returns 0. Uses NtContinue to set DR registers (avoids SetThreadContext ETW-TI event).
 
 #ifndef CHUNK_HW_BP_ETW

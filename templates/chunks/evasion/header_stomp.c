@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: stomp_pe_headers
 // headers: windows.h
+// risk: low
 // note: Zeros own PE headers in memory after init — defeats pe-sieve, malfind, memory scanners looking for MZ/PE signatures.
 
 #ifndef CHUNK_HEADER_STOMP

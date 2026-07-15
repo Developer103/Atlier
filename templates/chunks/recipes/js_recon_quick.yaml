@@ -1,0 +1,23 @@
+name: js_recon_quick
+description: Quick recon-only script — sysinfo, network, processes, security products
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/security_products
+  - collectors/drives
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion: []
+
+vars:
+  DROP_PATH: "%TEMP%\\diag.log"
+  EXFIL_FILENAME: "diag.log"

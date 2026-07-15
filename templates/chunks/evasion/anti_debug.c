@@ -1,7 +1,11 @@
 // chunk: evasion/anti_debug
 // depends: (none)
 // provides: check_debugger
+// risk: high
 // note: multi-method debugger detection — exits if analysis environment detected
+// WARNING: IsDebuggerPresent and CheckRemoteDebuggerPresent are KNOWN malware
+//   indicators that EDRs specifically flag. Using this chunk increases detection
+//   probability. Only include when anti-analysis is explicitly required.
 
 #ifndef CHUNK_ANTI_DEBUG
 #define CHUNK_ANTI_DEBUG

@@ -1,0 +1,405 @@
+<title>CrowdStrike Falcon — Detection vs Countermeasures</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-card: #161b22;
+    --bg-card-alt: #1c2230;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --text-bright: #e6edf3;
+    --threat: #e63946;
+    --threat-dim: rgba(230,57,70,0.15);
+    --proven: #2ec4b6;
+    --proven-dim: rgba(46,196,182,0.12);
+    --partial: #e9c46a;
+    --partial-dim: rgba(233,196,106,0.12);
+    --theoretical: #8d99ae;
+    --theoretical-dim: rgba(141,153,174,0.12);
+    --accent: #4895ef;
+    --mono: 'Menlo','Monaco','Cascadia Mono','Consolas','Liberation Mono',monospace;
+    --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media(prefers-color-scheme:light){:root{
+    --bg:#f5f5f3;--bg-card:#fff;--bg-card-alt:#f0eeeb;--border:#d0cdc7;
+    --text:#24292f;--text-dim:#57606a;--text-bright:#1b1f23;
+    --threat:#c1121f;--threat-dim:rgba(193,18,31,0.08);
+    --proven:#0d9488;--proven-dim:rgba(13,148,136,0.08);
+    --partial:#b8860b;--partial-dim:rgba(184,134,11,0.08);
+    --theoretical:#64748b;--theoretical-dim:rgba(100,116,139,0.08);
+    --accent:#2563eb;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0f1117;--bg-card:#161b22;--bg-card-alt:#1c2230;--border:#30363d;
+    --text:#c9d1d9;--text-dim:#8b949e;--text-bright:#e6edf3;
+    --threat:#e63946;--threat-dim:rgba(230,57,70,0.15);
+    --proven:#2ec4b6;--proven-dim:rgba(46,196,182,0.12);
+    --partial:#e9c46a;--partial-dim:rgba(233,196,106,0.12);
+    --theoretical:#8d99ae;--theoretical-dim:rgba(141,153,174,0.12);
+    --accent:#4895ef;
+  }
+  :root[data-theme="light"]{
+    --bg:#f5f5f3;--bg-card:#fff;--bg-card-alt:#f0eeeb;--border:#d0cdc7;
+    --text:#24292f;--text-dim:#57606a;--text-bright:#1b1f23;
+    --threat:#c1121f;--threat-dim:rgba(193,18,31,0.08);
+    --proven:#0d9488;--proven-dim:rgba(13,148,136,0.08);
+    --partial:#b8860b;--partial-dim:rgba(184,134,11,0.08);
+    --theoretical:#64748b;--theoretical-dim:rgba(100,116,139,0.08);
+    --accent:#2563eb;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.5;padding:2rem 1rem}
+  .wrap{max-width:1100px;margin:0 auto}
+
+  h1{font-family:var(--mono);font-size:1.4rem;color:var(--text-bright);letter-spacing:-0.02em;margin-bottom:0.25rem}
+  .subtitle{color:var(--text-dim);font-size:0.85rem;margin-bottom:2rem;font-family:var(--mono)}
+
+  /* Stats banner */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:2.5rem}
+  .stat{background:var(--bg-card);padding:1rem 1.2rem;text-align:center}
+  .stat-val{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--text-bright);line-height:1.2}
+  .stat-val.green{color:var(--proven)} .stat-val.amber{color:var(--partial)} .stat-val.red{color:var(--threat)}
+  .stat-label{font-size:0.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.2rem}
+
+  /* Layer cards */
+  .layer{border:1px solid var(--border);border-radius:8px;margin-bottom:1.2rem;overflow:hidden}
+  .layer-head{display:flex;align-items:center;gap:0.75rem;padding:0.9rem 1.2rem;background:var(--bg-card);cursor:pointer;user-select:none}
+  .layer-head:hover{background:var(--bg-card-alt)}
+  .layer-num{font-family:var(--mono);font-size:0.7rem;color:var(--threat);background:var(--threat-dim);padding:0.2rem 0.55rem;border-radius:4px;font-weight:600;white-space:nowrap}
+  .layer-title{font-family:var(--mono);font-size:0.95rem;font-weight:600;color:var(--text-bright);flex:1}
+  .layer-status{font-family:var(--mono);font-size:0.7rem;padding:0.2rem 0.6rem;border-radius:4px;font-weight:600;white-space:nowrap}
+  .layer-status.proven{color:var(--proven);background:var(--proven-dim)}
+  .layer-status.partial{color:var(--partial);background:var(--partial-dim)}
+  .layer-status.theoretical{color:var(--theoretical);background:var(--theoretical-dim)}
+  .layer-arrow{color:var(--text-dim);font-size:0.8rem;transition:transform 0.2s}
+  .layer.open .layer-arrow{transform:rotate(90deg)}
+
+  .layer-body{display:none;border-top:1px solid var(--border);padding:1.2rem}
+  .layer.open .layer-body{display:block}
+
+  .layer-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+  @media(max-width:700px){.layer-grid{grid-template-columns:1fr}}
+
+  .layer-col h3{font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.6rem;padding-bottom:0.4rem;border-bottom:1px solid var(--border)}
+  .layer-col h3 .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .det-dot{background:var(--threat)} .ctr-dot{background:var(--proven)}
+
+  .layer-col p{font-size:0.85rem;margin-bottom:0.5rem;line-height:1.6}
+  .layer-col ul{list-style:none;padding:0}
+  .layer-col li{font-size:0.82rem;padding:0.3rem 0;border-bottom:1px solid rgba(128,128,128,0.1);display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem}
+  .layer-col li:last-child{border-bottom:none}
+  .chunk-name{font-family:var(--mono);font-size:0.78rem;color:var(--accent)}
+  .chunk-count{font-family:var(--mono);font-size:0.72rem;color:var(--text-dim);white-space:nowrap}
+
+  /* Recipe matrix */
+  .section-title{font-family:var(--mono);font-size:1.1rem;color:var(--text-bright);margin:2.5rem 0 1rem;letter-spacing:-0.01em}
+  .matrix-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+  table{width:100%;border-collapse:collapse;font-size:0.8rem}
+  th{font-family:var(--mono);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);text-align:left;padding:0.6rem 0.8rem;background:var(--bg-card);border-bottom:1px solid var(--border);position:sticky;top:0}
+  td{padding:0.5rem 0.8rem;border-bottom:1px solid rgba(128,128,128,0.08);font-family:var(--mono);font-size:0.78rem;vertical-align:top}
+  tr:hover td{background:var(--bg-card-alt)}
+  .v-pass{color:var(--proven);font-weight:600} .v-fail{color:var(--threat)} .v-untested{color:var(--text-dim);font-style:italic}
+  .recipe-name{color:var(--text-bright)}
+
+  /* Gap analysis */
+  .gap-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin-bottom:1rem}
+  .gap-card h4{font-family:var(--mono);font-size:0.82rem;color:var(--partial);margin-bottom:0.5rem}
+  .gap-card p{font-size:0.82rem;color:var(--text-dim);line-height:1.6}
+
+  /* FUD estimate */
+  .fud-bar{display:flex;align-items:center;gap:1rem;margin:1rem 0}
+  .fud-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+  .fud-fill{height:100%;border-radius:4px}
+  .fud-label{font-family:var(--mono);font-size:0.78rem;color:var(--text-dim);white-space:nowrap}
+</style>
+
+<div class="wrap">
+  <h1>CrowdStrike Falcon &mdash; Detection vs Countermeasures</h1>
+  <div class="subtitle">malware_gen_framework // 142 recipes &middot; 110 evasion chunks &middot; 51 variant groups &middot; 199 variants</div>
+
+  <!-- Stats banner -->
+  <div class="stats">
+    <div class="stat"><div class="stat-val">6</div><div class="stat-label">CS Detection Layers</div></div>
+    <div class="stat"><div class="stat-val green">110</div><div class="stat-label">Evasion Chunks</div></div>
+    <div class="stat"><div class="stat-val green">5</div><div class="stat-label">Unique FUD Recipes</div></div>
+    <div class="stat"><div class="stat-val amber">16</div><div class="stat-label">Recipes Tested</div></div>
+    <div class="stat"><div class="stat-val">142</div><div class="stat-label">Total Recipes</div></div>
+    <div class="stat"><div class="stat-val red">~2M</div><div class="stat-label">Variant Combinations</div></div>
+  </div>
+
+  <!-- Layer 1: Static ML -->
+  <div class="layer open">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 1</span>
+      <span class="layer-title">Static ML Analysis</span>
+      <span class="layer-status proven">PROVEN</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>PE structure analysis, import table inspection, entropy measurement, Rich header fingerprinting, resource section analysis, file reputation (cloud ML first-seen scoring).</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Runs pre-execution. Flags high-entropy binaries, suspicious import combinations, known toolchain signatures (Cobalt Strike, Metasploit, MinGW default profiles).</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">resource_spoof</span><span class="chunk-count">50 profiles</span></li>
+            <li><span class="chunk-name">entropy_pad</span><span class="chunk-count">dict words</span></li>
+            <li><span class="chunk-name">rich_header</span><span class="chunk-count">MSVC spoof</span></li>
+            <li><span class="chunk-name">timestomp</span><span class="chunk-count">rand date</span></li>
+            <li><span class="chunk-name">checksum_spoof</span><span class="chunk-count">valid PE csum</span></li>
+            <li><span class="chunk-name">iat_pad</span><span class="chunk-count">3 variants</span></li>
+            <li><span class="chunk-name">section_merge</span><span class="chunk-count">std names</span></li>
+            <li><span class="chunk-name">pe_metadata</span><span class="chunk-count">6 variants</span></li>
+            <li><span class="chunk-name">debug_dir_strip</span><span class="chunk-count">remove PDB</span></li>
+            <li><span class="chunk-name">api_resolve</span><span class="chunk-count">7 variants (REQUIRED)</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--proven)">~151K static-distinct combinations. resources + manifest is the proven minimum for PE evasion.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 2: Userland Hooks -->
+  <div class="layer">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 2</span>
+      <span class="layer-title">Userland API Hooks</span>
+      <span class="layer-status proven">PROVEN</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>Inline hooks on ntdll.dll NT* functions. Replaces <code style="font-size:0.78rem">mov eax, &lt;SSN&gt;</code> with <code style="font-size:0.78rem">jmp</code> to Falcon DLL. SSNs scrambled &mdash; functions reordered so hardcoded SSNs fail.</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Hook chain: jmp &rarr; push rcx &rarr; indirect jump &rarr; XOR obfuscation &rarr; loop adding 0x45 per register &rarr; final jump to r10+0x28. Monitors: NtAllocateVirtualMemory, NtWriteVirtualMemory, NtCreateThreadEx, NtMapViewOfSection, etc.</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">indirect_syscall</span><span class="chunk-count">SSN + jmp ntdll</span></li>
+            <li><span class="chunk-name">hells_gate</span><span class="chunk-count">runtime SSN</span></li>
+            <li><span class="chunk-name">halos_gate</span><span class="chunk-count">neighbor SSN</span></li>
+            <li><span class="chunk-name">tartarus_gate</span><span class="chunk-count">hooked SSN</span></li>
+            <li><span class="chunk-name">recycled_gate</span><span class="chunk-count">clean stub</span></li>
+            <li><span class="chunk-name">syscall_trampoline</span><span class="chunk-count">ntdll gadget</span></li>
+            <li><span class="chunk-name">syscall_knowndlls</span><span class="chunk-count">KnownDlls map</span></li>
+            <li><span class="chunk-name">syscall_win32u</span><span class="chunk-count">win32u.dll</span></li>
+            <li><span class="chunk-name">manual_syscall_stub</span><span class="chunk-count">hand-rolled</span></li>
+            <li><span class="chunk-name">syswhispers3</span><span class="chunk-count">generated</span></li>
+          </ul>
+          <ul style="margin-top:0.6rem;border-top:1px solid var(--border);padding-top:0.5rem">
+            <li><span class="chunk-name">unhook_ntdll</span><span class="chunk-count">5 methods</span></li>
+            <li><span class="chunk-name">amsi_hwbp</span><span class="chunk-count">2 AMSI bypass</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--proven)">10 syscall gates &times; 5 unhook methods = 100 combinations. indirect_syscall + hells_gate proven against CS.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 3: Kernel Callbacks -->
+  <div class="layer">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 3</span>
+      <span class="layer-title">Kernel Callbacks</span>
+      <span class="layer-status partial">PARTIALLY PROVEN</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>csagent.sys registers kernel notification callbacks: PsSetCreateProcessNotifyRoutine, PsSetCreateThreadNotifyRoutine, PsSetLoadImageNotifyRoutine, registry callbacks, MiniFilter callbacks.</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Cannot be bypassed from userland. Sees every process creation, thread creation, image load, and registry operation regardless of userland hooks. The definitive telemetry source.</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">process_masquerade</span><span class="chunk-count">fake parent</span></li>
+            <li><span class="chunk-name">herpaderp</span><span class="chunk-count">overwrite on-disk</span></li>
+            <li><span class="chunk-name">phantom_dll</span><span class="chunk-count">delete-pending</span></li>
+            <li><span class="chunk-name">process_ghost</span><span class="chunk-count">ghost process</span></li>
+            <li><span class="chunk-name">ppid_spoof</span><span class="chunk-count">6 parents</span></li>
+            <li><span class="chunk-name">process_doppelgang</span><span class="chunk-count">TxF phantom</span></li>
+            <li><span class="chunk-name">txf_phantom</span><span class="chunk-count">NTFS txn</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--partial)">18 combinations. PPID spoofing + process masquerade proven. Kernel callback removal requires BYOVD (not in scope for userland-only payloads).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 4: Behavioral IOAs -->
+  <div class="layer">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 4</span>
+      <span class="layer-title">Behavioral IOAs</span>
+      <span class="layer-status proven">PROVEN</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>Correlated pattern matching across API call sequences, process trees, memory operations, thread contexts, and timing behavior. IOAs (Indicators of Attack) fire on behavioral patterns, not signatures.</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Examples: suspicious API sequence (VirtualAlloc &rarr; WriteProcessMemory &rarr; CreateRemoteThread), abnormal thread call stacks, process hollowing patterns, credential access API chains, beaconing intervals.</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">sleep_obfuscation</span><span class="chunk-count">8 variants</span></li>
+            <li><span class="chunk-name">stack_spoofing</span><span class="chunk-count">7 variants</span></li>
+            <li><span class="chunk-name">etw_bypass</span><span class="chunk-count">6 variants</span></li>
+            <li><span class="chunk-name">anti_debug</span><span class="chunk-count">6 variants</span></li>
+            <li><span class="chunk-name">anti_sandbox</span><span class="chunk-count">7 variants</span></li>
+            <li><span class="chunk-name">execution_timing</span><span class="chunk-count">3 variants</span></li>
+            <li><span class="chunk-name">injection</span><span class="chunk-count">12 methods</span></li>
+            <li><span class="chunk-name">control_flow</span><span class="chunk-count">4 variants</span></li>
+            <li><span class="chunk-name">memory_evasion</span><span class="chunk-count">4 variants</span></li>
+            <li><span class="chunk-name">env_keying</span><span class="chunk-count">4 variants</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--proven)">~1.78M behavioral-distinct combos. sleep_ekko, stack_spoof, etw_patch all proven against CS.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 5: Cloud ML -->
+  <div class="layer">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 5</span>
+      <span class="layer-title">Cloud ML &amp; Reputation</span>
+      <span class="layer-status proven">PROVEN</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>File uploaded to CrowdStrike cloud for ML scoring: reputation check (first-seen, prevalence), behavioral model inference, threat intelligence correlation. Verdict can override local static pass.</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Cloud ML is the hardest layer &mdash; it sees global patterns across all CrowdStrike customers. A binary that looks benign locally can be flagged by cloud if its structure matches known malware families.</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">api_resolve</span><span class="chunk-count">REQUIRED &mdash; 7 hash algos</span></li>
+            <li><span class="chunk-name">resources + manifest</span><span class="chunk-count">REQUIRED combo</span></li>
+            <li><span class="chunk-name">4 output formats</span><span class="chunk-count">PE, DLL, CPL, JScript</span></li>
+            <li><span class="chunk-name">JScript bypass</span><span class="chunk-count">COM + WMI + no PE</span></li>
+            <li><span class="chunk-name">resource_spoof</span><span class="chunk-count">50 app profiles</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--proven)">resources + manifest is the PROVEN recipe for passing cloud ML. Without api_resolve, PE imports alone trigger ML. JScript bypasses PE analysis entirely &mdash; 13/17 PASS results are JScript.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 6: Memory Scanning -->
+  <div class="layer">
+    <div class="layer-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="layer-num">LAYER 6</span>
+      <span class="layer-title">Memory Scanning (Intel TDT)</span>
+      <span class="layer-status theoretical">THEORETICAL</span>
+      <span class="layer-arrow">&#9654;</span>
+    </div>
+    <div class="layer-body">
+      <div class="layer-grid">
+        <div class="layer-col">
+          <h3><span class="dot det-dot"></span>CS Detection</h3>
+          <p>Intel Threat Detection Technology (TDT) Accelerated Memory Scanning offloads PE header and injection artifact scans to the CPU's integrated GPU. Periodic scans of process memory for known patterns.</p>
+          <p style="color:var(--text-dim);font-size:0.78rem;margin-top:0.5rem">Scans for: unmapped PE headers in memory, reflective DLL injection artifacts, shellcode patterns, known beacon memory layouts. Hardware-accelerated &mdash; minimal CPU overhead.</p>
+        </div>
+        <div class="layer-col">
+          <h3><span class="dot ctr-dot"></span>Our Countermeasures</h3>
+          <ul>
+            <li><span class="chunk-name">header_stomp</span><span class="chunk-count">zero PE header</span></li>
+            <li><span class="chunk-name">module_stomp</span><span class="chunk-count">overwrite legit</span></li>
+            <li><span class="chunk-name">module_overload</span><span class="chunk-count">hollowed module</span></li>
+            <li><span class="chunk-name">sleep_heap_encrypt</span><span class="chunk-count">encrypt at rest</span></li>
+            <li><span class="chunk-name">sleep_ekko</span><span class="chunk-count">ROP encrypt</span></li>
+            <li><span class="chunk-name">sleep_morpheus</span><span class="chunk-count">metamorphic</span></li>
+          </ul>
+          <p style="font-size:0.78rem;margin-top:0.6rem;color:var(--theoretical)">2&ndash;8 options available. NOT tested against Intel TDT specifically. Sleep encryption (Ekko) is proven against behavioral layer but TDT memory scans are a separate detection surface.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FUD Assessment -->
+  <h2 class="section-title">FUD Potential Assessment</h2>
+  <div class="gap-card">
+    <h4>Variant Space</h4>
+    <p>51 variant groups &times; 199 total variants = ~2M detection-distinct combinations across all layers. Each swap changes the binary's behavioral and static fingerprint enough to invalidate prior signatures.</p>
+    <div class="fud-bar">
+      <span class="fud-label">Tested</span>
+      <div class="fud-track"><div class="fud-fill" style="width:0.0008%;background:var(--proven)"></div></div>
+      <span class="fud-label">16 / ~2M</span>
+    </div>
+    <div class="fud-bar">
+      <span class="fud-label">Live pass rate</span>
+      <div class="fud-track"><div class="fud-fill" style="width:31%;background:var(--proven)"></div></div>
+      <span class="fud-label">5 / 16 unique (31%)</span>
+    </div>
+    <p style="margin-top:0.5rem">PE format: 4 PASS (resources + api_resolve required). JScript: 13 PASS across 3 recipes. Backdoor HTTP: 1 PASS. The 19 FAIL_NO_C2 results are NOT detection failures &mdash; the binary survived CS but C2 infrastructure failed.</p>
+  </div>
+
+  <!-- Recipe Test Matrix -->
+  <h2 class="section-title">Recipe Test Matrix (CS Falcon)</h2>
+  <div class="matrix-wrap">
+    <table>
+      <thead>
+        <tr><th>Recipe</th><th>Format</th><th>Verdict</th><th>Evasion Used</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="recipe-name">infostealer_full</td><td>PE (resources)</td><td class="v-pass">PASS</td><td>api_resolve, resources, manifest, entropy_pad, rich_header</td><td>Proven combo</td></tr>
+        <tr><td class="recipe-name">keylogger</td><td>PE (resources)</td><td class="v-pass">PASS</td><td>api_resolve, resources, manifest, GetAsyncKeyState</td><td>3-DLL IAT + LOLBin exfil</td></tr>
+        <tr><td class="recipe-name">backdoor_http_test</td><td>PE (resources)</td><td class="v-pass">PASS</td><td>api_resolve, resources, manifest</td><td>HTTP C2</td></tr>
+        <tr><td class="recipe-name">js_infostealer_full</td><td>JScript</td><td class="v-pass">PASS &times;7</td><td>COM objects, WMI, no PE binary</td><td>Most reliable format</td></tr>
+        <tr><td class="recipe-name">js_infostealer_stealth</td><td>JScript</td><td class="v-pass">PASS &times;3</td><td>Anti-analysis, obfuscated strings</td><td>Stealth variant</td></tr>
+        <tr><td class="recipe-name">infostealer_staged</td><td>PE</td><td class="v-fail">FAIL_NO_C2</td><td>Various</td><td>C2 infra issue, not detection</td></tr>
+        <tr><td class="recipe-name">infostealer_sideload</td><td>DLL</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>DLL sideloading via version.dll</td></tr>
+        <tr><td class="recipe-name">infostealer_ppid_svchost</td><td>PE</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>PPID spoofing</td></tr>
+        <tr><td class="recipe-name">infostealer_ghost</td><td>PE</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>Process ghosting</td></tr>
+        <tr><td class="recipe-name">backdoor_ppid_taskhostw</td><td>PE</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>Persistent backdoor + TLV C2</td></tr>
+        <tr><td class="recipe-name">infostealer_dll_rundll</td><td>DLL</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>rundll32 + indirect_syscall</td></tr>
+        <tr><td class="recipe-name">infostealer_cpl</td><td>CPL</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>Control Panel format</td></tr>
+        <tr><td class="recipe-name">infostealer_service</td><td>PE</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>Service registration</td></tr>
+        <tr><td class="recipe-name">keylogger_com_persist</td><td>PE</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>COM persistence</td></tr>
+        <tr><td class="recipe-name">infostealer_sideload_winmm</td><td>DLL</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>winmm.dll sideload</td></tr>
+        <tr><td class="recipe-name">infostealer_rundll</td><td>DLL</td><td class="v-untested">UNTESTED</td><td>&mdash;</td><td>RunPayload export</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Gap Analysis -->
+  <h2 class="section-title">Gap Analysis</h2>
+  <div class="gap-card">
+    <h4>Coverage Gaps</h4>
+    <p><strong>DLL sideloading:</strong> 4 sideload recipes exist but none tested against CS. This is the highest-value untested vector &mdash; signed parent process inherits trust from Falcon.</p>
+    <p style="margin-top:0.4rem"><strong>CPL format:</strong> Control Panel applets (.cpl) executed via control.exe are a less-monitored execution path. Untested.</p>
+    <p style="margin-top:0.4rem"><strong>Memory scanning (TDT):</strong> 6 countermeasures exist but none validated against Intel TDT hardware-accelerated scans specifically.</p>
+    <p style="margin-top:0.4rem"><strong>Kernel callbacks:</strong> PPID spoofing works but kernel-level callback removal requires BYOVD. No BYOVD chain implemented in the framework.</p>
+  </div>
+  <div class="gap-card">
+    <h4>Key Findings</h4>
+    <p><strong>api_resolve is REQUIRED</strong> for all PE formats. Every PE that passes CS uses dynamic API resolution via hash-based lookup. Static imports of sensitive APIs = instant detection.</p>
+    <p style="margin-top:0.4rem"><strong>resources + manifest = ML bypass.</strong> The resource section + embedded manifest combination is what passes CrowdStrike's cloud ML. This is the single most important evasion technique.</p>
+    <p style="margin-top:0.4rem"><strong>JScript is the most reliable format.</strong> 13/17 total PASS results are JScript. No PE analysis, no import table, no entropy measurement. Limited by COM/WMI capabilities.</p>
+    <p style="margin-top:0.4rem"><strong>19 FAIL_NO_C2 are NOT detection failures.</strong> These binaries survived CrowdStrike but the C2 listener had protocol mismatches (HTTP vs TCP) or timing issues. Retesting with correct C2 infrastructure could convert many to PASS.</p>
+  </div>
+
+  <div style="text-align:center;padding:2rem 0 1rem;color:var(--text-dim);font-size:0.72rem;font-family:var(--mono)">
+    malware_gen_framework &middot; last updated 2026-07-14 &middot; 48 test runs &middot; 142 recipes &middot; 110 evasion chunks
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.layer').forEach((el,i) => {
+  if(i > 0) el.classList.remove('open');
+});
+</script>

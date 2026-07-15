@@ -1,0 +1,431 @@
+<title>Algo vs Hermes — Head-to-Head Comparison</title>
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --surface: #1a2332;
+    --surface2: #232f40;
+    --border: #2a3a4e;
+    --text: #e8ecf2;
+    --muted: #6b7a8d;
+    --algo: #ff6b35;
+    --hermes: #00d4aa;
+    --fail: #ff4757;
+    --partial: #ffd43b;
+    --pass: #00d4aa;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface2: #f7f8fa;
+      --border: #d4d8e0;
+      --text: #1a2332;
+      --muted: #6b7a8d;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #f7f8fa;
+    --border: #d4d8e0;
+    --text: #1a2332;
+    --muted: #6b7a8d;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0f1a;
+    --surface: #1a2332;
+    --surface2: #232f40;
+    --border: #2a3a4e;
+    --text: #e8ecf2;
+    --muted: #6b7a8d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+
+  .mono { font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace; }
+  .muted { color: var(--muted); }
+  .algo-color { color: var(--algo); }
+  .hermes-color { color: var(--hermes); }
+  .fail { color: var(--fail); }
+  .partial { color: var(--partial); }
+
+  header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.3rem;
+  }
+  header .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  header .verdict-banner {
+    margin-top: 1rem;
+    padding: 0.6rem 1.2rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.9rem;
+    display: inline-block;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 640px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+  }
+  .card.algo { border-top: 3px solid var(--algo); }
+  .card.hermes { border-top: 3px solid var(--hermes); }
+
+  .card h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--muted); }
+  .stat-row .value { font-family: "JetBrains Mono", monospace; font-weight: 600; }
+
+  .big-number {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .big-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.2rem;
+  }
+  .stat-hero {
+    text-align: center;
+    padding: 0.8rem 0 1rem;
+  }
+
+  .timeline {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+  }
+  .timeline h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.8rem;
+  }
+
+  .tl-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.78rem;
+  }
+  .tl-label {
+    width: 90px;
+    flex-shrink: 0;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-align: right;
+  }
+  .tl-bar-wrap {
+    flex: 1;
+    height: 22px;
+    background: var(--surface2);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+  }
+  .tl-bar {
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    padding-left: 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.65rem;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .tl-tag {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    flex-shrink: 0;
+  }
+  .tag-quarantine { background: var(--fail); color: #fff; }
+  .tag-behavioral { background: var(--partial); color: #000; }
+  .tag-noc2 { background: var(--muted); color: #fff; }
+
+  section.analysis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  section.analysis h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.8rem;
+  }
+  section.analysis h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 1rem 0 0.4rem;
+  }
+  section.analysis h3:first-of-type { margin-top: 0; }
+  section.analysis p, section.analysis li {
+    font-size: 0.82rem;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  section.analysis ul {
+    padding-left: 1.2rem;
+    margin-bottom: 0.5rem;
+  }
+  section.analysis li { margin-bottom: 0.25rem; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-family: "JetBrains Mono", monospace;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+  }
+  .badge-algo { background: var(--algo); color: #fff; }
+  .badge-hermes { background: var(--hermes); color: #000; }
+
+  .moves-list {
+    list-style: none;
+    padding: 0;
+  }
+  .moves-list li {
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.3rem;
+    background: var(--surface2);
+    border-radius: 4px;
+    border-left: 3px solid var(--hermes);
+    font-size: 0.8rem;
+  }
+
+  footer {
+    text-align: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+</style>
+
+<header>
+  <h1>Algorithmic vs Hermes</h1>
+  <p class="subtitle">Head-to-head evasion test against CrowdStrike Falcon &mdash; July 14, 2026</p>
+  <div class="verdict-banner">
+    Both approaches <span class="fail">FAILED</span> &mdash; CrowdStrike behavioral IOAs caught every variant today
+  </div>
+</header>
+
+<div class="grid-2">
+  <div class="card algo">
+    <h2 class="algo-color">Algorithmic</h2>
+    <div class="stat-hero">
+      <div class="big-number algo-color">13</div>
+      <div class="big-label">combos tried</div>
+    </div>
+    <div class="stat-row"><span class="label">Wall time</span><span class="value">462.7s</span></div>
+    <div class="stat-row"><span class="label">Deployments</span><span class="value">9 / 13</span></div>
+    <div class="stat-row"><span class="label">Quarantined</span><span class="value fail">4</span></div>
+    <div class="stat-row"><span class="label">Best C2 data</span><span class="value partial">3,482 B</span></div>
+    <div class="stat-row"><span class="label">Deploy rate</span><span class="value">51s / deploy</span></div>
+    <div class="stat-row"><span class="label">Formats tried</span><span class="value">PE only</span></div>
+    <div class="stat-row"><span class="label">Adaptation</span><span class="value muted">None (fixed tree)</span></div>
+  </div>
+
+  <div class="card hermes">
+    <h2 class="hermes-color">Hermes (LLM)</h2>
+    <div class="stat-hero">
+      <div class="big-number hermes-color">41</div>
+      <div class="big-label">rounds (killed at timeout)</div>
+    </div>
+    <div class="stat-row"><span class="label">Wall time</span><span class="value">549s</span></div>
+    <div class="stat-row"><span class="label">Deployments</span><span class="value">4 / 41</span></div>
+    <div class="stat-row"><span class="label">Quarantined</span><span class="value fail">0</span></div>
+    <div class="stat-row"><span class="label">Best C2 data</span><span class="value partial">14,701 B</span></div>
+    <div class="stat-row"><span class="label">Deploy rate</span><span class="value">137s / deploy</span></div>
+    <div class="stat-row"><span class="label">Formats tried</span><span class="value">JScript + PE</span></div>
+    <div class="stat-row"><span class="label">Adaptation</span><span class="value hermes-color">Active reasoning</span></div>
+  </div>
+</div>
+
+<div class="timeline">
+  <h2>Algo &mdash; Deployment Timeline</h2>
+  <div class="tl-row">
+    <span class="tl-label">#1 11s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:4%;background:var(--fail)">QUARANTINED</div></div>
+    <span class="tl-tag tag-quarantine">Q</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#2 17s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:4%;background:var(--fail)">QUARANTINED</div></div>
+    <span class="tl-tag tag-quarantine">Q</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#3 64s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:22%;background:var(--partial)">3,482 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#4 71s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:4%;background:var(--fail)">QUARANTINED</div></div>
+    <span class="tl-tag tag-quarantine">Q</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#5 116s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:19%;background:var(--partial)">3,030 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#6 164s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:22%;background:var(--partial)">3,460 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#7 210s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:22%;background:var(--partial)">3,460 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#8 217s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:4%;background:var(--fail)">QUARANTINED</div></div>
+    <span class="tl-tag tag-quarantine">Q</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#9 263s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:21%;background:var(--partial)">3,323 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#10 310s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:19%;background:var(--partial)">2,974 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#11 360s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:21%;background:var(--partial)">3,323 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#12 408s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:21%;background:var(--partial)">3,323 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#13 461s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:19%;background:var(--partial)">2,979 B</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+
+  <h2 style="margin-top:1.2rem">Hermes &mdash; Deployment Timeline</h2>
+  <div class="tl-row">
+    <span class="tl-label">#1 R8 54s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:93%;background:var(--hermes)">14,701 B (JScript stealth)</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#2 R23 360s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:19%;background:var(--partial)">2,964 B (PE + heavy obf)</div></div>
+    <span class="tl-tag tag-behavioral">BEH</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#3 R34 424s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:1%;background:var(--muted)">0 B (PE callback_abuse)</div></div>
+    <span class="tl-tag tag-noc2">NO_C2</span>
+  </div>
+  <div class="tl-row">
+    <span class="tl-label">#4 R39 495s</span>
+    <div class="tl-bar-wrap"><div class="tl-bar" style="width:1%;background:var(--muted)">0 B (JScript full, TCP/HTTP mismatch)</div></div>
+    <span class="tl-tag tag-noc2">NO_C2</span>
+  </div>
+</div>
+
+<section class="analysis">
+  <h2>Analysis</h2>
+
+  <h3>Why Both Failed</h3>
+  <p>CrowdStrike's behavioral IOAs are catching all current PE and JScript infostealers. Every binary that survived static detection (~3KB for PE, ~14KB for JScript) was killed mid-execution. CS appears to have updated its behavioral models since the last successful test run.</p>
+
+  <h3>Speed: <span class="badge badge-algo">Algo Wins</span></h3>
+  <p>The algorithmic approach deployed <strong>2.7&times; more binaries per minute</strong> (9 deploys in 462s vs 4 deploys in 549s). It wastes no time on intelligence gathering, recipe study, or debugging &mdash; it just iterates through the decision tree. For problems with a known, finite search space, this is strictly faster.</p>
+
+  <h3>Quality: <span class="badge badge-hermes">Hermes Wins</span></h3>
+  <p>Hermes's best result was <strong>4.2&times; more C2 data</strong> (14,701 vs 3,482 bytes). It achieved this by pivoting to JScript format on its very first deployment &mdash; a format the algo never tried. Hermes also correctly diagnosed that JScript was more evasive than PE and pivoted back to it after PE failed.</p>
+
+  <h3>Hermes Unique Moves</h3>
+  <ul class="moves-list">
+    <li>Consulted knowledge base, identified <code>js_infostealer_stealth</code> as proven against CS</li>
+    <li>Pivoted to JScript format (not in algo's PE-only decision tree)</li>
+    <li>Self-debugged compilation failures caused by <code>randomize=true</code> variant substitution</li>
+    <li>Diagnosed TCP/HTTP protocol mismatch &mdash; was fixing it when killed</li>
+    <li>Read recipe YAML files to understand failure causes</li>
+    <li>Mutated recipes with targeted evasion additions (anti_debug, sleep_jitter)</li>
+    <li>Compared PE vs JScript results quantitatively (2,964 vs 14,701 bytes)</li>
+  </ul>
+
+  <h3>Hermes Overhead</h3>
+  <p>Of 41 rounds, only 4 were actual deployments. The remaining 37 rounds were: scanning (1), strategy (1), knowledge queries (2), listing recipes/chunks (3), reading files (4), creating recipes (3), assembly attempts (3), cleanups (4), and LLM reasoning between tools (16). This 10% deployment efficiency is the core tradeoff of the LLM approach.</p>
+
+  <h3>Verdict</h3>
+  <p>For <strong>well-characterized finite problems</strong> (known evasion combos against a known EDR), algorithmic wins on speed. For <strong>open-ended problems</strong> requiring format pivots, self-debugging, and creative adaptation, Hermes is the only option. The optimal architecture is <strong>hybrid</strong>: use the algorithmic engine for fast iteration through known combos, and escalate to Hermes when the algo exhausts its tree.</p>
+</section>
+
+<footer>
+  Test run: 2026-07-14 &middot; Target: Windows 11 + CrowdStrike Falcon &middot; Results: results/algo_vs_hermes_comparison.json
+</footer>

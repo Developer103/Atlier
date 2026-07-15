@@ -13,6 +13,8 @@ collectors:
   - ad_collectors/ad_computers
   - ad_collectors/ad_ous
 
+resources: true
+
 evasion: []
 arch: arch/ad_recon
 

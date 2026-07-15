@@ -12,6 +12,8 @@ collectors:
   - ad_collectors/ad_groups
   - ad_collectors/ad_computers
 
+resources: true
+
 evasion:
   - evasion/behavioral_pacing
   - evasion/sleep_jitter

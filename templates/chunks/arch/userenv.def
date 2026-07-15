@@ -1,0 +1,18 @@
+; userenv.dll sideload proxy
+; Deploy: place as userenv.dll next to target app
+; Targets: services, GPO tools, many system utilities
+LIBRARY userenv
+EXPORTS
+    CreateEnvironmentBlock = real_userenv.CreateEnvironmentBlock
+    DestroyEnvironmentBlock = real_userenv.DestroyEnvironmentBlock
+    GetUserProfileDirectoryA = real_userenv.GetUserProfileDirectoryA
+    GetUserProfileDirectoryW = real_userenv.GetUserProfileDirectoryW
+    LoadUserProfileA = real_userenv.LoadUserProfileA
+    LoadUserProfileW = real_userenv.LoadUserProfileW
+    UnloadUserProfile = real_userenv.UnloadUserProfile
+    GetProfilesDirectoryA = real_userenv.GetProfilesDirectoryA
+    GetProfilesDirectoryW = real_userenv.GetProfilesDirectoryW
+    GetDefaultUserProfileDirectoryA = real_userenv.GetDefaultUserProfileDirectoryA
+    GetDefaultUserProfileDirectoryW = real_userenv.GetDefaultUserProfileDirectoryW
+    ExpandEnvironmentStringsForUserA = real_userenv.ExpandEnvironmentStringsForUserA
+    ExpandEnvironmentStringsForUserW = real_userenv.ExpandEnvironmentStringsForUserW

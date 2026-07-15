@@ -1,0 +1,620 @@
+<title>malware_gen_framework — Architecture</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-card: #161b22;
+    --bg-card-alt: #1c2230;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --text-bright: #e6edf3;
+    --accent: #2ec4b6;
+    --accent-dim: rgba(46,196,182,0.12);
+    --blue: #4895ef;
+    --blue-dim: rgba(72,149,239,0.12);
+    --amber: #e9c46a;
+    --amber-dim: rgba(233,196,106,0.12);
+    --red: #e63946;
+    --red-dim: rgba(230,57,70,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --mono: 'Menlo','Monaco','Cascadia Mono','Consolas','Liberation Mono',monospace;
+    --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media(prefers-color-scheme:light){:root{
+    --bg:#f5f5f3;--bg-card:#fff;--bg-card-alt:#f0eeeb;--border:#d0cdc7;
+    --text:#24292f;--text-dim:#57606a;--text-bright:#1b1f23;
+    --accent:#0d9488;--accent-dim:rgba(13,148,136,0.08);
+    --blue:#2563eb;--blue-dim:rgba(37,99,235,0.08);
+    --amber:#b8860b;--amber-dim:rgba(184,134,11,0.08);
+    --red:#c1121f;--red-dim:rgba(193,18,31,0.08);
+    --purple:#7c3aed;--purple-dim:rgba(124,58,237,0.08);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0f1117;--bg-card:#161b22;--bg-card-alt:#1c2230;--border:#30363d;
+    --text:#c9d1d9;--text-dim:#8b949e;--text-bright:#e6edf3;
+    --accent:#2ec4b6;--accent-dim:rgba(46,196,182,0.12);
+    --blue:#4895ef;--blue-dim:rgba(72,149,239,0.12);
+    --amber:#e9c46a;--amber-dim:rgba(233,196,106,0.12);
+    --red:#e63946;--red-dim:rgba(230,57,70,0.12);
+    --purple:#a78bfa;--purple-dim:rgba(167,139,250,0.12);
+  }
+  :root[data-theme="light"]{
+    --bg:#f5f5f3;--bg-card:#fff;--bg-card-alt:#f0eeeb;--border:#d0cdc7;
+    --text:#24292f;--text-dim:#57606a;--text-bright:#1b1f23;
+    --accent:#0d9488;--accent-dim:rgba(13,148,136,0.08);
+    --blue:#2563eb;--blue-dim:rgba(37,99,235,0.08);
+    --amber:#b8860b;--amber-dim:rgba(184,134,11,0.08);
+    --red:#c1121f;--red-dim:rgba(193,18,31,0.08);
+    --purple:#7c3aed;--purple-dim:rgba(124,58,237,0.08);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;padding:2rem 1rem}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-family:var(--mono);font-size:1.4rem;color:var(--text-bright);letter-spacing:-0.02em;margin-bottom:0.2rem}
+  .subtitle{color:var(--text-dim);font-size:0.82rem;margin-bottom:2rem;font-family:var(--mono)}
+  code{font-family:var(--mono);font-size:0.82em;background:var(--bg-card-alt);padding:0.15em 0.4em;border-radius:3px}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:2.5rem}
+  .stat{background:var(--bg-card);padding:0.9rem 1rem;text-align:center}
+  .stat-val{font-family:var(--mono);font-size:1.5rem;font-weight:700;color:var(--text-bright);line-height:1.2}
+  .stat-val.teal{color:var(--accent)} .stat-val.blue{color:var(--blue)} .stat-val.amber{color:var(--amber)} .stat-val.purple{color:var(--purple)}
+  .stat-label{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.15rem}
+
+  /* Sections (collapsible) */
+  .section{border:1px solid var(--border);border-radius:8px;margin-bottom:1.2rem;overflow:hidden}
+  .section-head{display:flex;align-items:center;gap:0.7rem;padding:0.85rem 1.2rem;background:var(--bg-card);cursor:pointer;user-select:none}
+  .section-head:hover{background:var(--bg-card-alt)}
+  .section-num{font-family:var(--mono);font-size:0.68rem;padding:0.18rem 0.5rem;border-radius:4px;font-weight:600;white-space:nowrap}
+  .section-title{font-family:var(--mono);font-size:0.92rem;font-weight:600;color:var(--text-bright);flex:1}
+  .section-arrow{color:var(--text-dim);font-size:0.8rem;transition:transform 0.2s}
+  .section.open .section-arrow{transform:rotate(90deg)}
+  .section-body{display:none;border-top:1px solid var(--border);padding:1.2rem}
+  .section.open .section-body{display:block}
+
+  /* Flow diagram */
+  .flow{display:flex;align-items:center;justify-content:center;gap:0.3rem;flex-wrap:wrap;margin:1rem 0;font-family:var(--mono);font-size:0.78rem}
+  .flow-box{padding:0.4rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:var(--bg-card)}
+  .flow-box.teal{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+  .flow-box.blue{border-color:var(--blue);color:var(--blue);background:var(--blue-dim)}
+  .flow-box.amber{border-color:var(--amber);color:var(--amber);background:var(--amber-dim)}
+  .flow-box.purple{border-color:var(--purple);color:var(--purple);background:var(--purple-dim)}
+  .flow-arrow{color:var(--text-dim);font-size:0.9rem}
+
+  /* Sub-sections */
+  .sub{margin-top:1rem}
+  .sub h3{font-family:var(--mono);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:0.5rem;padding-bottom:0.35rem;border-bottom:1px solid var(--border)}
+  .sub p{font-size:0.84rem;margin-bottom:0.5rem;line-height:1.6}
+
+  /* Tables */
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px;margin:0.8rem 0}
+  table{width:100%;border-collapse:collapse;font-size:0.78rem}
+  th{font-family:var(--mono);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);text-align:left;padding:0.55rem 0.7rem;background:var(--bg-card);border-bottom:1px solid var(--border);position:sticky;top:0}
+  td{padding:0.45rem 0.7rem;border-bottom:1px solid rgba(128,128,128,0.08);font-family:var(--mono);font-size:0.76rem;vertical-align:top}
+  tr:hover td{background:var(--bg-card-alt)}
+
+  /* Chips */
+  .chip{display:inline-block;font-family:var(--mono);font-size:0.7rem;padding:0.15rem 0.45rem;border-radius:3px;margin:0.1rem 0.15rem}
+  .chip.teal{color:var(--accent);background:var(--accent-dim)}
+  .chip.blue{color:var(--blue);background:var(--blue-dim)}
+  .chip.amber{color:var(--amber);background:var(--amber-dim)}
+  .chip.red{color:var(--red);background:var(--red-dim)}
+  .chip.purple{color:var(--purple);background:var(--purple-dim)}
+
+  /* Grid layout */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+  @media(max-width:700px){.grid-2{grid-template-columns:1fr}}
+
+  /* Comparison */
+  .compare-row{display:flex;align-items:baseline;gap:0.8rem;padding:0.5rem 0;border-bottom:1px solid rgba(128,128,128,0.1)}
+  .compare-row:last-child{border-bottom:none}
+  .compare-label{font-family:var(--mono);font-size:0.78rem;color:var(--text-dim);min-width:140px}
+  .compare-val{font-size:0.82rem;flex:1}
+
+  .footer{text-align:center;padding:2rem 0 1rem;color:var(--text-dim);font-size:0.7rem;font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+  <h1>malware_gen_framework</h1>
+  <div class="subtitle">Architecture Documentation &middot; v3.0 &middot; Chunk Assembler + Hermes AI Orchestrator</div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="stat-val teal">378</div><div class="stat-label">Total Chunks</div></div>
+    <div class="stat"><div class="stat-val blue">143</div><div class="stat-label">Recipes</div></div>
+    <div class="stat"><div class="stat-val amber">51</div><div class="stat-label">Variant Groups</div></div>
+    <div class="stat"><div class="stat-val purple">20</div><div class="stat-label">Hermes Tools</div></div>
+    <div class="stat"><div class="stat-val">4</div><div class="stat-label">Output Formats</div></div>
+    <div class="stat"><div class="stat-val teal">~2M</div><div class="stat-label">Distinct Combos</div></div>
+  </div>
+
+  <!-- 1. Architecture Overview -->
+  <div class="section open">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--accent);background:var(--accent-dim)">01</span>
+      <span class="section-title">Architecture Overview</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <p style="font-size:0.84rem;margin-bottom:1rem">Three execution paths exist, each building on the one below it. The chunk assembler is the production engine; the LLM pipeline is legacy/experimental; Hermes orchestrates either autonomously.</p>
+
+      <div class="flow">
+        <span class="flow-box teal">Recipe YAML</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">Chunk Assembler</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">Template Substitution</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">API Rewrite</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box amber">MinGW / Zig</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box amber">Resource + Rich Header</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box blue">PE / DLL / CPL / JScript</span>
+      </div>
+
+      <div class="flow" style="margin-top:0.5rem">
+        <span class="flow-box purple">Hermes LLM</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box purple">Tool Calls</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">Assembler</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box blue">Deploy (SSH)</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box amber">Analyze</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box purple">Adapt / Mutate</span>
+      </div>
+
+      <div class="sub">
+        <h3>Pipeline Comparison</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pipeline</th><th>LLM Required</th><th>Deterministic</th><th>Speed</th><th>Use Case</th></tr></thead>
+            <tbody>
+              <tr><td><span class="chip teal">Chunk Assembler</span></td><td>No</td><td>Yes (with seed)</td><td>~2s</td><td>Production builds, batch testing, CI</td></tr>
+              <tr><td><span class="chip purple">Hermes AI</span></td><td>Yes (Qwen 35B)</td><td>No</td><td>Minutes-hours</td><td>Autonomous campaigns, evasion mutation</td></tr>
+              <tr><td><span class="chip amber">LLM Pipeline</span></td><td>Yes</td><td>No</td><td>Minutes</td><td>Legacy — code gen from scratch (moved to out-of-order/)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Entry Points</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Interface</th><th>Command / Path</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>CLI (chunk)</td><td><code>python -m malware_gen_framework chunk --recipe &lt;name&gt;</code></td><td>Assemble + compile from recipe</td></tr>
+              <tr><td>CLI (hermes)</td><td><code>python -m hermes --mode campaign|validate|evade</code></td><td>AI-driven campaign or validation</td></tr>
+              <tr><td>Web Portal</td><td><code>python -m malware_gen_framework portal</code></td><td>aiohttp + WebSocket UI on localhost:8080</td></tr>
+              <tr><td>Direct API</td><td><code>assembler.assemble(recipe_path)</code></td><td>Python API for integration</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Chunk Assembler Pipeline -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--accent);background:var(--accent-dim)">02</span>
+      <span class="section-title">Chunk Assembler Pipeline</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <p style="font-size:0.84rem;margin-bottom:1rem">The assembler reads a YAML recipe, resolves chunk dependencies via topological sort, concatenates into a single compilable source file, applies API rewriting, and compiles with MinGW or Zig.</p>
+
+      <div class="sub">
+        <h3>Recipe Format</h3>
+        <p>Each recipe is a YAML file specifying which chunks to include. The assembler resolves <code>depends:</code> metadata from chunk headers and orders chunks correctly.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>api_resolve</td><td>string</td><td>Hash-based API resolver (DJB2, CRC32, FNV1a, ROR13, PEB walk)</td></tr>
+              <tr><td>evasion</td><td>list</td><td>Evasion chunks to include</td></tr>
+              <tr><td>process</td><td>string</td><td>Process manipulation (PPID spoof, ghosting, masquerade)</td></tr>
+              <tr><td>core</td><td>list</td><td>Buffer management, command exec, file I/O</td></tr>
+              <tr><td>collectors</td><td>list</td><td>Data collectors (sysinfo, browser, clipboard, etc.)</td></tr>
+              <tr><td>exfil</td><td>string</td><td>Exfiltration method (TCP, HTTP, DNS, file drop)</td></tr>
+              <tr><td>arch</td><td>string</td><td>Entry point architecture (main, DllMain, CplApplet, shellcode)</td></tr>
+              <tr><td>resources</td><td>bool</td><td>Inject resource section + manifest (REQUIRED for CS PE evasion)</td></tr>
+              <tr><td>vars</td><td>dict</td><td>Template variables (C2_IP, C2_PORT, etc.)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Chunk Categories</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Category</th><th>C</th><th>JS</th><th>VBS</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>api_resolve</td><td>7</td><td>&mdash;</td><td>&mdash;</td><td>Dynamic API resolution via hash lookup — hides imports from static analysis</td></tr>
+              <tr><td>arch</td><td>26</td><td>&mdash;</td><td>&mdash;</td><td>Entry points: main(), DllMain, CplApplet, shellcode, sideload, service</td></tr>
+              <tr><td>collectors</td><td>42</td><td>~30</td><td>~20</td><td>Data gathering: sysinfo, browser creds, clipboard, screenshot, keylogger</td></tr>
+              <tr><td>evasion</td><td>112</td><td>~10</td><td>~5</td><td>Anti-detection: syscall, sleep obfusc, stack spoof, ETW bypass, anti-sandbox</td></tr>
+              <tr><td>exfil</td><td>22</td><td>~8</td><td>~5</td><td>TCP, HTTP, DNS, SMB, file drop, LOLBin (curl, certutil)</td></tr>
+              <tr><td>process</td><td>9</td><td>&mdash;</td><td>&mdash;</td><td>PPID spoof, process ghosting, masquerade, herpaderp</td></tr>
+              <tr><td>ad_collectors</td><td>6</td><td>&mdash;</td><td>&mdash;</td><td>Active Directory: users, groups, computers, GPOs via LDAP</td></tr>
+              <tr><td>core</td><td>5</td><td>&mdash;</td><td>&mdash;</td><td>emit_buffer, run_cmd, file_ops, string helpers</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-dim);margin-top:0.5rem">Total: 255 C chunks + 80 JScript + 43 VBScript = 378 chunks across 4 output formats</p>
+      </div>
+
+      <div class="sub">
+        <h3>Assembly Pipeline Stages</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Stage</th><th>What It Does</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Parse recipe</td><td>Read YAML, detect output format (C/JScript/VBScript/Batch)</td></tr>
+              <tr><td>2</td><td>Variant randomization</td><td>If <code>--randomize</code>: swap chunks with alternatives from the same variant group</td></tr>
+              <tr><td>3</td><td>Dependency resolution</td><td>Parse <code>depends:</code> metadata from chunk headers, topological sort</td></tr>
+              <tr><td>4</td><td>Header collection</td><td>Deduplicate <code>headers:</code> across all chunks; winsock2.h always first</td></tr>
+              <tr><td>5</td><td>Body concatenation</td><td>Read each chunk body, inline local <code>#include</code>s, strip include guards</td></tr>
+              <tr><td>6</td><td>Template substitution</td><td>Replace <code>{{COLLECTOR_CALLS}}</code>, <code>{{EVASION_INIT}}</code>, <code>{{C2_IP}}</code>, etc.</td></tr>
+              <tr><td>7</td><td>API rewriting</td><td>If api_resolve set: replace static API calls with hash-resolved lookups</td></tr>
+              <tr><td>8</td><td>Obfuscation</td><td>Optional string encryption, control flow flattening via <code>obfuscate.py</code></td></tr>
+              <tr><td>9</td><td>Compilation</td><td>MinGW or Zig cross-compiler &rarr; PE/DLL/CPL</td></tr>
+              <tr><td>10</td><td>Post-compile</td><td>Resource injection, Rich header spoof, PE timestamp stomp, checksum fix</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Post-Compilation Transforms</h3>
+        <div class="grid-2">
+          <div>
+            <p><strong>Resource Injection</strong> — Embeds a version info resource from 50 legitimate app profiles (AppLocker, Update Orchestrator, etc.) plus an application manifest. Resource section presence makes PE look like a real application to ML classifiers.</p>
+            <p style="margin-top:0.4rem"><strong>Rich Header Injection</strong> — Fabricates a Rich/DanS header matching MSVC 14.x toolchain signatures. Defeats toolchain fingerprinting that flags MinGW-produced binaries.</p>
+          </div>
+          <div>
+            <p><strong>PE Timestamp Stomping</strong> — Overwrites <code>TimeDateStamp</code> with a plausible older date. Defeats "recently compiled" heuristics.</p>
+            <p style="margin-top:0.4rem"><strong>Compilers</strong> — MinGW (default, proven) produces standard PE. Zig CC produces binaries with different linker signatures and section layout, diversifying the static surface. Both target x86_64-windows.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Evasion System -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--amber);background:var(--amber-dim)">03</span>
+      <span class="section-title">Evasion System &mdash; 51 Variant Groups</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <p style="font-size:0.84rem;margin-bottom:1rem">Evasion chunks are organized into 51 variant groups. Each group contains functionally equivalent alternatives — swapping within a group changes the binary signature while preserving behavior. This controlled polymorphism creates ~2M detection-distinct combinations.</p>
+
+      <div class="sub">
+        <h3>By EDR Detection Layer</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>EDR Layer</th><th>Variant Groups</th><th>Total Variants</th><th>What They Target</th></tr></thead>
+            <tbody>
+              <tr><td>Static ML</td>
+                <td><span class="chip teal">api_resolution</span> <span class="chip teal">pe_metadata</span> <span class="chip teal">iat_manipulation</span></td>
+                <td>16</td>
+                <td>Import table, entropy, Rich header, resources, sections</td></tr>
+              <tr><td>Userland Hooks</td>
+                <td><span class="chip blue">syscall_gate</span> <span class="chip blue">ntdll_restore</span> <span class="chip blue">amsi_bypass</span></td>
+                <td>17</td>
+                <td>NT function hooks, SSN scrambling, AMSI</td></tr>
+              <tr><td>Kernel Callbacks</td>
+                <td><span class="chip amber">ppid_spoof</span> <span class="chip amber">process_evasion</span></td>
+                <td>9</td>
+                <td>Process creation notifications, parent PID, image loads</td></tr>
+              <tr><td>Behavioral IOAs</td>
+                <td><span class="chip red">sleep_obfuscation</span> <span class="chip red">stack_spoofing</span> <span class="chip red">etw_bypass</span> <span class="chip red">anti_debug</span> <span class="chip red">anti_sandbox</span> <span class="chip red">injection_*</span> <span class="chip red">control_flow</span> <span class="chip red">memory_evasion</span> <span class="chip red">execution_timing</span> <span class="chip red">env_keying</span></td>
+                <td>75</td>
+                <td>API call sequences, thread stacks, memory patterns, timing</td></tr>
+              <tr><td>Cloud ML</td>
+                <td><span class="chip purple">js_*</span> <span class="chip purple">net_*</span></td>
+                <td>27</td>
+                <td>File reputation, JScript analysis, network fingerprints</td></tr>
+              <tr><td>Collectors</td>
+                <td><span class="chip teal">system_info</span> <span class="chip teal">processes</span> <span class="chip teal">netinfo</span> <span class="chip teal">clipboard</span> etc.</td>
+                <td>55</td>
+                <td>Multiple implementations per collector (API, LOLBin, WMI)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Key Variant Groups (Behavioral)</h3>
+        <div class="grid-2">
+          <div>
+            <p><strong>syscall_gate (10)</strong> — indirect_syscall, hells_gate, halos_gate, tartarus_gate, recycled_gate, syswhispers3, syscall_trampoline, syscall_knowndlls, syscall_win32u, manual_syscall_stub</p>
+            <p style="margin-top:0.4rem"><strong>sleep_obfuscation (8)</strong> — ekko, foliage, gargoyle, cronos, deathsleep, lazarus, morpheus, heap_encrypt</p>
+            <p style="margin-top:0.4rem"><strong>stack_spoofing (7)</strong> — stack_spoof, stack_spoof_gadget, stack_spoof_loudsunrun, stack_spoof_rop, stack_spoof_synthetic, thread_stack_spoof, ret_spoof</p>
+          </div>
+          <div>
+            <p><strong>injection (13)</strong> — atom_bombing, cascade_inject, code_cave, dll_notif_callback, fiber_exec, ntmap_inject, propagate_inject, threadless_inject, tp_work_exec, triggered_exec, veh_inject, wnf_callback, instrumentation_callback</p>
+            <p style="margin-top:0.4rem"><strong>etw_bypass (6)</strong> — etw_patch, etw_full_patch, etw_buffer_corrupt, etw_callback_inject, etw_provider_unreg, etw_session_stop</p>
+            <p style="margin-top:0.4rem"><strong>persistence (7)</strong> — registry Run key, scheduled task, COM hijack, WMI event, startup folder, service, DLL search order</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Hermes AI Orchestrator -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--purple);background:var(--purple-dim)">04</span>
+      <span class="section-title">Hermes AI Orchestrator</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <p style="font-size:0.84rem;margin-bottom:1rem">Hermes is an autonomous campaign engine powered by a local LLM (Qwen 35B on Blackwell GPU, port 11235). It operates via a tool-use loop: the LLM receives a system prompt with target context, reasons about next steps, and calls tools to execute them.</p>
+
+      <div class="flow">
+        <span class="flow-box purple">System Prompt</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box purple">LLM Reasoning</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">Tool Call</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box teal">Tool Result</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box purple">LLM Reasoning</span>
+        <span class="flow-arrow">&rarr;</span>
+        <span class="flow-box">Loop</span>
+      </div>
+
+      <div class="sub">
+        <h3>Operating Modes</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mode</th><th>LLM</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><span class="chip purple">campaign</span></td><td>Yes</td><td>Full autonomous cycle: recon &rarr; plan &rarr; build &rarr; deploy &rarr; analyze &rarr; adapt. LLM decides strategy.</td></tr>
+              <tr><td><span class="chip teal">validate</span></td><td>No</td><td>Mechanically test all PASS recipes against target EDR. Output: validation report with pass/fail/detection details.</td></tr>
+              <tr><td><span class="chip amber">evade</span></td><td>Yes</td><td>LLM-driven mutation loop on specific recipes until they evade. Changes one dimension at a time.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Tool Inventory (20 tools)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool</th><th>Phase</th><th>What It Does</th></tr></thead>
+            <tbody>
+              <tr><td>scan_target</td><td>Recon</td><td>SSH into VM, enumerate OS, EDR, AV, open ports, running processes</td></tr>
+              <tr><td>list_edr_events</td><td>Recon</td><td>Query CrowdStrike/Defender event logs for recent detections</td></tr>
+              <tr><td>list_recipes</td><td>Plan</td><td>List available recipes, optionally filtered by format</td></tr>
+              <tr><td>list_chunks</td><td>Plan</td><td>List chunks in a category with descriptions</td></tr>
+              <tr><td>get_strategy</td><td>Plan</td><td>Get the strategy tree for a specific EDR</td></tr>
+              <tr><td>query_knowledge</td><td>Plan</td><td>Query the knowledge DB for past operation results</td></tr>
+              <tr><td>sweep_matrix</td><td>Plan</td><td>Generate variant matrix for a recipe across dimensions</td></tr>
+              <tr><td>analyze_detection</td><td>Plan</td><td>Classify a detection failure and suggest countermeasures</td></tr>
+              <tr><td>assemble</td><td>Build</td><td>Assemble a recipe into compilable source, optionally compile</td></tr>
+              <tr><td>create_recipe</td><td>Build</td><td>Create a new recipe YAML from specified chunks</td></tr>
+              <tr><td>mutate_recipe</td><td>Build</td><td>Modify an existing recipe — swap evasion layers, change exfil, etc.</td></tr>
+              <tr><td>deploy_to_vm</td><td>Deploy</td><td>SCP binary to VM, verify it survived EDR static scan</td></tr>
+              <tr><td>start_c2_listener</td><td>Deploy</td><td>Start a C2 listener (TCP/HTTP/TLV) on the host</td></tr>
+              <tr><td>execute_on_vm</td><td>Deploy</td><td>Run a command on the VM via SSH</td></tr>
+              <tr><td>check_c2_data</td><td>Analyze</td><td>Check if the C2 listener received data, inspect contents</td></tr>
+              <tr><td>analyze_results</td><td>Analyze</td><td>Full post-execution analysis: binary exists? detections? C2 data?</td></tr>
+              <tr><td>cleanup_vm</td><td>Cleanup</td><td>Kill processes, delete binaries, remove scheduled tasks</td></tr>
+              <tr><td>write_experimental_code</td><td>Innovation</td><td>Write custom C code to a scratch directory</td></tr>
+              <tr><td>compile_experimental</td><td>Innovation</td><td>Compile experimental code with MinGW</td></tr>
+              <tr><td>save_innovation_report</td><td>Innovation</td><td>Record results of an innovation experiment</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Intelligence Systems</h3>
+        <div class="grid-2">
+          <div>
+            <p><strong>Strategy Tree</strong> — Decision tree per EDR with proven techniques, fallback paths, and format preferences. Guides the LLM toward approaches that have worked before.</p>
+            <p style="margin-top:0.4rem"><strong>Knowledge DB</strong> — Persisted at <code>hermes_knowledge.json</code>. Records every operation: recipe, evasion layers, EDR, result, C2 bytes, failure type. Queried by the LLM to avoid repeating failed approaches.</p>
+          </div>
+          <div>
+            <p><strong>Innovation Engine</strong> — After N consecutive failures (configurable, default 100), enters innovation mode: gives the LLM write access to scratch files and a focused prompt to try experimental techniques outside the recipe system.</p>
+            <p style="margin-top:0.4rem"><strong>Circuit Breaker</strong> — After 5 consecutive VM-unreachable errors, aborts the campaign. Prevents infinite loops when infrastructure fails.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. VM Infrastructure -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--blue);background:var(--blue-dim)">05</span>
+      <span class="section-title">VM Infrastructure</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <div class="grid-2">
+        <div>
+          <div class="sub">
+            <h3>QEMU Configuration</h3>
+            <p><strong>Guest:</strong> Windows 11 23H2 (x86_64), 8 GB RAM, 4 cores, KVM acceleration</p>
+            <p><strong>Firmware:</strong> OVMF UEFI with Secure Boot + vTPM (swtpm)</p>
+            <p><strong>Network:</strong> SLIRP NAT with port forwards — SSH :10022, RDP :13389</p>
+            <p><strong>Display:</strong> VNC on 127.0.0.1:1 for RDP-dependent tests (keylogger)</p>
+            <p><strong>EDR:</strong> CrowdStrike Falcon + Windows Defender (base snapshot)</p>
+          </div>
+          <div class="sub">
+            <h3>Snapshot System</h3>
+            <p>Uses <code>blockdev-snapshot-sync</code> QMP command for overlay-based snapshots. NEVER uses savevm/loadvm (crashes UEFI pflash).</p>
+            <p style="margin-top:0.4rem"><strong>Gold snapshot:</strong> <code>crowdstrike</code> — CS Falcon + Defender + RDP configured. This is committed to the base disk; all test overlays are created on top.</p>
+            <p style="margin-top:0.4rem"><strong>Workflow:</strong> save overlay &rarr; run tests (writes go to overlay) &rarr; restore (discard overlay, reboot from base)</p>
+          </div>
+        </div>
+        <div>
+          <div class="sub">
+            <h3>C2 Listeners</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Type</th><th>Protocol</th><th>Used By</th></tr></thead>
+                <tbody>
+                  <tr><td>TCP raw</td><td>nc -l -p 9001</td><td>Infostealers, keyloggers (tcp_direct exfil)</td></tr>
+                  <tr><td>HTTP</td><td>Python aiohttp</td><td>HTTP-based exfil, backdoor C2</td></tr>
+                  <tr><td>TLV backdoor</td><td>Custom framed</td><td>Persistent backdoor with command dispatch</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="sub">
+            <h3>Deployment Methods</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Binary Type</th><th>Execution</th></tr></thead>
+                <tbody>
+                  <tr><td>EXE</td><td><code>cmd /c payload.exe</code> via SSH</td></tr>
+                  <tr><td>DLL (sideload)</td><td>Copy host.exe + version.dll, execute host</td></tr>
+                  <tr><td>DLL (rundll32)</td><td><code>rundll32 payload.dll,RunPayload</code></td></tr>
+                  <tr><td>CPL</td><td><code>control.exe payload.cpl</code></td></tr>
+                  <tr><td>JScript</td><td><code>cscript //nologo payload.js</code></td></tr>
+                  <tr><td>Keylogger</td><td><code>schtasks /create ... /it</code> (interactive session)</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Design Rationale -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--red);background:var(--red-dim)">06</span>
+      <span class="section-title">Design Rationale &amp; Trade-offs</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <div class="sub">
+        <h3>Key Design Decisions</h3>
+        <div class="compare-row">
+          <span class="compare-label">Chunks vs Pure LLM</span>
+          <span class="compare-val">Chunk templates are deterministic and testable — the same recipe always produces the same binary (minus randomization). Pure LLM generation is creative but unreliable: it misses MinGW constraints, introduces compilation errors, and can't be batch-tested. The chunk system handles the 90% that's formulaic; Hermes adds LLM creativity for the 10% that requires adaptation.</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-label">YAML vs Code API</span>
+          <span class="compare-val">Recipes are YAML because Hermes (the LLM) can read and write them. A Python API would require the LLM to write Python code, which is error-prone. YAML is the interface contract between the AI orchestrator and the deterministic assembler.</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-label">Variant Groups vs Parametric</span>
+          <span class="compare-val">Variant groups give controlled polymorphism: every variant in a group has been manually written and tested for compilation. Parametric generation (e.g., "generate N random evasion functions") produces untested code. Variant groups are the middle ground between no diversity and chaos.</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-label">MinGW vs MSVC</span>
+          <span class="compare-val">The framework runs on Linux. MinGW cross-compiles to Windows PE from the Linux host without a Windows build environment. MSVC requires a Windows machine or complex Wine setup. Trade-off: MinGW produces PE binaries with identifiable default section names and Rich headers — countered by Rich header injection and section renaming post-compile.</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-label">Local LLM vs Cloud</span>
+          <span class="compare-val">Local Qwen 35B on Blackwell GPU means no API costs, no content filtering, and no rate limits. Trade-off: single-request bottleneck (no concurrent pipelines), lower reasoning quality than frontier cloud models. Hermes compensates with extensive tool-use and structured prompting.</span>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>vs Other Frameworks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Framework</th><th>Approach</th><th>Our Advantage</th><th>Their Advantage</th></tr></thead>
+            <tbody>
+              <tr><td>Cobalt Strike</td><td>Beacon + Malleable C2</td><td>~2M variants vs fixed beacon profile; chunk-level customization; JScript format</td><td>Mature C2 infrastructure, OPSEC features, team server</td></tr>
+              <tr><td>Sliver</td><td>Go implants + mTLS</td><td>C source = smaller binaries, more compiler control; recipe system for rapid iteration</td><td>Cross-platform implants, built-in pivoting, open source</td></tr>
+              <tr><td>Havoc</td><td>Demon agent + BOFs</td><td>AI-driven evasion mutation; 4 output formats; massive variant space</td><td>BOF execution, sleep obfuscation built-in, modern UI</td></tr>
+              <tr><td>Brute Ratel</td><td>Badger + syscall</td><td>Autonomous campaign engine (Hermes); self-testing validation loop</td><td>Purpose-built for EDR evasion, kernel-level capabilities</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="sub">
+        <h3>Strengths &amp; Limitations</h3>
+        <div class="grid-2">
+          <div>
+            <p style="color:var(--accent);font-family:var(--mono);font-size:0.78rem;margin-bottom:0.3rem">STRENGTHS</p>
+            <p style="font-size:0.82rem">&bull; Deterministic, testable output from recipes</p>
+            <p style="font-size:0.82rem">&bull; ~2M detection-distinct variant combinations</p>
+            <p style="font-size:0.82rem">&bull; 4 output formats (PE, DLL, CPL, JScript)</p>
+            <p style="font-size:0.82rem">&bull; Autonomous campaigns via Hermes AI</p>
+            <p style="font-size:0.82rem">&bull; Self-testing validation loop with VM</p>
+            <p style="font-size:0.82rem">&bull; No cloud dependency — fully local</p>
+          </div>
+          <div>
+            <p style="color:var(--red);font-family:var(--mono);font-size:0.78rem;margin-bottom:0.3rem">LIMITATIONS</p>
+            <p style="font-size:0.82rem">&bull; Chunk compatibility matrix is complex (not all combos compile)</p>
+            <p style="font-size:0.82rem">&bull; MinGW PE fingerprint requires Rich header injection to mask</p>
+            <p style="font-size:0.82rem">&bull; No EV code signing capability</p>
+            <p style="font-size:0.82rem">&bull; Local LLM bottleneck (one pipeline at a time)</p>
+            <p style="font-size:0.82rem">&bull; BYOVD / kernel-level attacks not implemented</p>
+            <p style="font-size:0.82rem">&bull; Shellcode pipeline is nascent</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Stats Footer -->
+  <div class="section">
+    <div class="section-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="section-num" style="color:var(--text-dim);background:rgba(128,128,128,0.15)">07</span>
+      <span class="section-title">Current State &amp; Test Results</span>
+      <span class="section-arrow">&#9654;</span>
+    </div>
+    <div class="section-body">
+      <div class="grid-2">
+        <div>
+          <div class="sub">
+            <h3>Inventory</h3>
+            <div class="compare-row"><span class="compare-label">C chunks</span><span class="compare-val">255</span></div>
+            <div class="compare-row"><span class="compare-label">JScript chunks</span><span class="compare-val">80</span></div>
+            <div class="compare-row"><span class="compare-label">VBScript chunks</span><span class="compare-val">43</span></div>
+            <div class="compare-row"><span class="compare-label">Total chunks</span><span class="compare-val" style="color:var(--accent)">378</span></div>
+            <div class="compare-row"><span class="compare-label">Recipes</span><span class="compare-val">143</span></div>
+            <div class="compare-row"><span class="compare-label">Variant groups</span><span class="compare-val">51 groups / 199 variants</span></div>
+            <div class="compare-row"><span class="compare-label">Hermes tools</span><span class="compare-val">20</span></div>
+            <div class="compare-row"><span class="compare-label">Output formats</span><span class="compare-val">PE, DLL, CPL, JScript (+ VBScript, Batch)</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="sub">
+            <h3>CrowdStrike Test Results</h3>
+            <div class="compare-row"><span class="compare-label">Total test runs</span><span class="compare-val">48</span></div>
+            <div class="compare-row"><span class="compare-label">PASS (FUD)</span><span class="compare-val" style="color:var(--accent)">17 (5 unique recipes)</span></div>
+            <div class="compare-row"><span class="compare-label">FAIL_NO_C2</span><span class="compare-val" style="color:var(--amber)">19 (infra failure, not detection)</span></div>
+            <div class="compare-row"><span class="compare-label">FAIL_BEHAVIORAL</span><span class="compare-val" style="color:var(--red)">5</span></div>
+            <div class="compare-row"><span class="compare-label">FAIL_STATIC</span><span class="compare-val" style="color:var(--red)">3</span></div>
+            <div class="compare-row"><span class="compare-label">Live pass rate</span><span class="compare-val">5/16 unique = 31%</span></div>
+            <div class="compare-row"><span class="compare-label">Recipes untested</span><span class="compare-val">127 / 143</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    malware_gen_framework &middot; architecture v3.0 &middot; last updated 2026-07-14 &middot; 378 chunks &middot; 143 recipes &middot; 20 Hermes tools
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.section').forEach((el,i) => {
+  if(i > 0) el.classList.remove('open');
+});
+</script>

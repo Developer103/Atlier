@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: self_delete
 // headers: windows.h
+// risk: low
 // note: Deletes own exe from disk via NTFS $DATA stream rename + POSIX delete. Retries if file is locked. No child processes.
 
 #ifndef CHUNK_SELF_DELETE

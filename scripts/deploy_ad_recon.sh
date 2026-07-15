@@ -7,6 +7,8 @@ VM_PORT=10022
 VM_USER=vmuser
 VM_PASS=vmuser123
 C2_PORT=9001
+VM_SNAPSHOT="${VM_SNAPSHOT:-crowdstrike}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN_USER="MALWARE\\it.admin"
 DOMAIN_PASS="Adm1nP@ss!"
 CAPTURE="/tmp/ad_recon_capture.bin"
@@ -25,7 +27,7 @@ echo "  VM alive"
 
 # 2. Upload
 echo "[2/6] Uploading..."
-eval $SCP "$BINARY" "$VM_USER@localhost:'C:\\Users\\$VM_USER\\Desktop\\payload.exe'" 2>/dev/null
+eval $SCP "$BINARY" "$VM_USER@localhost:'Desktop\\payload.exe'" 2>/dev/null
 sleep 3
 EXISTS=$(eval $SSH "'if exist C:\\Users\\$VM_USER\\Desktop\\payload.exe (echo EXISTS) else (echo GONE)'" 2>/dev/null | tr -d '\r')
 if [ "$EXISTS" = "GONE" ]; then
@@ -117,9 +119,16 @@ echo ""
 echo "--- Defender Status ---"
 eval $SSH "'powershell -Command \"Get-MpThreatDetection | Where-Object { \\\$_.InitialDetectionTime -gt (Get-Date).AddMinutes(-5) } | Select-Object ThreatID,ProcessName | Format-List\"'" 2>/dev/null | tr -d '\r'
 
-# Cleanup
+# Cleanup — restore VM snapshot
 echo "--- Cleanup ---"
-eval $SSH "'schtasks /delete /tn ad_recon_test /f 2>NUL'" 2>/dev/null | tr -d '\r'
-eval $SSH "'taskkill /f /im payload.exe 2>NUL'" 2>/dev/null | tr -d '\r'
-eval $SSH "'del \"C:\\Users\\$VM_USER\\Desktop\\payload.exe\" 2>NUL'" 2>/dev/null | tr -d '\r'
-echo "  Cleaned"
+echo "[*] Restoring VM snapshot..."
+if "$SCRIPT_DIR/vm_snapshot.sh" restore "$VM_SNAPSHOT" 2>/dev/null; then
+    echo "  OK (restored $VM_SNAPSHOT)"
+else
+    echo "  No snapshot to restore, cleaning up manually..."
+    eval $SSH "'schtasks /delete /tn ad_recon_test /f 2>NUL'" 2>/dev/null | tr -d '\r'
+    eval $SSH "'taskkill /f /im payload.exe 2>NUL'" 2>/dev/null | tr -d '\r'
+    eval $SSH "'del \"C:\\Users\\$VM_USER\\Desktop\\payload.exe\" 2>NUL'" 2>/dev/null | tr -d '\r'
+    echo "  Cleaned"
+fi
+fuser -k $C2_PORT/tcp 2>/dev/null || true

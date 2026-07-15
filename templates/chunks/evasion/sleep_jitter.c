@@ -1,6 +1,7 @@
 // chunk: evasion/sleep_jitter
 // depends: (none)
 // provides: jitter_sleep
+// risk: none
 // note: randomized sleep to break behavioral patterns
 
 #ifndef JITTER_SLEEP_DEFINED

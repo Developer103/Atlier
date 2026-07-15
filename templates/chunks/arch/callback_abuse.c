@@ -10,14 +10,15 @@
 typedef void (*collector_fn)(void);
 
 static collector_fn g_callback_collectors[32];
-static int g_callback_idx = 0;
+static volatile LONG g_callback_done = 0;
 static int g_callback_count = 0;
 
 static VOID CALLBACK timer_callback(PVOID param, BOOLEAN fired) {
-    (void)param; (void)fired;
-    if (g_callback_idx < g_callback_count) {
-        g_callback_collectors[g_callback_idx]();
-        g_callback_idx++;
+    (void)fired;
+    int idx = (int)(ULONG_PTR)param;
+    if (idx >= 0 && idx < g_callback_count) {
+        g_callback_collectors[idx]();
+        InterlockedIncrement(&g_callback_done);
     }
 }
 
@@ -41,11 +42,17 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < g_callback_count; i++) {
         HANDLE ht = NULL;
-        CreateTimerQueueTimer(&ht, timer_queue, timer_callback, NULL,
-                              500 + i * 1500, 0, WT_EXECUTEDEFAULT);
+        CreateTimerQueueTimer(&ht, timer_queue, timer_callback,
+                              (PVOID)(ULONG_PTR)i,
+                              500 + i * 2000, 0, WT_EXECUTELONGFUNCTION);
     }
 
-    Sleep(500 + g_callback_count * 1500 + 2000);
+    DWORD timeout = 500 + g_callback_count * 2000 + 30000;
+    DWORD waited = 0;
+    while (g_callback_done < g_callback_count && waited < timeout) {
+        Sleep(500);
+        waited += 500;
+    }
     DeleteTimerQueueEx(timer_queue, INVALID_HANDLE_VALUE);
 
     if (g_pos > 0)

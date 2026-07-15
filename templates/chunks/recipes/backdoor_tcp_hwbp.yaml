@@ -16,8 +16,12 @@ commands:
   - commands/cmd_screenshot
   - commands/cmd_registry
   - commands/cmd_netinfo
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
 
 arch: arch/backdoor
+
+resources: true
 
 evasion:
   - evasion/hw_bp_etw

@@ -28,6 +28,8 @@ arch: arch/callback_abuse
 api_resolve: api_resolve/api_hash_djb2
 process: process/ppid_spoof
 
+resources: true
+
 evasion:
   - evasion/anti_debug
   - evasion/anti_sandbox

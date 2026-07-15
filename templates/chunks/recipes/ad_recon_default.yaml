@@ -14,6 +14,8 @@ collectors:
   - ad_collectors/ad_ous
   - ad_collectors/ad_gpos
 
+resources: true
+
 evasion:
   - evasion/behavioral_pacing
   - evasion/sleep_jitter

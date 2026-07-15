@@ -1,6 +1,7 @@
 // chunk: evasion/api_hash
 // depends: (none)
 // provides: djb2_hash, resolve_api
+// risk: low
 // note: DJB2 hash-based API resolution — hides API names from import table
 
 #ifndef CHUNK_API_HASH

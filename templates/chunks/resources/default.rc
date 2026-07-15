@@ -1,0 +1,51 @@
+#include <winver.h>
+
+1 VERSIONINFO
+FILEVERSION    {{RC_VMAJOR}},{{RC_VMINOR}},0,0
+PRODUCTVERSION {{RC_VMAJOR}},{{RC_VMINOR}},0,0
+FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+FILEFLAGS      0
+FILEOS         VOS__WINDOWS32
+FILETYPE       VFT_APP
+FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "{{RC_COMPANY}}\0"
+            VALUE "FileDescription",  "{{RC_DESCRIPTION}}\0"
+            VALUE "FileVersion",      "{{RC_VERSION}}\0"
+            VALUE "InternalName",     "{{RC_FILENAME}}\0"
+            VALUE "LegalCopyright",   "\xA9 {{RC_COMPANY}}. All rights reserved.\0"
+            VALUE "OriginalFilename", "{{RC_FILENAME}}\0"
+            VALUE "ProductName",      "{{RC_PRODUCT}}\0"
+            VALUE "ProductVersion",   "{{RC_VERSION}}\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0
+    END
+END
+
+1 24 BEGIN
+"<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>\r\n"
+"<assembly xmlns=""urn:schemas-microsoft-com:asm.v1"" manifestVersion=""1.0"">\r\n"
+"  <assemblyIdentity version=""{{RC_VMAJOR}}.{{RC_VMINOR}}.0.0"" processorArchitecture=""amd64""\r\n"
+"    name=""{{RC_ASMNAME}}"" type=""win32""/>\r\n"
+"  <description>{{RC_DESCRIPTION}}</description>\r\n"
+"  <trustInfo xmlns=""urn:schemas-microsoft-com:asm.v3"">\r\n"
+"    <security><requestedPrivileges>\r\n"
+"      <requestedExecutionLevel level=""asInvoker"" uiAccess=""false""/>\r\n"
+"    </requestedPrivileges></security>\r\n"
+"  </trustInfo>\r\n"
+"  <compatibility xmlns=""urn:schemas-microsoft-com:compatibility.v1"">\r\n"
+"    <application>\r\n"
+"      <supportedOS Id=""{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}""/>\r\n"
+"      <supportedOS Id=""{1f676c76-80e1-4239-95bb-83d0f6d0da78}""/>\r\n"
+"      <supportedOS Id=""{e2011457-1546-43c5-a5fe-008deee3d3f0}""/>\r\n"
+"    </application>\r\n"
+"  </compatibility>\r\n"
+"</assembly>\r\n"
+END

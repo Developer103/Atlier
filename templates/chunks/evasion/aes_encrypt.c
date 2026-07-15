@@ -3,6 +3,7 @@
 // provides: aes_decrypt_str
 // headers: windows.h,wincrypt.h
 // libs: crypt32
+// risk: none
 // note: AES-128 CBC string decryption using CryptoAPI — strings encrypted at build time
 
 #ifndef CHUNK_AES_ENCRYPT

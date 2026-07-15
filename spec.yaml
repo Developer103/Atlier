@@ -8,7 +8,9 @@ c2_address: 10.0.2.2
 c2_port: 9001
 edrs:
 - elastic
+- crowdstrike
 antivirus: Defender
+vm_snapshot: crowdstrike
 patch_level: null
 installed_compilers:
 - ''

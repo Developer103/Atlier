@@ -122,6 +122,12 @@ class CompilerSelector:
                 tool=compiler, command=cmd, language="c", target_os="windows-x86_64"
             )
 
+        elif compiler == "zig" or "zig" in compiler:
+            cmd = "zig cc -target x86_64-windows-gnu -O2 source.c -o malware.exe -lws2_32 -ladvapi32"
+            return CompilerInstruction(
+                tool="zig", command=cmd, language="c", target_os="windows-x86_64"
+            )
+
         elif compiler == "rustc":
             target_os = self._infer_target(spec)
             if "windows" in target_os:

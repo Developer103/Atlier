@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: init_elastic_gadget, elastic_call
 // headers: windows.h
+// risk: low
 // note: Elastic Defend call gadget bypass — loads system DLL with call-rax gadget, provides call wrapper to insert gadget DLL into call stack and break EDR stack signature patterns.
 
 #ifndef CHUNK_ELASTIC_GADGET

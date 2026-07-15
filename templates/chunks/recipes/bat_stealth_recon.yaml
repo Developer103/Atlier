@@ -1,0 +1,25 @@
+name: bat_stealth_recon
+description: Stealth recon with full evasion checks, file-drop exfil (no network)
+format: batch
+
+core:
+  - core/output
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/users
+  - collectors/security_products
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/delayed_exec
+  - evasion/env_check
+
+vars:
+  DELAY_SECONDS: "120"
+  DROP_PATH: "%USERPROFILE%\\Documents"

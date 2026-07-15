@@ -1,0 +1,18 @@
+; dbghelp.dll sideload proxy
+; Deploy: place as dbghelp.dll next to target app (many dev tools load it)
+; Targets: Visual Studio, WinDbg, Process Monitor, many .NET apps
+LIBRARY dbghelp
+EXPORTS
+    MiniDumpWriteDump = real_dbghelp.MiniDumpWriteDump
+    SymInitialize = real_dbghelp.SymInitialize
+    SymCleanup = real_dbghelp.SymCleanup
+    SymFromAddr = real_dbghelp.SymFromAddr
+    SymGetLineFromAddr64 = real_dbghelp.SymGetLineFromAddr64
+    SymSetOptions = real_dbghelp.SymSetOptions
+    SymGetOptions = real_dbghelp.SymGetOptions
+    StackWalk64 = real_dbghelp.StackWalk64
+    UnDecorateSymbolName = real_dbghelp.UnDecorateSymbolName
+    ImageNtHeader = real_dbghelp.ImageNtHeader
+    ImageDirectoryEntryToData = real_dbghelp.ImageDirectoryEntryToData
+    SymLoadModule64 = real_dbghelp.SymLoadModule64
+    SymUnloadModule64 = real_dbghelp.SymUnloadModule64

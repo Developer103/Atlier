@@ -1,0 +1,812 @@
+{
+  "operations": [
+    {
+      "timestamp": "2026-07-12T03:00:00",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "success",
+      "c2_bytes": 560000,
+      "detection_details": "0 detections",
+      "failure_type": "",
+      "notes": "Full infostealer via cscript.exe, HTTP POST exfil. JScript text files bypass CS ML scoring entirely."
+    },
+    {
+      "timestamp": "2026-07-12T03:15:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "success",
+      "c2_bytes": 510728,
+      "detection_details": "0 detections. PE with resources (version info + manifest) passes ML scoring.",
+      "failure_type": "",
+      "notes": "Compiled with resources (company: Contoso Ltd, product: System Health Monitor). No evasion chunks needed. Resources fix all ML feature scores."
+    },
+    {
+      "timestamp": "2026-07-12T12:45:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_stealer_combo",
+      "evasion_layers": [
+        "behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "success",
+      "c2_bytes": 510726,
+      "detection_details": "0 detections. Combo recipe: keylogger inside infostealer body. 58KB, 6 DLLs.",
+      "failure_type": "",
+      "notes": "Standalone keylogger (4 DLLs, 51KB) quarantined by ML. Embedding keylogger inside larger infostealer binary with 6+ DLLs defeats ML scoring. Standard section names + manifest required."
+    },
+    {
+      "timestamp": "2026-07-12T12:46:00",
+      "malware_type": "backdoor",
+      "format_type": "pe",
+      "recipe": "backdoor_http_api",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "success",
+      "c2_bytes": 210,
+      "detection_details": "0 detections. HTTP POST callback to C2. 58KB, standard sections + resources.",
+      "failure_type": "",
+      "notes": "WinHTTP backdoor. POST /result with binary payload. Resources (version info + manifest) required for ML bypass."
+    },
+    {
+      "timestamp": "2026-07-12T02:30:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "quarantined",
+      "c2_bytes": 0,
+      "detection_details": "ML-scored and quarantined. MinGW PE without resources scores badly on Rich header, imports, entropy, resources, signature.",
+      "failure_type": "quarantine",
+      "notes": "Missing version info and manifest. ML model combines features and unsigned MinGW binary with no resources = instant quarantine."
+    },
+    {
+      "timestamp": "2026-07-12T02:45:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "quarantined",
+      "c2_bytes": 0,
+      "detection_details": "Self-signed certificate not trusted by CS cloud reputation check.",
+      "failure_type": "quarantine",
+      "notes": "Self-signing does not help \u2014 CrowdStrike checks the full trust chain."
+    },
+    {
+      "timestamp": "2026-07-12T02:58:00",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_ad",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "7.x",
+      "result": "partial",
+      "c2_bytes": 0,
+      "detection_details": "PowerShell [adsisearcher] blocked. CrowdStrike behavioral detection on PowerShell with Reflection.Emit/Add-Type patterns.",
+      "failure_type": "behavioral_detection",
+      "notes": "AD enumeration via PowerShell subprocess is caught. Use LOLBin commands (net user /domain) instead."
+    },
+    {
+      "timestamp": "2026-07-10T12:00:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_edr_v2",
+      "evasion_layers": [
+        "etw_patch",
+        "sleep_encrypt",
+        "indirect_syscall",
+        "behavioral_pacing",
+        "api_hash"
+      ],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "success",
+      "c2_bytes": 450000,
+      "detection_details": "0 detections with 5-layer evasion stack.",
+      "failure_type": "",
+      "notes": "ETW patch + sleep encrypt + indirect syscalls bypass Defender effectively."
+    },
+    {
+      "timestamp": "2026-07-10T11:00:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_full",
+      "evasion_layers": [],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "detected",
+      "c2_bytes": 0,
+      "detection_details": "Static signature match on API patterns.",
+      "failure_type": "static_detection",
+      "notes": "PE without evasion is caught by Defender static sigs. Need at minimum ETW patch + sleep encrypt."
+    },
+    {
+      "timestamp": "2026-07-03T10:00:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger",
+      "evasion_layers": [],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "success",
+      "c2_bytes": 5235,
+      "detection_details": "0 detections. GetAsyncKeyState polling + curl.exe LOLBin exfil. IAT: K32+msvcrt+USER32 only.",
+      "failure_type": "",
+      "notes": "Proven: 3-DLL IAT profile evades Defender. No hooks, no winsock imports."
+    },
+    {
+      "timestamp": "2026-07-03T10:15:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_api",
+      "evasion_layers": [],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "success",
+      "c2_bytes": 4842,
+      "detection_details": "0 detections. Raw TCP (ws2_32) exfil. IAT: K32+msvcrt+USER32+WS2_32.",
+      "failure_type": "",
+      "notes": "4-DLL IAT with WS2_32 also passes Defender."
+    },
+    {
+      "timestamp": "2026-07-03T10:30:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_stealth_max",
+      "evasion_layers": [
+        "anti_sandbox",
+        "sleep_jitter",
+        "anti_debug",
+        "env_keying",
+        "timing_gate"
+      ],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "success",
+      "c2_bytes": 6011,
+      "detection_details": "0 detections. 5 evasion layers + curl exfil. IAT: K32+msvcrt+USER32+ADVAPI32.",
+      "failure_type": "",
+      "notes": "Heavy evasion doesn't hurt but doesn't help either. Clean code evades equally well."
+    },
+    {
+      "timestamp": "2026-07-03T11:00:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_winhttp",
+      "evasion_layers": [],
+      "edr": "defender",
+      "edr_version": "latest",
+      "result": "success",
+      "c2_bytes": 4898,
+      "detection_details": "0 detections. WinHTTP API exfil. IAT: K32+msvcrt+USER32+WINHTTP.",
+      "failure_type": "",
+      "notes": "WinHTTP is another viable exfil method. All 12/12 keylogger recipes pass Defender."
+    },
+    {
+      "timestamp": "2026-07-04T10:00:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_api_only",
+      "evasion_layers": [],
+      "edr": "elastic",
+      "edr_version": "8.15.3",
+      "result": "success",
+      "c2_bytes": 584,
+      "detection_details": "0 real Elastic SIEM alerts. Zero-child-process design: all collection via Win32 API, raw TCP exfil.",
+      "failure_type": "",
+      "notes": "Hand-written EDR-hardened keylogger. Startup folder persistence (not registry Run key). FreeConsole + decoy APIs."
+    },
+    {
+      "timestamp": "2026-07-04T10:15:00",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_api_only",
+      "evasion_layers": [],
+      "edr": "elastic",
+      "edr_version": "8.15.3",
+      "result": "success",
+      "c2_bytes": 2078,
+      "detection_details": "0 real Elastic SIEM alerts. Browser creds (Chrome/Firefox), file search, network info all via API. Single TCP burst exfil.",
+      "failure_type": "",
+      "notes": "Run-and-exit design, no persistence. Zero child processes. Elastic free tier completely blind."
+    },
+    {
+      "timestamp": "2026-07-04T08:00:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger",
+      "evasion_layers": [],
+      "edr": "elastic",
+      "edr_version": "8.15.3",
+      "result": "detected",
+      "c2_bytes": 4776,
+      "detection_details": "LOLBin alerts: curl.exe (Potential File Transfer), cmd.exe (System Info Discovery), tasklist.exe (Process Discovery), schtasks (Scheduled Task).",
+      "failure_type": "behavioral_detection",
+      "notes": "v1 sweep: 11/12 recipes failed because of LOLBin child process spawning. Only keylogger_api (raw TCP, no LOLBins) passed."
+    },
+    {
+      "timestamp": "2026-07-04T12:00:00",
+      "malware_type": "keylogger",
+      "format_type": "pe",
+      "recipe": "keylogger_zero_child",
+      "evasion_layers": [],
+      "edr": "elastic",
+      "edr_version": "8.15.3",
+      "result": "success",
+      "c2_bytes": 4776,
+      "detection_details": "0 Elastic alerts after converting all LOLBin chunks to API equivalents. 12/12 recipes pass.",
+      "failure_type": "",
+      "notes": "v2 sweep: replaced curl\u2192tcp_flush, cmd /c hostname\u2192GetComputerNameA, tasklist\u2192CreateToolhelp32Snapshot, schtasks\u2192startup folder copy. Zero-child-process architecture is the key."
+    },
+    {
+      "timestamp": "2026-07-14T05:52:28.009662",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_stealth",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/anti_analysis",
+        "evasion/env_keying",
+        "evasion/deferred_exec",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: js_infostealer_stealth.js\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T05:52:09.364377\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T05:53:48.496867",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_stealth",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/anti_analysis",
+        "evasion/env_keying",
+        "evasion/deferred_exec",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 17122,
+      "detection_details": "=== Analysis Results ===\nBinary: js_infostealer_stealth.js\nBinary exists on VM: True\nC2 data received: 17122 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T05:52:49.553580\n  Requests: 1\n  Total bytes: 17122\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:                     MALWAREVM..OS Name:       ",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T06:03:06.152498",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_stealth",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/anti_analysis",
+        "evasion/env_keying",
+        "evasion/deferred_exec",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 13864,
+      "detection_details": "=== Analysis Results ===\nBinary: js_infostealer_stealth.js\nBinary exists on VM: True\nC2 data received: 13864 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T06:02:01.706146\n  Requests: 1\n  Total bytes: 13864\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:                     MALWAREVM..OS Name:       ",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T06:03:52.379045",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_full.exe\nBinary exists on VM: True\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: NO_C2\nDetail: Binary exists but no C2 data received\nSuggested action: check_c2_connectivity\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T06:03:28.318609\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "no_c2_data",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T10:17:31.128396",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven",
+      "evasion_layers": [
+        "evasion/stack_spoof",
+        "evasion/thread_stack_spoof",
+        "evasion/iat_pad",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T10:17:01.069984\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T11:03:50.743055",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_stealth",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/anti_analysis",
+        "evasion/env_keying",
+        "evasion/deferred_exec",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 14701,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer.js\nBinary exists on VM: True\nC2 data received: 14701 bytes\nDefender detections: 0\nCrowdStrike detections: 1\n\nVerdict: BEHAVIORAL\nDetail: Data collected but post-execution detection triggered\nSuggested action: change_runtime_behavior\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T11:02:49.191856\n  Requests: 1\n  Total bytes: 14701\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T11:06:03.280464",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_final",
+      "evasion_layers": [
+        "evasion/etw_patch",
+        "evasion/sleep_encrypt",
+        "evasion/stack_spoof",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 2964,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_cs_pe_final.exe\nBinary exists on VM: True\nC2 data received: 2964 bytes\nDefender detections: 0\nCrowdStrike detections: 1\n\nVerdict: BEHAVIORAL\nDetail: Data collected but post-execution detection triggered\nSuggested action: change_runtime_behavior\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T11:05:28.783086\n  Requests: 1\n  Total bytes: 2964\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MALWAREVM..Username: vmuser..OS:....",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T11:09:33.545840",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_v2",
+      "evasion_layers": [
+        "evasion/anti_debug",
+        "evasion/anti_sandbox",
+        "evasion/aes_encrypt",
+        "evasion/sleep_jitter",
+        "evasion/deferred_exec",
+        "evasion/stack_spoof",
+        "evasion/thread_stack_spoof"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_cs_pe_v2.exe\nBinary exists on VM: True\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 1\n\nVerdict: NO_C2\nDetail: Binary exists but no C2 data received\nSuggested action: check_c2_connectivity\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T11:08:26.294158\n  Requests: 0\n  Total bytes: 0\n\n--- CrowdStrike Detections ---\n  === CrowdStrike Quarantine ===",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T11:11:12.574676",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer.js\nBinary exists on VM: True\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 1\n\nVerdict: NO_C2\nDetail: Binary exists but no C2 data received\nSuggested action: check_c2_connectivity\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T11:09:58.516420\n  Requests: 0\n  Total bytes: 0\n\n--- CrowdStrike Detections ---\n  === CrowdStrike Quarantine ===",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T13:48:39.750306",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_edr_v2",
+      "evasion_layers": [
+        "evasion/anti_debug",
+        "evasion/anti_sandbox",
+        "evasion/aes_encrypt",
+        "evasion/sleep_jitter",
+        "evasion/deferred_exec"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_pe.exe\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T13:44:32.706784\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T13:49:14.357022",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_edr_v2",
+      "evasion_layers": [
+        "evasion/anti_debug",
+        "evasion/anti_sandbox",
+        "evasion/aes_encrypt",
+        "evasion/sleep_jitter",
+        "evasion/deferred_exec"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_pe.exe\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T13:44:32.706784\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T13:50:44.322057",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_edr_v2",
+      "evasion_layers": [
+        "evasion/anti_debug",
+        "evasion/anti_sandbox",
+        "evasion/aes_encrypt",
+        "evasion/sleep_jitter",
+        "evasion/deferred_exec"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_pe.exe\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T13:50:19.993520\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T13:51:28.037171",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_edr_v2",
+      "evasion_layers": [
+        "evasion/anti_debug",
+        "evasion/anti_sandbox",
+        "evasion/aes_encrypt",
+        "evasion/sleep_jitter",
+        "evasion/deferred_exec"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer_pe.exe\nBinary exists on VM: False\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: UNKNOWN\nDetail: Unclassified: binary=gone, c2=0B\nSuggested action: manual_investigation\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T13:51:06.415945\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "quarantined",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T15:31:18.933765",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven_v3",
+      "evasion_layers": [
+        "evasion/etw_patch",
+        "evasion/sleep_encrypt",
+        "evasion/stack_spoof",
+        "evasion/behavioral_pacing",
+        "evasion/deferred_exec",
+        "evasion/process_masquerade"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: True\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: NO_C2\nDetail: Binary exists but no C2 data received\nSuggested action: check_c2_connectivity\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T15:29:40.510851\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "no_c2_data",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T16:34:28.303199",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven_v2",
+      "evasion_layers": [
+        "evasion/stack_spoof",
+        "evasion/thread_stack_spoof",
+        "evasion/iat_pad",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 2754,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: True\nC2 data received: 2754 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T16:33:25.191858\n  Requests: 1\n  Total bytes: 2754\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MALWAREVM..Username: vmuser..OS: Windows 10.0 Build 26200..Arch: x64  CPUs: 4..RAM: 8185 MB....=== RUNNING PRO",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-14T16:38:33.049051",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 0,
+      "detection_details": "=== Analysis Results ===\nBinary: js_infostealer_full.js\nBinary exists on VM: True\nC2 data received: 0 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: NO_C2\nDetail: Binary exists but no C2 data received\nSuggested action: check_c2_connectivity\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-14T16:35:37.378276\n  Requests: 0\n  Total bytes: 0",
+      "failure_type": "no_c2_data",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:00:39.922325",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_full",
+      "evasion_layers": [],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 541812,
+      "detection_details": "=== Analysis Results ===\nBinary: infostealer.js\nBinary exists on VM: True\nC2 data received: 541812 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-15T13:00:07.553292\n  Requests: 1\n  Total bytes: 541812\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:                     MALWAREVM..OS Name:                ",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:01:47.895812",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_stealth",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/anti_analysis",
+        "evasion/env_keying",
+        "evasion/deferred_exec",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 14645,
+      "detection_details": "=== Analysis Results ===\nBinary: stealth_infostealer.js\nBinary exists on VM: True\nC2 data received: 14645 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-15T13:00:51.475977\n  Requests: 1\n  Total bytes: 14645\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:                     MALWAREVM..OS Name:          ",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:03:01.418668",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven",
+      "evasion_layers": [
+        "evasion/etw_patch",
+        "evasion/sleep_ekko",
+        "evasion/hells_gate",
+        "evasion/stack_spoof"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 207997,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: True\nC2 data received: 207997 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-15T13:02:01.493399\n  Requests: 1\n  Total bytes: 207997\n  Preview (first 500 bytes): === SYSTEM INFO ===..Hostname: MALWAREVM..Username: vmuser..OS: Windows 10.0 Build 26200..Arch: x64  CPUs: 4..RAM: 8185 MB..NIC: Intel(R)",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:05:46.634796",
+      "malware_type": "infostealer",
+      "format_type": "jscript",
+      "recipe": "js_infostealer_staged",
+      "evasion_layers": [
+        "evasion/anti_sandbox",
+        "evasion/behavioral_pacing"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 30090,
+      "detection_details": "=== Analysis Results ===\nBinary: staged_infostealer.js\nBinary exists on VM: True\nC2 data received: 30090 bytes\nDefender detections: 0\nCrowdStrike detections: 0\n\nVerdict: SUCCESS\nDetail: All checks passed\nSuggested action: none\n\n--- C2 Report ---\nC2 listener port 9001:\n  Started: 2026-07-15T13:05:02.432518\n  Requests: 2\n  Total bytes: 30090\n  Preview (first 500 bytes): === STAGE 1: RECON ===..=== SYSTEM INFO ===..Hostname: MalwareVM..User: malwarevm\\vmuser....Host Name:                     MALWAR",
+      "failure_type": "detected",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:13:31.208952",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven",
+      "evasion_layers": [
+        "evasion/etw_patch",
+        "evasion/sleep_ekko",
+        "evasion/hells_gate",
+        "evasion/stack_spoof"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "SUCCESS",
+      "c2_bytes": 207997,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: True\nC2 data received: 207997 bytes\nDefender detections: 0\nCrowdStrike detections: 0\nVerdict: SUCCESS\nDetail: All checks passed",
+      "failure_type": "",
+      "notes": ""
+    },
+    {
+      "timestamp": "2026-07-15T13:13:31.210042",
+      "malware_type": "infostealer",
+      "format_type": "pe",
+      "recipe": "infostealer_cs_pe_proven",
+      "evasion_layers": [
+        "evasion/etw_patch",
+        "evasion/sleep_ekko",
+        "evasion/hells_gate",
+        "evasion/stack_spoof"
+      ],
+      "edr": "crowdstrike",
+      "edr_version": "",
+      "result": "FAILURE",
+      "c2_bytes": 207997,
+      "detection_details": "=== Analysis Results ===\nBinary: payload.exe\nBinary exists on VM: True\nC2 data received: 207997 bytes\nDefender detections: 0\nCrowdStrike detections: 1\nVerdict: SUCCESS\nDetail: All checks passed",
+      "failure_type": "detected",
+      "notes": ""
+    }
+  ],
+  "proven_recipes": {
+    "crowdstrike:infostealer": [
+      "jscript:js_infostealer_full:",
+      "pe:infostealer_full+resources:",
+      "pe:infostealer_cs_pe_proven:evasion/etw_patch,evasion/sleep_ekko,evasion/hells_gate,evasion/stack_spoof"
+    ],
+    "crowdstrike:keylogger": [
+      "pe:keylogger_stealer_combo+resources:",
+      "jscript:js_keylogger_cs:"
+    ],
+    "crowdstrike:backdoor": [
+      "pe:backdoor_http_api+resources:",
+      "jscript:js_backdoor_http:"
+    ],
+    "defender:keylogger": [
+      "pe:keylogger:",
+      "pe:keylogger_api:",
+      "pe:keylogger_poll:",
+      "pe:keylogger_certutil:",
+      "pe:keylogger_cscript:",
+      "pe:keylogger_powershell:",
+      "pe:keylogger_mshta:",
+      "pe:keylogger_winhttp:",
+      "pe:keylogger_stealth:",
+      "pe:keylogger_stealth_max:anti_sandbox,sleep_jitter,anti_debug,env_keying,timing_gate",
+      "pe:keylogger_dns:",
+      "pe:keylogger_recon_heavy:"
+    ],
+    "defender:infostealer": [
+      "pe:infostealer_edr_v2:etw_patch,sleep_encrypt,indirect_syscall,behavioral_pacing,api_hash"
+    ],
+    "elastic:keylogger": [
+      "pe:keylogger_zero_child:",
+      "pe:keylogger_api_only:"
+    ],
+    "elastic:infostealer": [
+      "pe:infostealer_api_only:",
+      "pe:infostealer_edr_v2:etw_patch,sleep_encrypt,indirect_syscall,behavioral_pacing,api_hash"
+    ]
+  },
+  "failed_patterns": {
+    "crowdstrike:infostealer": [
+      "quarantine:pe:infostealer_full (no resources)",
+      "quarantine:pe:infostealer_full (self-signed)",
+      "behavioral_detection:jscript:js_infostealer_ad (PowerShell adsisearcher)",
+      "quarantined:jscript:js_infostealer_stealth",
+      "detected:jscript:js_infostealer_stealth",
+      "no_c2_data:pe:infostealer_full",
+      "quarantined:pe:infostealer_cs_pe_proven",
+      "quarantined:pe:infostealer_cs_pe_final",
+      "quarantined:pe:infostealer_cs_pe_v2",
+      "quarantined:jscript:js_infostealer_full",
+      "quarantined:pe:infostealer_edr_v2",
+      "no_c2_data:pe:infostealer_cs_pe_proven_v3",
+      "detected:pe:infostealer_cs_pe_proven_v2",
+      "no_c2_data:jscript:js_infostealer_full",
+      "detected:jscript:js_infostealer_full",
+      "detected:pe:infostealer_cs_pe_proven",
+      "detected:jscript:js_infostealer_staged"
+    ],
+    "crowdstrike:keylogger": [
+      "quarantine:pe:keylogger_api (standalone, 4 DLLs, 51KB \u2014 GetAsyncKeyState pattern flagged)",
+      "quarantine:pe:keylogger_recon_heavy (5 DLLs, 57KB \u2014 still flagged with delayed quarantine)",
+      "quarantine:pe:any (no resources/manifest \u2014 ML quarantines all PE without .rsrc)",
+      "quarantine:pe:any (VERSIONINFO only, no manifest \u2014 insufficient for ML bypass)",
+      "quarantine:pe:any (random section names \u2014 gibberish names trigger ML)"
+    ],
+    "defender:infostealer": [
+      "static_detection:pe:infostealer_full (no evasion)"
+    ],
+    "elastic:keylogger": [
+      "behavioral_detection:pe:keylogger (LOLBin child processes: curl.exe, cmd.exe, tasklist.exe, schtasks)"
+    ]
+  },
+  "edr_profiles": {
+    "crowdstrike": {
+      "detection_method": "ML scoring + behavioral analysis + cloud reputation",
+      "pe_scoring_features": [
+        "rich_header",
+        "imports",
+        "entropy",
+        "resources",
+        "signature",
+        "cloud_reputation"
+      ],
+      "script_handling": "low_priority \u2014 text files (.js/.vbs) not scanned by ML, too many FP from legit scripts",
+      "bypass_primary": "jscript via cscript.exe (text file = no ML scan, cscript.exe = trusted LOLBin)",
+      "bypass_secondary": "PE with embedded resources (version info + manifest = fixes ML feature scores). CRITICAL: must use standard section names (no randomization), 6+ DLLs for keylogger, combo recipe for keylogger (embed in infostealer body). Manifest must have sanitized assembly name (no spaces) and 4-part version.",
+      "powershell_monitoring": "heavy \u2014 Add-Type, Reflection.Emit, adsisearcher all blocked by behavioral analysis",
+      "lolbin_monitoring": "light \u2014 net user, systeminfo, tasklist individually legitimate via cmd.exe",
+      "available_lolbins": [
+        "powershell.exe",
+        "cscript.exe",
+        "wscript.exe",
+        "curl.exe",
+        "rundll32.exe",
+        "cmd.exe",
+        "InstallUtil.exe"
+      ],
+      "missing_lolbins": [
+        "mshta.exe",
+        "certutil.exe",
+        "cmstp.exe",
+        "csc.exe",
+        "MSBuild.exe"
+      ]
+    },
+    "defender": {
+      "detection_method": "AMSI + static signatures + cloud ML + ETW kernel monitoring",
+      "bypass_primary": "PE with evasion chunks (ETW patch, sleep encrypt, indirect syscalls)",
+      "bypass_secondary": "clean 3-DLL IAT keylogger (K32+msvcrt+USER32) \u2014 no evasion needed for keylogger pattern",
+      "amsi_monitoring": "heavy \u2014 scripts routed through AMSI pipeline",
+      "tamper_protection": "blocks AMSI patch via direct memory write",
+      "keylogger_notes": "GetAsyncKeyState polling is undetected. All 12 keylogger recipes pass. Heavy obfuscation (SEH+anti-debug) WORSENS detection.",
+      "iat_sweet_spot": "3 DLLs (K32+msvcrt+USER32). 4 DLLs (adding WS2_32/WINHTTP/DNSAPI/ADVAPI32) also passes."
+    },
+    "elastic": {
+      "detection_method": "rule-based EQL/KQL pattern matching on event telemetry (NOT behavioral analysis in free tier)",
+      "version_tested": "8.15.3 (free tier, 497 enabled rules)",
+      "bypass_primary": "zero-child-process PE \u2014 all collection via Win32 API, raw TCP exfil, startup folder persistence",
+      "bypass_secondary": "jscript via cscript.exe",
+      "what_triggers_alerts": [
+        "curl.exe \u2192 Potential File Transfer via Curl",
+        "cmd.exe \u2192 System Info Discovery",
+        "tasklist.exe \u2192 Process Discovery",
+        "schtasks \u2192 Local Scheduled Task Creation",
+        "registry Run key \u2192 Startup or Run Key Registry Modification"
+      ],
+      "what_is_undetected": [
+        "GetAsyncKeyState polling",
+        "raw TCP exfil to RFC1918 addresses (rules exclude 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)",
+        "DNS exfil (no DNS tunneling rules)",
+        "Startup folder file creation (no rule)",
+        "Any native C binary using direct Win32 APIs",
+        "WinHTTP API calls"
+      ],
+      "critical_evasion_rules": [
+        "Replace ALL LOLBin exfil with raw TCP (tcp_flush) or WinHTTP",
+        "Replace cmd /c hostname \u2192 GetComputerNameA, cmd /c whoami \u2192 GetUserNameA",
+        "Replace tasklist \u2192 CreateToolhelp32Snapshot",
+        "Replace schtasks persistence \u2192 Startup folder CopyFileA",
+        "NO cmd.exe/powershell.exe/curl.exe child processes",
+        "For public C2: network rules WOULD fire (they only exclude RFC1918)"
+      ]
+    }
+  }
+}

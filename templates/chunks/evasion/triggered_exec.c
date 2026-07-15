@@ -2,7 +2,10 @@
 // depends: (none)
 // provides: wait_for_user_activity
 // headers: windows.h
+// risk: medium
 // note: Wait for real user activity (mouse/keyboard) before starting — sandboxes are idle
+// WARNING: Waits for mouse movement before executing. Hangs indefinitely when
+//   deployed via SSH or automated pipelines. Only use for interactive/RDP deployment.
 
 #ifndef CHUNK_TRIGGERED_EXEC
 #define CHUNK_TRIGGERED_EXEC

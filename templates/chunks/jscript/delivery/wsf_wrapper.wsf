@@ -1,0 +1,18 @@
+<!-- chunk: delivery/wsf_wrapper -->
+<!-- provides: wsf_container -->
+<!-- format: wsf -->
+<!-- note: Windows Script File that embeds JScript payload with manifest for COM access -->
+
+<?xml version="1.0" encoding="UTF-8"?>
+<package>
+<job id="main">
+<runtime>
+<description>Windows Update Service</description>
+</runtime>
+<script language="JScript">
+<![CDATA[
+{{PAYLOAD_BODY}}
+]]>
+</script>
+</job>
+</package>

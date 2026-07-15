@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: module_stomp_init, module_stomp_execute
 // headers: windows.h
+// risk: low
 // note: Module stomping — loads a legitimate signed DLL, overwrites its .text section with payload code. Executable region appears image-backed (MEM_IMAGE), defeating VAD-based "unbacked private commit" detection. Uses dbgcore.dll as sacrificial DLL (rarely loaded, large enough .text).
 
 #ifndef CHUNK_MODULE_STOMP

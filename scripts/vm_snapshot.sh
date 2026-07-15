@@ -41,6 +41,26 @@ case "${1:-help}" in
     save)
         TAG="${2:-clean_state}"
         OVERLAY="$DISK_DIR/${DISK_STEM}.overlay-${TAG}.qcow2"
+
+        # SAFETY: verify base disk exists before snapshotting.
+        # If the base is gone (deleted while QEMU held fd), the overlay
+        # will have a dangling backing-file reference and restore will fail.
+        if [ ! -f "$DISK_IMG" ]; then
+            echo "WARNING: base disk missing: $DISK_IMG"
+            echo "  QEMU may be running from a deleted file (fd still open)."
+            echo "  Attempting to recover base disk via QMP block commit..."
+            # Try to get QEMU to flush its in-memory state to a new file
+            qemu-img create -f qcow2 "$DISK_IMG" 80G 2>/dev/null
+            RESULT=$(qmp_cmd "{\"execute\":\"block-commit\",\"arguments\":{\"device\":\"$DISK_DEVICE\"}}")
+            if ! echo "$RESULT" | grep -q '"return"'; then
+                rm -f "$DISK_IMG"
+                echo "ABORT: cannot recover base disk. Save a full snapshot instead:"
+                echo "  qemu-img convert from the running device"
+                exit 1
+            fi
+            echo "  Base disk recovered."
+        fi
+
         rm -f "$OVERLAY"
         echo "Creating snapshot '$TAG'..."
         RESULT=$(qmp_cmd "{\"execute\":\"blockdev-snapshot-sync\",\"arguments\":{\"device\":\"$DISK_DEVICE\",\"snapshot-file\":\"$OVERLAY\",\"format\":\"qcow2\"}}")
@@ -61,6 +81,22 @@ case "${1:-help}" in
             echo "No snapshot '$TAG' found (expected $OVERLAY)"
             exit 1
         fi
+
+        # SAFETY: verify base disk exists BEFORE touching anything.
+        # The overlay is the ONLY copy of post-snapshot writes. If the
+        # base disk is gone and we delete the overlay, the VM is bricked.
+        if [ ! -f "$DISK_IMG" ]; then
+            echo "ABORT: base disk missing: $DISK_IMG"
+            echo "  The overlay ($OVERLAY) is the only surviving disk."
+            echo "  Committing overlay into a standalone base disk..."
+            qemu-img convert -O qcow2 "$OVERLAY" "$DISK_IMG"
+            if [ $? -ne 0 ] || [ ! -f "$DISK_IMG" ]; then
+                echo "  FAILED to commit overlay. Overlay preserved, nothing deleted."
+                exit 1
+            fi
+            echo "  Base disk recovered from overlay ($(du -h "$DISK_IMG" | cut -f1))."
+        fi
+
         echo "Restoring snapshot '$TAG'..."
 
         # 1. Graceful shutdown via SSH
@@ -83,7 +119,15 @@ case "${1:-help}" in
             fi
         fi
 
-        # 3. Discard overlay
+        # 3. Verify base disk is still intact after QEMU exit
+        if [ ! -f "$DISK_IMG" ]; then
+            echo "ABORT: base disk vanished after QEMU shutdown: $DISK_IMG"
+            echo "  This can happen if the COW was deleted while QEMU held the fd."
+            echo "  Overlay preserved: $OVERLAY"
+            exit 1
+        fi
+
+        # 4. Discard overlay
         echo "  Discarding overlay..."
         rm -f "$OVERLAY"
         rm -f "$QMP_SOCK"
@@ -111,7 +155,7 @@ case "${1:-help}" in
             -tpmdev emulator,id=tpm0,chardev=chrtpm \
             -device tpm-tis,tpmdev=tpm0 \
             -qmp "unix:$QMP_SOCK,server,nowait" \
-            -netdev user,id=net0,hostfwd=tcp::${VM_PORT}-:22 \
+            -netdev user,id=net0,hostfwd=tcp::${VM_PORT}-:22,hostfwd=tcp::13389-:3389 \
             -device e1000,netdev=net0,romfile= \
             -vga std -vnc 127.0.0.1:1 \
             -serial file:/tmp/vm.log \

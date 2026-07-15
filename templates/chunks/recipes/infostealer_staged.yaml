@@ -20,6 +20,8 @@ collectors:
 exfil: exfil/tcp_direct
 arch: arch/staged
 
+resources: true
+
 evasion:
   - evasion/anti_debug
   - evasion/sleep_jitter

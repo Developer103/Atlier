@@ -28,6 +28,8 @@ arch: arch/fiber
 api_resolve: api_resolve/peb_walk
 process: process/ppid_spoof
 
+resources: true
+
 evasion:
   - evasion/anti_debug
   - evasion/anti_vm

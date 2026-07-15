@@ -51,12 +51,22 @@ mkdir -p "$PKG_DIR"
 SSH="sshpass -p $VM_PASS ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -p $VM_PORT $VM_USER@localhost"
 SCP="sshpass -p $VM_PASS scp -o StrictHostKeyChecking=no -P $VM_PORT"
 
+VM_SNAPSHOT="${VM_SNAPSHOT:-crowdstrike}"
+
 C2_PID=""
 cleanup() {
     [ -n "$C2_PID" ] && kill $C2_PID 2>/dev/null || true
-    $SSH "schtasks /delete /tn keylog_test /f 2>nul" >/dev/null 2>&1 || true
-    $SSH "taskkill /f /im keylogger.exe 2>nul" >/dev/null 2>&1 || true
-    $SSH "del C:\\Users\\$VM_USER\\Desktop\\keylogger.exe 2>nul" >/dev/null 2>&1 || true
+    echo ""
+    echo "[*] Restoring VM snapshot..."
+    if "$SCRIPT_DIR/vm_snapshot.sh" restore "$VM_SNAPSHOT" 2>/dev/null; then
+        echo "  OK (restored $VM_SNAPSHOT)"
+    else
+        echo "  No snapshot to restore, cleaning up manually..."
+        $SSH "schtasks /delete /tn keylog_test /f 2>nul" >/dev/null 2>&1 || true
+        $SSH "taskkill /f /im keylogger.exe 2>nul" >/dev/null 2>&1 || true
+        $SSH "del C:\\Users\\$VM_USER\\Desktop\\keylogger.exe 2>nul" >/dev/null 2>&1 || true
+    fi
+    fuser -k "$C2_PORT/tcp" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -124,7 +134,7 @@ rm -f "${PROJECT_DIR}/results/latest"
 ln -s "chunk_keylogger_${TIMESTAMP}" "${PROJECT_DIR}/results/latest"
 
 echo "[3/5] Uploading payload..."
-$SCP "$PAYLOAD" "$VM_USER@localhost:C:\\Users\\$VM_USER\\Desktop\\keylogger.exe" 2>/dev/null
+$SCP "$PAYLOAD" "$VM_USER@localhost:Desktop\\keylogger.exe" 2>/dev/null
 sleep 2
 EXISTS=$($SSH 'if exist C:\Users\vmuser\Desktop\keylogger.exe (echo EXISTS) else (echo GONE)' 2>/dev/null | tr -d '\r')
 if [ "$EXISTS" = "GONE" ]; then

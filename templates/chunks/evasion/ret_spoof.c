@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: init_ret_spoof, spoofed_call
 // headers: windows.h
+// risk: none
 // note: Return address spoofing — hides the true caller from EDR stack walkers.
 //       Scans loaded modules for a jmp rbx gadget, uses it to trampoline API calls
 //       so the return address on the stack points to legitimate code.

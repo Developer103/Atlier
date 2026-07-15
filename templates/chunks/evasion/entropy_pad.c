@@ -1,6 +1,7 @@
 // chunk: evasion/entropy_pad
 // depends: (none)
 // provides: entropy_pad_ref
+// risk: none
 
 #ifndef CHUNK_ENTROPY_PAD
 #define CHUNK_ENTROPY_PAD

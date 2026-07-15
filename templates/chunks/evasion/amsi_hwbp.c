@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: amsi_hwbp_init, amsi_hwbp_cleanup
 // headers: windows.h
+// risk: medium
 // note: Patchless AMSI bypass — hardware breakpoint on AmsiScanBuffer + VEH. No memory modification in amsi.dll. Uses DR1 (DR0 may be used by hw_bp_etw). NtContinue sets debug regs to avoid ETW-TI event from SetThreadContext.
 
 #ifndef CHUNK_AMSI_HWBP

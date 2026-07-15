@@ -204,14 +204,25 @@ def _mutate_source(source: str, os_platform: str = "windows") -> str:
             'src', 'dst', 'buf', 'len', 'size', 'count', 'result',
             'status', 'ret', 'err', 'rc', 'fd', 'fp', 'ptr',
             'hProcess', 'hThread', 'hModule', 'hKey', 'hFile',
+            # x86 mnemonics — renaming these corrupts inline asm
+            'sub', 'add', 'mov', 'xor', 'and', 'or', 'not', 'push',
+            'pop', 'call', 'ret', 'jmp', 'cmp', 'test', 'lea', 'nop',
+            'int', 'inc', 'dec', 'shl', 'shr', 'div', 'mul', 'neg',
         }
         if vname in _PROTECTED:
             continue
         suffix = ''.join(rng.choices(string.ascii_lowercase, k=4))
         var_map[vname] = f"_{vname[0]}{suffix}"
 
+    source = re.sub(r'/\*.*?\*/', '', source, flags=re.DOTALL)
+
     for old_name, new_name in var_map.items():
-        source = re.sub(r'\b' + re.escape(old_name) + r'\b', new_name, source)
+        pat = re.compile(r'"(?:[^"\\]|\\.)*"|' + r'\b' + re.escape(old_name) + r'\b')
+        def _make_repl(new):
+            def _repl(m):
+                return m.group(0) if m.group(0).startswith('"') else new
+            return _repl
+        source = pat.sub(_make_repl(new_name), source)
 
     if _is_linux:
         _JUNK_BLOCKS = [
@@ -230,11 +241,38 @@ def _mutate_source(source: str, os_platform: str = "windows") -> str:
 
     lines = source.split('\n')
     insertions: list[tuple[int, str]] = []
+    _naked_pending = False
+    _naked_depth = 0
     for idx, line in enumerate(lines):
         stripped = line.strip()
+        if '__attribute__((naked))' in stripped:
+            _naked_pending = True
+            _naked_depth = 0
+        if _naked_pending or _naked_depth > 0:
+            opens = stripped.count('{')
+            closes = stripped.count('}')
+            if _naked_pending and opens > 0:
+                _naked_pending = False
+                _naked_depth = opens - closes
+            elif not _naked_pending:
+                _naked_depth += opens - closes
+            continue
         if (stripped.startswith('if (') or stripped.startswith('for (')
                 or stripped.startswith('while (') or stripped == 'return 0;'
                 or stripped == 'return FALSE;' or stripped == 'return TRUE;'):
+            if idx > 0:
+                prev_stripped = ""
+                for j in range(idx - 1, max(idx - 3, -1), -1):
+                    ps = lines[j].strip()
+                    if ps:
+                        prev_stripped = ps
+                        break
+                if (prev_stripped and not prev_stripped.endswith('{')
+                        and not prev_stripped.endswith(';')
+                        and not prev_stripped.endswith('}')
+                        and not prev_stripped.startswith('//')
+                        and not prev_stripped.startswith('#')):
+                    continue
             if rng.random() < 0.15:
                 indent = len(line) - len(line.lstrip())
                 jid = rng.randint(1000, 9999)
@@ -308,13 +346,35 @@ def _inject_control_flow_junk(source: str) -> str:
     lines = source.split('\n')
     insertions = []
 
+    _naked_pending = False
+    _naked_depth = 0
     for idx, line in enumerate(lines):
         stripped = line.strip()
+        if '__attribute__((naked))' in stripped:
+            _naked_pending = True
+            _naked_depth = 0
+        if _naked_pending or _naked_depth > 0:
+            opens = stripped.count('{')
+            closes = stripped.count('}')
+            if _naked_pending and opens > 0:
+                _naked_pending = False
+                _naked_depth = opens - closes
+            elif not _naked_pending:
+                _naked_depth += opens - closes
+            continue
         # Insert after function-call statements (ending with ');')
         if (stripped.endswith(');') and not stripped.startswith('//')
                 and not stripped.startswith('#') and not stripped.startswith('typedef')
                 and not stripped.startswith('static') and 'return' not in stripped
                 and '=' not in stripped):
+            next_line = ""
+            for j in range(idx + 1, min(idx + 3, len(lines))):
+                ns = lines[j].strip()
+                if ns:
+                    next_line = ns
+                    break
+            if next_line.startswith("else"):
+                continue
             if rng.random() < 0.06:  # ~6% of qualifying lines
                 indent = len(line) - len(line.lstrip())
                 pad = ' ' * indent
@@ -368,8 +428,6 @@ def _encrypt_string_literals(source: str) -> str:
         except (UnicodeDecodeError, ValueError):
             decoded = raw
         if len(decoded) <= 3:
-            return False
-        if _FMT_RE.search(raw):
             return False
         return True
 
@@ -517,6 +575,10 @@ _SUSPICIOUS_APIS: dict[str, tuple[str, str, str]] = {
     "InternetOpenUrlA":        ("wininet.dll",  "HINTERNET","HINTERNET,LPCSTR,LPCSTR,DWORD,DWORD,DWORD_PTR"),
     "IsDebuggerPresent":       ("kernel32.dll", "BOOL",     "void"),
     "CheckRemoteDebuggerPresent": ("kernel32.dll", "BOOL",  "HANDLE,PBOOL"),
+    "BitBlt":                  ("gdi32.dll",    "BOOL",   "HDC,int,int,int,int,HDC,int,int,DWORD"),
+    "GetDIBits":               ("gdi32.dll",    "int",    "HDC,HBITMAP,UINT,UINT,LPVOID,LPBITMAPINFO,UINT"),
+    "WSAStartup":              ("ws2_32.dll",   "int",    "WORD,LPWSADATA"),
+    "GetAdaptersInfo":         ("iphlpapi.dll", "ULONG",  "PIP_ADAPTER_INFO,PULONG"),
 }
 
 

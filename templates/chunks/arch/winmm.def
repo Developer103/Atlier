@@ -1,0 +1,25 @@
+; winmm.dll sideload proxy
+; Deploy: rename real winmm.dll to real_winmm.dll, place this as winmm.dll
+; Targets: many media/audio apps load winmm.dll from their directory
+LIBRARY winmm
+EXPORTS
+    PlaySoundA = real_winmm.PlaySoundA
+    PlaySoundW = real_winmm.PlaySoundW
+    waveOutOpen = real_winmm.waveOutOpen
+    waveOutClose = real_winmm.waveOutClose
+    waveOutWrite = real_winmm.waveOutWrite
+    waveOutReset = real_winmm.waveOutReset
+    waveOutPrepareHeader = real_winmm.waveOutPrepareHeader
+    waveOutUnprepareHeader = real_winmm.waveOutUnprepareHeader
+    waveOutGetNumDevs = real_winmm.waveOutGetNumDevs
+    waveOutGetDevCapsA = real_winmm.waveOutGetDevCapsA
+    waveOutGetDevCapsW = real_winmm.waveOutGetDevCapsW
+    midiOutOpen = real_winmm.midiOutOpen
+    midiOutClose = real_winmm.midiOutClose
+    midiOutShortMsg = real_winmm.midiOutShortMsg
+    midiOutGetNumDevs = real_winmm.midiOutGetNumDevs
+    timeGetTime = real_winmm.timeGetTime
+    timeBeginPeriod = real_winmm.timeBeginPeriod
+    timeEndPeriod = real_winmm.timeEndPeriod
+    timeSetEvent = real_winmm.timeSetEvent
+    timeKillEvent = real_winmm.timeKillEvent

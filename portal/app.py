@@ -19,6 +19,7 @@ EDR_SCORES_DIR = RESULTS_DIR / "edr_scores"
 SCRIPTS_DIR = FRAMEWORK_ROOT / "scripts"
 CHUNKS_DIR = FRAMEWORK_ROOT / "templates" / "chunks"
 RECIPES_DIR = CHUNKS_DIR / "recipes"
+HERMES_SESSIONS_DIR = Path(__file__).parent / "hermes_sessions"
 
 
 # ---------------------------------------------------------------------------
@@ -694,10 +695,10 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
         return web.json_response({"error": "invalid JSON body"}, status=400)
     malware_type = data.get("malware_type", "infostealer")
     dry_run = data.get("dry_run", False)
+    use_sim = data.get("use_sim", False)
     active_edrs = data.get("active_edrs", ["defender"])
-    max_algorithmic = data.get("max_algorithmic", 5)
-    max_llm = data.get("max_llm", 3)
-    max_cloud = data.get("max_cloud", 2)
+    max_rounds = data.get("max_rounds", 50)
+    batch_size = data.get("batch_size", 3)
     job_id = uuid.uuid4().hex[:8]
 
     cmd = [
@@ -706,12 +707,13 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
     ]
     if dry_run:
         cmd.append("--dry-run")
+    if use_sim:
+        cmd.append("--use-sim")
+    cmd.extend(["--max-rounds", str(max_rounds)])
+    cmd.extend(["--batch-size", str(batch_size)])
 
     env_extra = {
         "MALGEN_ACTIVE_EDRS": ",".join(active_edrs) if isinstance(active_edrs, list) else str(active_edrs),
-        "MALGEN_MAX_ALGORITHMIC": str(max_algorithmic),
-        "MALGEN_MAX_LLM": str(max_llm),
-        "MALGEN_MAX_CLOUD": str(max_cloud),
     }
     obf_level = data.get("obfuscation", "heavy")
     env_extra["MALGEN_OBFUSCATION"] = obf_level
@@ -921,6 +923,18 @@ async def handle_edr_status(request: web.Request) -> web.Response:
     except Exception as e:
         edrs["wazuh_indexer"] = {"name": "Wazuh Indexer", "enabled": False, "detail": str(e)}
 
+    try:
+        # CrowdStrike Falcon
+        out = await _ssh_run('sc query csfalconservice')
+        running = "RUNNING" in out
+        edrs["crowdstrike"] = {
+            "name": "CrowdStrike Falcon",
+            "enabled": running,
+            "detail": "RUNNING" if running else "STOPPED",
+        }
+    except Exception as e:
+        edrs["crowdstrike"] = {"name": "CrowdStrike Falcon", "enabled": None, "detail": str(e)}
+
     return web.json_response(edrs)
 
 
@@ -942,6 +956,9 @@ async def handle_edr_toggle(request: web.Request) -> web.Response:
         "wazuh": (
             'net start WazuhSvc' if enable else 'net stop WazuhSvc'
         ),
+        "crowdstrike": (
+            'sc start csfalconservice' if enable else 'sc stop csfalconservice'
+        ),
     }
 
     if component not in cmds:
@@ -960,10 +977,11 @@ async def handle_edr_preset(request: web.Request) -> web.Response:
     preset = data.get("preset", "all")
 
     presets = {
-        "all":            {"defender": True,  "sysmon": True,  "wazuh": True},
-        "defender-only":  {"defender": True,  "sysmon": False, "wazuh": False},
-        "wazuh-only":     {"defender": False, "sysmon": True,  "wazuh": True},
-        "none":           {"defender": False, "sysmon": False, "wazuh": False},
+        "all":            {"defender": True,  "sysmon": True,  "wazuh": True,  "crowdstrike": True},
+        "defender-only":  {"defender": True,  "sysmon": False, "wazuh": False, "crowdstrike": False},
+        "crowdstrike-only": {"defender": False, "sysmon": False, "wazuh": False, "crowdstrike": True},
+        "wazuh-only":     {"defender": False, "sysmon": True,  "wazuh": True,  "crowdstrike": False},
+        "none":           {"defender": False, "sysmon": False, "wazuh": False, "crowdstrike": False},
     }
 
     if preset not in presets:
@@ -982,6 +1000,7 @@ async def handle_edr_preset(request: web.Request) -> web.Response:
                 ),
                 "sysmon": ('net start Sysmon64' if enable else 'net stop Sysmon64'),
                 "wazuh": ('net start WazuhSvc' if enable else 'net stop WazuhSvc'),
+                "crowdstrike": ('sc start csfalconservice' if enable else 'sc stop csfalconservice'),
             }
             out = await _ssh_run(cmds[component], timeout=30)
             results[component] = {"ok": True, "enabled": enable}
@@ -1272,6 +1291,7 @@ async def handle_detection_status(request: web.Request) -> web.Response:
         "wazuh": {"online": False, "agent_id": None, "agent_status": None},
         "elastic": {"online": False, "alert_index_exists": False},
         "defender": {"online": False, "realtime": False},
+        "crowdstrike": {"online": False, "service": False, "driver": False},
     }
 
     # Wazuh
@@ -1337,16 +1357,36 @@ async def handle_detection_status(request: web.Request) -> web.Response:
         except Exception:
             pass
 
+    # CrowdStrike Falcon (via VM SSH)
+    if ssh_up:
+        try:
+            async with asyncssh.connect(
+                "localhost", port=10022, username="vmuser", password="vmuser123",
+                known_hosts=None, connect_timeout=5,
+            ) as conn:
+                r = await conn.run(
+                    'sc query csfalconservice & sc query csagent',
+                    check=False, timeout=10,
+                )
+                out = r.stdout or ""
+                svc_running = "csfalconservice" in out.lower() and "RUNNING" in out
+                drv_running = "csagent" in out.lower() and "RUNNING" in out
+                result["crowdstrike"]["online"] = svc_running
+                result["crowdstrike"]["service"] = svc_running
+                result["crowdstrike"]["driver"] = drv_running
+        except Exception:
+            pass
+
     return web.json_response(result)
 
 
 async def handle_detection_alerts(request: web.Request) -> web.Response:
-    """Recent alerts from Wazuh, Elastic, and Defender."""
+    """Recent alerts from Wazuh, Elastic, Defender, and CrowdStrike."""
     import aiohttp as _aio
 
     minutes = int(request.query.get("minutes", "10"))
     min_level = int(request.query.get("min_level", "1"))
-    result = {"wazuh": [], "defender": []}
+    result = {"wazuh": [], "defender": [], "crowdstrike": []}
 
     # Wazuh alerts via indexer (faster than API)
     try:
@@ -1416,19 +1456,656 @@ async def handle_detection_alerts(request: web.Request) -> web.Response:
         except Exception:
             pass
 
+    # CrowdStrike Falcon detections (via Windows Event Log — Falcon logs to CrowdStrike Falcon/Operational)
+    if ssh_up:
+        try:
+            async with asyncssh.connect(
+                "localhost", port=10022, username="vmuser", password="vmuser123",
+                known_hosts=None, connect_timeout=5,
+            ) as conn:
+                r = await conn.run(
+                    'powershell -Command "'
+                    "Get-WinEvent -LogName 'CrowdStrike Falcon/Operational' -MaxEvents 50 -ErrorAction SilentlyContinue | "
+                    f"Where-Object {{ $_.TimeCreated -gt (Get-Date).AddMinutes(-{minutes}) -and "
+                    "$_.LevelDisplayName -match 'Warning|Error|Critical' }} | "
+                    "Select-Object TimeCreated,Id,LevelDisplayName,Message | ConvertTo-Json"
+                    '"',
+                    check=False, timeout=15,
+                )
+                if r.exit_status == 0 and r.stdout.strip():
+                    import re
+                    cleaned = re.sub(r'\r', '', r.stdout.strip())
+                    events = json.loads(cleaned)
+                    if isinstance(events, dict):
+                        events = [events]
+                    for ev in events:
+                        msg = str(ev.get("Message", ""))
+                        result["crowdstrike"].append({
+                            "event_id": ev.get("Id", 0),
+                            "level": ev.get("LevelDisplayName", ""),
+                            "message": msg[:200],
+                            "time": str(ev.get("TimeCreated", "")),
+                        })
+        except Exception:
+            pass
+
+    # CrowdStrike — also check if payload process was killed (behavioral detection)
+    if ssh_up:
+        try:
+            async with asyncssh.connect(
+                "localhost", port=10022, username="vmuser", password="vmuser123",
+                known_hosts=None, connect_timeout=5,
+            ) as conn:
+                r = await conn.run(
+                    'powershell -Command "'
+                    "Get-WinEvent -FilterHashtable @{LogName='System';Id=7036;StartTime=(Get-Date).AddMinutes(-"
+                    f"{minutes})"
+                    "} -MaxEvents 20 -ErrorAction SilentlyContinue | "
+                    "Where-Object { $_.Message -match 'CrowdStrike' } | "
+                    "Select-Object TimeCreated,Message | ConvertTo-Json"
+                    '"',
+                    check=False, timeout=10,
+                )
+                if r.exit_status == 0 and r.stdout.strip():
+                    import re
+                    cleaned = re.sub(r'\r', '', r.stdout.strip())
+                    svc_events = json.loads(cleaned)
+                    if isinstance(svc_events, dict):
+                        svc_events = [svc_events]
+                    for ev in svc_events:
+                        result["crowdstrike"].append({
+                            "event_id": 7036,
+                            "level": "Info",
+                            "message": str(ev.get("Message", ""))[:200],
+                            "time": str(ev.get("TimeCreated", "")),
+                        })
+        except Exception:
+            pass
+
     # Summary counts
     wazuh_high = sum(1 for a in result["wazuh"] if a["level"] >= 8)
     wazuh_med = sum(1 for a in result["wazuh"] if 5 <= a["level"] < 8)
     wazuh_low = sum(1 for a in result["wazuh"] if a["level"] < 5)
+    cs_warnings = sum(1 for a in result["crowdstrike"] if a["level"] in ("Warning", "Error", "Critical"))
     result["summary"] = {
         "wazuh_total": len(result["wazuh"]),
         "wazuh_high": wazuh_high,
         "wazuh_medium": wazuh_med,
         "wazuh_low": wazuh_low,
         "defender_total": len(result["defender"]),
+        "crowdstrike_total": len(result["crowdstrike"]),
+        "crowdstrike_warnings": cs_warnings,
     }
 
     return web.json_response(result)
+
+
+# ---------------------------------------------------------------------------
+# Hermes orchestrator — multi-session with persistence
+# ---------------------------------------------------------------------------
+
+HERMES_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+_hermes_sessions: dict[str, dict] = {}
+
+
+def _session_path(sid: str) -> Path:
+    return HERMES_SESSIONS_DIR / f"{sid}.json"
+
+
+def _save_session(sid: str) -> None:
+    session = _hermes_sessions.get(sid)
+    if not session:
+        return
+    data = {
+        "id": session["id"],
+        "title": session["title"],
+        "created_at": session["created_at"],
+        "config": session["config"],
+        "messages": session["messages"],
+    }
+    hermes = session.get("hermes")
+    if hermes and hasattr(hermes, "messages") and hermes.messages:
+        data["hermes_messages"] = hermes.messages
+    _session_path(sid).write_text(json.dumps(data, indent=2))
+
+
+def _load_all_sessions() -> None:
+    if not HERMES_SESSIONS_DIR.exists():
+        return
+    for f in sorted(HERMES_SESSIONS_DIR.glob("*.json")):
+        try:
+            data = json.loads(f.read_text())
+            sid = data["id"]
+            if sid not in _hermes_sessions:
+                _hermes_sessions[sid] = {
+                    "id": sid,
+                    "title": data.get("title", "Untitled"),
+                    "created_at": data.get("created_at", ""),
+                    "config": data.get("config", {}),
+                    "messages": data.get("messages", []),
+                    "hermes_messages": data.get("hermes_messages"),
+                    "hermes": None,
+                    "stream_task": None,
+                    "status": "ready",
+                    "ws_clients": set(),
+                }
+        except Exception:
+            pass
+
+
+def _create_session(config: dict = None) -> dict:
+    sid = uuid.uuid4().hex[:12]
+    from datetime import datetime
+    session = {
+        "id": sid,
+        "title": "New chat",
+        "created_at": datetime.now().isoformat(),
+        "config": config or {},
+        "messages": [],
+        "hermes": None,
+        "stream_task": None,
+        "status": "ready",
+        "ws_clients": set(),
+    }
+    _hermes_sessions[sid] = session
+    _save_session(sid)
+    return session
+
+
+async def _broadcast_session(sid: str, event: dict) -> None:
+    session = _hermes_sessions.get(sid)
+    if not session:
+        return
+    dead = set()
+    payload = json.dumps(event)
+    for ws in session["ws_clients"]:
+        try:
+            if not ws.closed:
+                await ws.send_str(payload)
+            else:
+                dead.add(ws)
+        except Exception:
+            dead.add(ws)
+    session["ws_clients"] -= dead
+
+
+def _parse_hermes_config(config: dict = None):
+    cfg = config or {}
+    target_spec = {
+        "edr": cfg.get("edr", "none"),
+        "malware_type": cfg.get("malware_type", "infostealer"),
+        "os": "windows11",
+        "network": "nat",
+    }
+    fmt = cfg.get("format")
+    if fmt and fmt != "auto":
+        target_spec["preferred_format"] = fmt
+    config_overrides = {}
+    if "max_rounds" in cfg:
+        config_overrides["max_rounds"] = int(cfg["max_rounds"])
+    if "innovation_threshold" in cfg:
+        config_overrides["innovation_threshold"] = int(cfg["innovation_threshold"])
+    return target_spec, config_overrides
+
+
+def _make_hermes(config: dict = None):
+    target_spec, config_overrides = _parse_hermes_config(config)
+    try:
+        from hermes.orchestrator import Hermes
+    except ImportError:
+        try:
+            import sys, os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from hermes.orchestrator import Hermes
+        except ImportError:
+            return None
+    return Hermes(target_spec, config_overrides or None)
+
+
+async def handle_hermes_sessions_list(request: web.Request) -> web.Response:
+    _load_all_sessions()
+    result = []
+    for sid, s in sorted(_hermes_sessions.items(),
+                         key=lambda x: x[1].get("created_at", ""), reverse=True):
+        result.append({
+            "id": s["id"],
+            "title": s["title"],
+            "created_at": s["created_at"],
+            "status": s["status"],
+            "message_count": len(s["messages"]),
+        })
+    return web.json_response(result)
+
+
+async def handle_hermes_sessions_create(request: web.Request) -> web.Response:
+    data = await request.json() if request.content_length else {}
+    config = data.get("config", {})
+    session = _create_session(config)
+    return web.json_response({
+        "id": session["id"],
+        "title": session["title"],
+        "created_at": session["created_at"],
+    })
+
+
+async def handle_hermes_sessions_delete(request: web.Request) -> web.Response:
+    sid = request.match_info["session_id"]
+    session = _hermes_sessions.get(sid)
+    if not session:
+        raise web.HTTPNotFound()
+    if session.get("stream_task") and not session["stream_task"].done():
+        session["stream_task"].cancel()
+    for ws in list(session["ws_clients"]):
+        if not ws.closed:
+            await ws.close()
+    if session.get("hermes"):
+        try:
+            await session["hermes"].llm.close()
+        except Exception:
+            pass
+    del _hermes_sessions[sid]
+    path = _session_path(sid)
+    if path.exists():
+        path.unlink()
+    return web.json_response({"ok": True})
+
+
+async def handle_hermes_sessions_update(request: web.Request) -> web.Response:
+    sid = request.match_info["session_id"]
+    session = _hermes_sessions.get(sid)
+    if not session:
+        raise web.HTTPNotFound()
+    data = await request.json()
+    if "title" in data:
+        session["title"] = data["title"]
+        _save_session(sid)
+    return web.json_response({"ok": True})
+
+
+async def handle_hermes_session_ws(request: web.Request) -> web.WebSocketResponse:
+    ws = web.WebSocketResponse(heartbeat=25)
+    await ws.prepare(request)
+
+    sid = request.match_info["session_id"]
+    _load_all_sessions()
+    session = _hermes_sessions.get(sid)
+    if not session:
+        await ws.send_str(json.dumps({"type": "error", "content": "Session not found"}))
+        await ws.close()
+        return ws
+
+    session["ws_clients"].add(ws)
+
+    await ws.send_str(json.dumps({"type": "replay_start"}))
+    for msg in session["messages"]:
+        await ws.send_str(json.dumps(msg))
+    await ws.send_str(json.dumps({
+        "type": "replay_end",
+        "status": session["status"],
+        "title": session["title"],
+    }))
+
+    pending_msgs: asyncio.Queue = asyncio.Queue()
+
+    async def _read_ws():
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                await pending_msgs.put(msg.data)
+            elif msg.type in (WSMsgType.CLOSE, WSMsgType.ERROR):
+                await pending_msgs.put(None)
+                return
+        await pending_msgs.put(None)
+
+    async def _run_stream(user_msg: str, config: dict):
+        session["status"] = "thinking"
+        event_queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def _on_event(event_type, data):
+            asyncio.run_coroutine_threadsafe(
+                event_queue.put({
+                    "type": event_type,
+                    **(data if isinstance(data, dict) else {"content": str(data)}),
+                }),
+                loop,
+            )
+
+        try:
+            target_spec, config_overrides = _parse_hermes_config(config)
+            max_rounds = config_overrides.get("max_rounds", 50)
+
+            import concurrent.futures
+
+            def _run_campaign():
+                try:
+                    from hermes.hermes_agent_bridge import launch_campaign
+                    result = launch_campaign(
+                        target_spec,
+                        config_overrides or None,
+                        max_rounds=max_rounds,
+                        on_progress=_on_event,
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        event_queue.put({"type": "complete", "content": json.dumps(result)}),
+                        loop,
+                    )
+                except Exception as e:
+                    import traceback
+                    asyncio.run_coroutine_threadsafe(
+                        event_queue.put({"type": "error", "content": f"{type(e).__name__}: {e}\n{traceback.format_exc()[-500:]}"}),
+                        loop,
+                    )
+                finally:
+                    asyncio.run_coroutine_threadsafe(event_queue.put(None), loop)
+
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            executor.submit(_run_campaign)
+
+            while True:
+                event = await event_queue.get()
+                if event is None:
+                    break
+                session["messages"].append(event)
+                _save_session(sid)
+                await _broadcast_session(sid, event)
+
+            executor.shutdown(wait=False)
+
+        except asyncio.CancelledError:
+            event = {"type": "complete", "content": "Stopped by user."}
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+        except Exception as e:
+            event = {"type": "error", "content": str(e) or f"{type(e).__name__}: check server logs"}
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+        finally:
+            session["status"] = "ready"
+            _save_session(sid)
+
+    reader_task = asyncio.create_task(_read_ws())
+
+    try:
+        while True:
+            raw = await pending_msgs.get()
+            if raw is None:
+                break
+
+            try:
+                data = json.loads(raw)
+            except (ValueError, TypeError):
+                data = {"type": "chat", "content": raw}
+
+            msg_type = data.get("type", "chat")
+
+            if msg_type == "stop":
+                if session.get("stream_task") and not session["stream_task"].done():
+                    session["stream_task"].cancel()
+                    try:
+                        await session["stream_task"]
+                    except asyncio.CancelledError:
+                        pass
+                    session["stream_task"] = None
+                continue
+
+            if msg_type != "chat":
+                continue
+
+            user_msg = data.get("content", "").strip()
+            config = data.get("config", {})
+            if not user_msg:
+                continue
+
+            if session["title"] == "New chat":
+                session["title"] = user_msg[:50] + ("..." if len(user_msg) > 50 else "")
+                _save_session(sid)
+                await _broadcast_session(sid, {"type": "session_title", "title": session["title"]})
+
+            user_event = {"type": "user_message", "content": user_msg}
+            session["messages"].append(user_event)
+            _save_session(sid)
+
+            payload = json.dumps(user_event)
+            for other_ws in session["ws_clients"]:
+                if other_ws is not ws and not other_ws.closed:
+                    try:
+                        await other_ws.send_str(payload)
+                    except Exception:
+                        pass
+
+            if session.get("stream_task") and not session["stream_task"].done():
+                session["stream_task"].cancel()
+                try:
+                    await session["stream_task"]
+                except asyncio.CancelledError:
+                    pass
+
+            await _broadcast_session(sid, {"type": "thinking"})
+            session["stream_task"] = asyncio.create_task(_run_stream(user_msg, config))
+
+    finally:
+        reader_task.cancel()
+        session["ws_clients"].discard(ws)
+
+    return ws
+
+
+async def handle_hermes_operation(request: web.Request) -> web.Response:
+    data = await request.json()
+    malware_type = data.get("malware_type", "infostealer")
+    edr = data.get("edr", "auto")
+    c2_ip = data.get("c2_ip", "10.0.2.2")
+    c2_port = int(data.get("c2_port", 9001))
+    max_rounds = data.get("max_rounds")
+    innovation_threshold = data.get("innovation_threshold")
+
+    cfg = {"edr": edr, "malware_type": malware_type}
+    if max_rounds is not None:
+        cfg["max_rounds"] = max_rounds
+    if innovation_threshold is not None:
+        cfg["innovation_threshold"] = innovation_threshold
+
+    hermes = _make_hermes(cfg)
+    if not hermes:
+        return web.json_response({"error": "Hermes not installed"}, status=500)
+
+    job_id = uuid.uuid4().hex[:8]
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": [],
+        "cmd_str": f"hermes run {malware_type} {edr}",
+        "command": "hermes",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+
+    async def _run_hermes():
+        job = jobs[job_id]
+        def on_progress(event_type, data):
+            if event_type == "round_start":
+                job["output"].append(f"Round {data['round']}/{data['max_rounds']}")
+            elif event_type == "reasoning":
+                job["output"].append(f"Hermes: {data['text'][:300]}")
+            elif event_type == "tool_call":
+                job["output"].append(f"  -> {data['name']}")
+            elif event_type == "tool_result":
+                job["output"].append(f"  <- {data['result'][:200]}")
+        hermes.on_progress(on_progress)
+        try:
+            result = await hermes.run()
+            status = result.get("status", "unknown")
+            job["status"] = "success" if status == "completed" else "failed"
+            job["exit_code"] = 0 if status == "completed" else 1
+            job["output"].append(f"Result: {status}")
+        except Exception as e:
+            job["output"].append(f"Error: {e}")
+            job["status"] = "failed"
+            job["exit_code"] = 1
+        for q in list(job["listeners"]):
+            asyncio.create_task(q.put(("done", job["status"])))
+
+    asyncio.create_task(_run_hermes())
+    return web.json_response({"job_id": job_id, "cmd_str": f"hermes run {malware_type} {edr}"})
+
+
+async def handle_hermes_knowledge(request: web.Request) -> web.Response:
+    hermes = _make_hermes()
+    if not hermes:
+        return web.json_response({"error": "Hermes not installed"}, status=500)
+    try:
+        return web.json_response(hermes.knowledge.get_summary())
+    finally:
+        await hermes.llm.close()
+
+
+async def handle_hermes_validate(request: web.Request) -> web.Response:
+    """Start a recipe validation sweep as a background job."""
+    data = await request.json() if request.content_length else {}
+    edr = data.get("edr", "crowdstrike")
+    recipes = data.get("recipes", None)
+    max_rounds = data.get("max_rounds")
+    innovation_threshold = data.get("innovation_threshold")
+
+    cfg = {"edr": edr}
+    if max_rounds is not None:
+        cfg["max_rounds"] = max_rounds
+    if innovation_threshold is not None:
+        cfg["innovation_threshold"] = innovation_threshold
+
+    hermes = _make_hermes(cfg)
+    if not hermes:
+        return web.json_response({"error": "Hermes not installed"}, status=500)
+
+    job_id = uuid.uuid4().hex[:8]
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": [],
+        "cmd_str": f"hermes validate {edr}",
+        "command": "hermes-validate",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+
+    async def _run_validate():
+        job = jobs[job_id]
+        def on_progress(event_type, pdata):
+            if event_type == "validation_start":
+                job["output"].append(f"Testing {pdata['total']} proven recipes...")
+            elif event_type == "validation_progress":
+                job["output"].append(f"[{pdata['current']}/{pdata['total']}] {pdata['recipe']} ({pdata['format']})")
+            elif event_type == "validation_complete":
+                job["output"].append(
+                    f"Done: {pdata['still_pass']}/{pdata['total_tested']} still pass, "
+                    f"{pdata['newly_failed']} newly failed"
+                )
+        hermes.on_progress(on_progress)
+        try:
+            result = await hermes.run_validation(recipes)
+            job["status"] = "success"
+            job["exit_code"] = 0
+            job["output"].append(json.dumps(result, indent=2))
+            job["result"] = result
+        except Exception as e:
+            job["output"].append(f"Error: {e}")
+            job["status"] = "failed"
+            job["exit_code"] = 1
+        for q in list(job["listeners"]):
+            asyncio.create_task(q.put(("done", job["status"])))
+
+    asyncio.create_task(_run_validate())
+    return web.json_response({"job_id": job_id, "cmd_str": f"hermes validate {edr}"})
+
+
+async def handle_hermes_evade(request: web.Request) -> web.Response:
+    """Start an evasion loop for specific recipes as a background job."""
+    data = await request.json() if request.content_length else {}
+    edr = data.get("edr", "crowdstrike")
+    recipes = data.get("recipes", [])
+    max_rounds = int(data.get("max_rounds", 50))
+    innovation_threshold = int(data.get("innovation_threshold", 100))
+
+    if not recipes:
+        return web.json_response({"error": "recipes list required"}, status=400)
+
+    hermes = _make_hermes({
+        "edr": edr,
+        "max_rounds": max_rounds,
+        "innovation_threshold": innovation_threshold,
+    })
+    if not hermes:
+        return web.json_response({"error": "Hermes not installed"}, status=500)
+
+    job_id = uuid.uuid4().hex[:8]
+    recipe_str = ",".join(recipes)
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": [],
+        "cmd_str": f"hermes evade {edr} [{recipe_str}]",
+        "command": "hermes-evade",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+
+    async def _run_evade():
+        job = jobs[job_id]
+        def on_progress(event_type, pdata):
+            if event_type == "round_start":
+                job["output"].append(f"Round {pdata['round']}/{pdata['max_rounds']}")
+            elif event_type == "reasoning":
+                job["output"].append(f"Hermes: {pdata['text'][:300]}")
+            elif event_type == "tool_call":
+                job["output"].append(f"  -> {pdata['name']}")
+            elif event_type == "tool_result":
+                job["output"].append(f"  <- {pdata['result'][:200]}")
+        hermes.on_progress(on_progress)
+        try:
+            result = await hermes.run_evade(recipes, max_rounds=max_rounds)
+            status = result.get("status", "unknown")
+            job["status"] = "success" if status == "completed" else "failed"
+            job["exit_code"] = 0 if status == "completed" else 1
+            job["output"].append(f"Result: {status}")
+        except Exception as e:
+            job["output"].append(f"Error: {e}")
+            job["status"] = "failed"
+            job["exit_code"] = 1
+        for q in list(job["listeners"]):
+            asyncio.create_task(q.put(("done", job["status"])))
+
+    asyncio.create_task(_run_evade())
+    return web.json_response({"job_id": job_id, "cmd_str": f"hermes evade {edr} [{recipe_str}]"})
+
+
+async def handle_hermes_recipe_results(request: web.Request) -> web.Response:
+    """Return recipe test results."""
+    rr_path = RESULTS_DIR / "recipe_results.json"
+    if not rr_path.exists():
+        return web.json_response({"results": []})
+    data = json.loads(rr_path.read_text())
+    return web.json_response(data)
+
+
+async def handle_hermes_validation_report(request: web.Request) -> web.Response:
+    """Return the latest validation report."""
+    rp = RESULTS_DIR / "validation_report.json"
+    if not rp.exists():
+        return web.json_response({"error": "No validation report found"}, status=404)
+    data = json.loads(rp.read_text())
+    return web.json_response(data)
 
 
 # ---------------------------------------------------------------------------
@@ -1474,5 +2151,21 @@ def create_app() -> web.Application:
     app.router.add_get("/api/detection/status", handle_detection_status)
     app.router.add_get("/api/detection/alerts", handle_detection_alerts)
     app.router.add_get("/ws/ssh", handle_ssh_ws)
+    app.router.add_get("/api/hermes/sessions", handle_hermes_sessions_list)
+    app.router.add_post("/api/hermes/sessions", handle_hermes_sessions_create)
+    app.router.add_delete("/api/hermes/sessions/{session_id}", handle_hermes_sessions_delete)
+    app.router.add_patch("/api/hermes/sessions/{session_id}", handle_hermes_sessions_update)
+    app.router.add_get("/ws/hermes/{session_id}", handle_hermes_session_ws)
+    app.router.add_post("/api/hermes/run", handle_hermes_operation)
+    app.router.add_get("/api/hermes/knowledge", handle_hermes_knowledge)
+    app.router.add_post("/api/hermes/validate", handle_hermes_validate)
+    app.router.add_post("/api/hermes/evade", handle_hermes_evade)
+    app.router.add_get("/api/hermes/recipe-results", handle_hermes_recipe_results)
+    app.router.add_get("/api/hermes/validation-report", handle_hermes_validation_report)
     app.router.add_get("/ws/{job_id}", handle_ws)
+
+    async def _on_startup(app):
+        _load_all_sessions()
+    app.on_startup.append(_on_startup)
+
     return app
