@@ -1,0 +1,109 @@
+╔══════════════════════════════════════════════════╗
+║     BLIND MODE STRESS TEST — PREFLIGHT CHECK    ║
+╚══════════════════════════════════════════════════╝
+
+LLM (http://localhost:1234): qwen3.6-35b-a3b-uncensored-hauhaucs-aggressiv
+VM SSH (:10022): OK
+
+Timeout per run: 1200s
+Max rounds: 999999
+Output: results/blind_tests_v2/
+Matrix: 2 types × 5 formats = 10 runs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[1/10] blind_info_auto  (type=infostealer, format=auto)
+Started: 2026-07-17 07:52:11
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: success (rounds=1, exit=0)
+  Finished: 2026-07-17 07:55:55
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[2/10] blind_info_pe  (type=infostealer, format=pe)
+Started: 2026-07-17 07:55:55
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: success (rounds=1, exit=0)
+  Finished: 2026-07-17 08:07:27
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[3/10] blind_info_js  (type=infostealer, format=jscript)
+Started: 2026-07-17 08:07:27
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-17 08:27:28
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[4/10] blind_info_vbs  (type=infostealer, format=vbscript)
+Started: 2026-07-17 08:27:28
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-17 08:47:29
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[5/10] blind_info_bat  (type=infostealer, format=batch)
+Started: 2026-07-17 08:47:29
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-17 09:07:30
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[6/10] blind_back_auto  (type=backdoor, format=auto)
+Started: 2026-07-17 09:07:30
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+scripts/blind_test_matrix.sh: 94 行: 3783140 強制終了            timeout "$TIMEOUT" python3 -m hermes --target-edr "$EDR" --malware-type "$TYPE" --format "$FMT" --blind --llm-url "$LLM_URL" --max-rounds "$MAX_ROUNDS" --json-output -v > "$LOG_FILE" 2>&1
+  Result: CRASH (rounds=0, exit=137)
+  Finished: 2026-07-17 09:16:34
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[7/10] blind_back_pe  (type=backdoor, format=pe)
+Started: 2026-07-17 09:16:34
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+scripts/blind_test_matrix.sh: 94 行: 3785612 強制終了            timeout "$TIMEOUT" python3 -m hermes --target-edr "$EDR" --malware-type "$TYPE" --format "$FMT" --blind --llm-url "$LLM_URL" --max-rounds "$MAX_ROUNDS" --json-output -v > "$LOG_FILE" 2>&1
+  Result: CRASH (rounds=0, exit=137)
+  Finished: 2026-07-17 09:27:14
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[8/10] blind_back_js  (type=backdoor, format=jscript)
+Started: 2026-07-17 09:27:14
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-17 09:47:15
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[9/10] blind_back_vbs  (type=backdoor, format=vbscript)
+Started: 2026-07-17 09:47:15
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-17 10:07:17
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[10/10] blind_back_bat  (type=backdoor, format=batch)
+Started: 2026-07-17 10:07:17
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: success (rounds=1, exit=0)
+  Finished: 2026-07-17 10:11:40
+
+
+╔══════════════════════════════════════════════════╗
+║              BLIND MODE TEST RESULTS             ║
+╚══════════════════════════════════════════════════╝
+
+RUN_ID                    STATUS     ROUNDS EXIT     NOTES
+------------------------- ---------- ------ -------- -----
+blind_info_auto           success    1      0        
+blind_info_pe             success    1      0        
+blind_info_js             TIMEOUT    0      124      killed after 1200s (20min)
+blind_info_vbs            TIMEOUT    0      124      killed after 1200s (20min)
+blind_info_bat            TIMEOUT    0      124      killed after 1200s (20min)
+blind_back_auto           CRASH      0      137      exit code 137
+blind_back_pe             CRASH      0      137      exit code 137
+blind_back_js             TIMEOUT    0      124      killed after 1200s (20min)
+blind_back_vbs            TIMEOUT    0      124      killed after 1200s (20min)
+blind_back_bat            success    1      0        
+
+Total: 10 runs
+  SUCCESS:  3
+  FAIL:     0
+  ERROR:    2
+  TIMEOUT:  5
+
+Logs: results/blind_tests_v2/

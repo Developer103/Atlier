@@ -197,10 +197,10 @@ groups:
     - evasion/deferred_exec
     - evasion/triggered_exec
 
-  # ── Sleep timing ──
-  sleep_timing:
-    - evasion/sleep_encrypt
-    - evasion/sleep_jitter
+  # ── Sleep timing (sleep_encrypt excluded: it provides obf_sleep() which
+  #    arch/backdoor depends on via USE_OBF_SLEEP — not swappable) ──
+  # sleep_timing:
+  #   - evasion/sleep_jitter
 
   # ── PE metadata manipulation ──
   pe_metadata:
@@ -341,15 +341,72 @@ groups:
     - jscript/evasion/deferred_exec
     - jscript/evasion/triggered_exec
     - jscript/evasion/sleep_jitter
+    - jscript/evasion/triggered_wmi
+    - jscript/evasion/conditional_time
+    - jscript/evasion/self_reexec
 
   # ── JScript string protection ──
   js_string_protection:
     - jscript/evasion/string_obfusc
     - jscript/evasion/encoding_rotate
+    - jscript/evasion/split_join
+    - jscript/evasion/reverse_decode
+    - jscript/evasion/unicode_escape
+    - jscript/evasion/math_charcode
+
+  # ── JScript AMSI bypass ──
+  js_amsi_bypass:
+    - jscript/evasion/amsi_bypass
+    - jscript/evasion/amsi_registry
+    - jscript/evasion/amsi_clr_downgrade
+    - jscript/evasion/amsi_string_frag
+
+  # ── JScript sandbox hardware checks ──
+  js_sandbox_hardware:
+    - jscript/evasion/screen_check
+    - jscript/evasion/uptime_check
+    - jscript/evasion/usb_history
+    - jscript/evasion/installed_software
+    - jscript/evasion/desktop_files
+    - jscript/evasion/gpu_check
+    - jscript/evasion/mouse_check
+    - jscript/evasion/temp_density
+
+  # ── JScript ETW/telemetry disable ──
+  js_etw_disable:
+    - jscript/evasion/etw_disable
+    - jscript/evasion/wsh_trace_disable
+    - jscript/evasion/script_log_disable
+
+  # ── JScript process creation ──
+  js_process_creation:
+    - jscript/evasion/process_wmi
+    - jscript/evasion/process_shell_app
+    - jscript/evasion/process_shellwindows
+    - jscript/evasion/process_schtask
 
   # ── JScript COM creation patterns ──
   js_com_creation:
     - jscript/evasion/com_object_rotate
+
+  # ── JScript HTTP object ──
+  js_http_object:
+    - jscript/evasion/http_object_rotate
+
+  # ── JScript filesystem evasion ──
+  js_filesystem:
+    - jscript/evasion/ads_exec
+    - jscript/evasion/motw_strip
+    - jscript/evasion/temp_dir_rotate
+
+  # ── JScript LOLBin execution ──
+  js_lolbin_exec:
+    - jscript/evasion/lolbin_mshta
+    - jscript/evasion/lolbin_rundll32
+
+  # ── JScript self-cleanup ──
+  js_self_cleanup:
+    - jscript/evasion/self_delete
 
   # ── JScript delivery ──
   js_delivery:
@@ -358,3 +415,130 @@ groups:
     - jscript/delivery/xsl_transform
     - jscript/delivery/sct_scriptlet
     - jscript/delivery/lnk_wrapper
+
+  # ══════════════════════════════════════════════════════════════════════
+  # VBSCRIPT EVASION VARIANT GROUPS
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── VBScript anti-analysis ──
+  vbs_anti_analysis:
+    - vbscript/evasion/anti_analysis
+    - vbscript/evasion/anti_sandbox
+    - vbscript/evasion/env_keying
+    - vbscript/evasion/wmi_evasion
+
+  # ── VBScript execution timing ──
+  vbs_execution_timing:
+    - vbscript/evasion/behavioral_pacing
+    - vbscript/evasion/deferred_exec
+    - vbscript/evasion/triggered_exec
+    - vbscript/evasion/sleep_jitter
+    - vbscript/evasion/conditional_time
+    - vbscript/evasion/self_reexec
+
+  # ── VBScript string protection ──
+  vbs_string_protection:
+    - vbscript/evasion/string_obfusc
+    - vbscript/evasion/encoding_rotate
+    - vbscript/evasion/split_join
+    - vbscript/evasion/reverse_decode
+
+  # ── VBScript AMSI bypass ──
+  vbs_amsi_bypass:
+    - vbscript/evasion/amsi_bypass
+    - vbscript/evasion/amsi_registry
+    - vbscript/evasion/amsi_clr_downgrade
+
+  # ── VBScript sandbox hardware checks ──
+  vbs_sandbox_hardware:
+    - vbscript/evasion/screen_check
+    - vbscript/evasion/uptime_check
+    - vbscript/evasion/usb_history
+    - vbscript/evasion/installed_software
+    - vbscript/evasion/desktop_files
+    - vbscript/evasion/gpu_check
+    - vbscript/evasion/mouse_check
+
+  # ── VBScript ETW/telemetry disable ──
+  vbs_etw_disable:
+    - vbscript/evasion/etw_disable
+    - vbscript/evasion/wsh_trace_disable
+    - vbscript/evasion/script_log_disable
+
+  # ── VBScript process creation ──
+  vbs_process_creation:
+    - vbscript/evasion/process_wmi
+    - vbscript/evasion/process_shell_app
+    - vbscript/evasion/process_schtask
+
+  # ── VBScript COM creation ──
+  vbs_com_creation:
+    - vbscript/evasion/com_object_rotate
+
+  # ── VBScript HTTP object ──
+  vbs_http_object:
+    - vbscript/evasion/http_object_rotate
+
+  # ── VBScript filesystem evasion ──
+  vbs_filesystem:
+    - vbscript/evasion/ads_exec
+    - vbscript/evasion/motw_strip
+    - vbscript/evasion/temp_dir_rotate
+
+  # ── VBScript self-cleanup ──
+  vbs_self_cleanup:
+    - vbscript/evasion/self_delete
+
+  # ══════════════════════════════════════════════════════════════════════
+  # BATCH EVASION VARIANT GROUPS
+  # ══════════════════════════════════════════════════════════════════════
+
+  # ── Batch anti-sandbox ──
+  bat_anti_sandbox:
+    - batch/evasion/anti_sandbox
+    - batch/evasion/env_check
+    - batch/evasion/screen_check
+    - batch/evasion/uptime_check
+    - batch/evasion/usb_history
+    - batch/evasion/installed_software
+    - batch/evasion/desktop_files
+    - batch/evasion/temp_density
+
+  # ── Batch string obfuscation ──
+  bat_string_obfusc:
+    - batch/evasion/string_obfusc
+    - batch/evasion/caret_escape
+    - batch/evasion/env_var_encode
+    - batch/evasion/delayed_expansion
+
+  # ── Batch execution timing ──
+  bat_execution_timing:
+    - batch/evasion/delayed_exec
+    - batch/evasion/conditional_time
+    - batch/evasion/self_reexec
+    - batch/evasion/sleep_variation
+
+  # ── Batch process creation ──
+  bat_process_creation:
+    - batch/evasion/process_wmic
+    - batch/evasion/process_schtask
+    - batch/evasion/process_forfiles
+
+  # ── Batch ETW/telemetry ──
+  bat_etw_disable:
+    - batch/evasion/etw_disable
+    - batch/evasion/event_log_clear
+
+  # ── Batch filesystem evasion ──
+  bat_filesystem:
+    - batch/evasion/ads_hide
+    - batch/evasion/motw_strip
+    - batch/evasion/temp_dir_rotate
+
+  # ── Batch self-cleanup ──
+  bat_self_cleanup:
+    - batch/evasion/self_delete
+
+  # ── Batch junk code ──
+  bat_junk_code:
+    - batch/evasion/junk_code

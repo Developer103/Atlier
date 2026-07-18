@@ -697,7 +697,7 @@ async def handle_chunk_hybrid(request: web.Request) -> web.Response:
     dry_run = data.get("dry_run", False)
     use_sim = data.get("use_sim", False)
     active_edrs = data.get("active_edrs", ["defender"])
-    max_rounds = data.get("max_rounds", 50)
+    max_rounds = data.get("max_rounds", 999999)
     batch_size = data.get("batch_size", 3)
     job_id = uuid.uuid4().hex[:8]
 
@@ -1541,6 +1541,40 @@ async def handle_detection_alerts(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# LLM server discovery
+# ---------------------------------------------------------------------------
+
+_LLM_PORTS = [11235, 11234, 1234]
+
+async def handle_llm_models(request: web.Request) -> web.Response:
+    """Query LLM servers for available models. Optionally filter by port."""
+    import httpx
+
+    port_filter = request.query.get("port")
+    ports = [int(port_filter)] if port_filter else _LLM_PORTS
+    results = []
+
+    async def _probe(port):
+        url = f"http://localhost:{port}/v1/models"
+        try:
+            async with httpx.AsyncClient(timeout=3) as client:
+                resp = await client.get(url)
+                if resp.status_code != 200:
+                    return
+                data = resp.json().get("data", [])
+                for m in data:
+                    mid = m.get("id", "")
+                    if mid.startswith("text-") or "embed" in mid.lower():
+                        continue
+                    results.append({"id": mid, "port": port})
+        except Exception:
+            pass
+
+    await asyncio.gather(*[_probe(p) for p in ports])
+    return web.json_response({"models": results, "ports": ports})
+
+
+# ---------------------------------------------------------------------------
 # Hermes orchestrator — multi-session with persistence
 # ---------------------------------------------------------------------------
 
@@ -1632,6 +1666,8 @@ async def _broadcast_session(sid: str, event: dict) -> None:
 
 def _parse_hermes_config(config: dict = None):
     cfg = config or {}
+    import logging as _log
+    _log.getLogger(__name__).info("_parse_hermes_config raw cfg: %s", cfg)
     target_spec = {
         "edr": cfg.get("edr", "none"),
         "malware_type": cfg.get("malware_type", "infostealer"),
@@ -1646,6 +1682,14 @@ def _parse_hermes_config(config: dict = None):
         config_overrides["max_rounds"] = int(cfg["max_rounds"])
     if "innovation_threshold" in cfg:
         config_overrides["innovation_threshold"] = int(cfg["innovation_threshold"])
+    if cfg.get("llm_port"):
+        config_overrides["llm_url"] = f"http://localhost:{cfg['llm_port']}"
+    if cfg.get("llm_model"):
+        config_overrides["llm_model"] = cfg["llm_model"]
+    if cfg.get("variant_count"):
+        config_overrides["variant_count"] = int(cfg["variant_count"])
+    if cfg.get("blind_mode"):
+        config_overrides["blind_mode"] = True
     return target_spec, config_overrides
 
 
@@ -1773,7 +1817,7 @@ async def handle_hermes_session_ws(request: web.Request) -> web.WebSocketRespons
 
         try:
             target_spec, config_overrides = _parse_hermes_config(config)
-            max_rounds = config_overrides.get("max_rounds", 50)
+            max_rounds = config_overrides.get("max_rounds", 999999)
 
             import concurrent.futures
 
@@ -2032,7 +2076,7 @@ async def handle_hermes_evade(request: web.Request) -> web.Response:
     data = await request.json() if request.content_length else {}
     edr = data.get("edr", "crowdstrike")
     recipes = data.get("recipes", [])
-    max_rounds = int(data.get("max_rounds", 50))
+    max_rounds = int(data.get("max_rounds", 999999))
     innovation_threshold = int(data.get("innovation_threshold", 100))
 
     if not recipes:
@@ -2151,6 +2195,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/detection/status", handle_detection_status)
     app.router.add_get("/api/detection/alerts", handle_detection_alerts)
     app.router.add_get("/ws/ssh", handle_ssh_ws)
+    app.router.add_get("/api/llm/models", handle_llm_models)
     app.router.add_get("/api/hermes/sessions", handle_hermes_sessions_list)
     app.router.add_post("/api/hermes/sessions", handle_hermes_sessions_create)
     app.router.add_delete("/api/hermes/sessions/{session_id}", handle_hermes_sessions_delete)

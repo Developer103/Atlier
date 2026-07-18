@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
     "recipes_dir": str(_BASE / "templates" / "chunks" / "recipes"),
     "results_dir": str(_BASE / "results"),
     "knowledge_db_path": str(_BASE / "hermes_knowledge.json"),
-    "max_rounds": 50,
+    "max_rounds": 999999,
     "batch_size": 3,
     "innovation_threshold": 100,
     "c2_listen_host": "0.0.0.0",

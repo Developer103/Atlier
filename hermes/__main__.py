@@ -29,10 +29,16 @@ def main():
                         choices=["infostealer", "keylogger", "backdoor"],
                         help="Malware type (default: infostealer)")
     parser.add_argument("--format", default="auto",
-                        choices=["auto", "c", "jscript"],
+                        choices=["auto", "pe", "c", "jscript", "vbscript", "batch"],
                         help="Force output format (default: auto)")
     parser.add_argument("--max-rounds", type=int, default=50,
                         help="Maximum rounds (default: 50)")
+    parser.add_argument("--blind", action="store_true",
+                        help="Blind mode: strip all prior knowledge and proven recipes")
+    parser.add_argument("--variants", type=int, default=1,
+                        help="Number of randomized variants to build per recipe (1-10)")
+    parser.add_argument("--llm-model", default=None,
+                        help="LLM model name override")
     parser.add_argument("--innovation-threshold", type=int, default=100,
                         help="Consecutive failures before innovation mode (default: 100)")
     parser.add_argument("--recipes", default=None,
@@ -79,6 +85,12 @@ def main():
     }
     if args.llm_url:
         config_overrides["llm_url"] = args.llm_url
+    if args.llm_model:
+        config_overrides["llm_model"] = args.llm_model
+    if args.blind:
+        config_overrides["blind_mode"] = True
+    if args.variants > 1:
+        config_overrides["variant_count"] = args.variants
 
     def on_progress(event_type, data):
         if event_type == "round_start":

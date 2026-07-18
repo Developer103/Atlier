@@ -18,7 +18,6 @@ evasion:
 - evasion/sleep_heap_encrypt
 - evasion/syscall_knowndlls
 - evasion/stack_spoof
-- evasion/hw_bp_etw
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

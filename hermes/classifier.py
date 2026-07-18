@@ -36,9 +36,34 @@ def classify_failure(
     stderr: str,
     stdout: str,
     format_type: str = "c",
+    is_backdoor: bool = False,
+    backdoor_beacons: int = 0,
+    backdoor_results: int = 0,
 ) -> FailureResult:
+    if is_backdoor and backdoor_beacons > 0:
+        if backdoor_results >= 2 and binary_exists \
+                and not defender_detections and not cs_detections:
+            return FailureResult(
+                FailureType.SUCCESS,
+                f"Backdoor operational: {backdoor_beacons} beacons, {backdoor_results} command results",
+                "none",
+            )
+        if backdoor_results == 0 and binary_exists:
+            return FailureResult(
+                FailureType.PARTIAL_COLLECT,
+                f"Backdoor beaconed ({backdoor_beacons}x) but returned no command results — TLV encoding mismatch or command handlers broken",
+                "check_command_handler_implementation",
+            )
+
     if c2_bytes > 100 and binary_exists and not defender_detections and not cs_detections:
         return FailureResult(FailureType.SUCCESS, "All checks passed", "none")
+
+    if is_backdoor and c2_bytes == 0 and backdoor_beacons == 0 and binary_exists:
+        return FailureResult(
+            FailureType.NO_C2,
+            "Backdoor never beaconed — check C2 protocol (must be backdoor, not tcp/http) and connectivity",
+            "check_c2_protocol_and_connectivity",
+        )
 
     if stderr and ("error:" in stderr.lower() or "undefined reference" in stderr.lower()):
         return FailureResult(

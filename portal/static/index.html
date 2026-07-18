@@ -517,6 +517,18 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
         <button id="hermes-stop-btn" style="display:none;padding:2px 10px;font-size:11px;background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">&#9632; Stop</button>
       </div>
       <div class="hermes-config" id="hermes-config">
+        <label>LLM:
+          <select id="hermes-llm-port" onchange="hermesRefreshModels()">
+            <option value="11235">:11235</option>
+            <option value="11234">:11234</option>
+            <option value="1234">:1234</option>
+          </select>
+        </label>
+        <label>Model:
+          <select id="hermes-llm-model">
+            <option value="">Loading...</option>
+          </select>
+        </label>
         <label>EDR:
           <select id="hermes-edr">
             <option value="crowdstrike">CrowdStrike</option>
@@ -540,6 +552,12 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
             <option value="vbscript">VBScript</option>
             <option value="batch">Batch</option>
           </select>
+        </label>
+        <label>Variants:
+          <input type="number" id="hermes-variants" value="1" min="1" max="10" style="width:40px">
+        </label>
+        <label style="cursor:pointer" title="Hide past success recipes — discover from scratch">
+          <input type="checkbox" id="hermes-blind"> Blind
         </label>
       </div>
       <div class="chat-messages" id="chat-messages">
@@ -2681,6 +2699,10 @@ function renderSessionList() {
       </div>
       <button class="hermes-session-del" onclick="event.stopPropagation();hermesDeleteSession('${s.id}')" title="Delete">×</button>
     `;
+    item.querySelector('.hermes-session-title').addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      hermesRenameSession(s.id, s.title || 'New chat');
+    });
     item.addEventListener('click', () => hermesSwitchSession(s.id));
     formArea.appendChild(item);
   });
@@ -2731,6 +2753,36 @@ function hermesSwitchSession(sid) {
   localStorage.setItem('hermes_active_session', sid);
   renderSessionList();
   hermesConnectSession(sid);
+}
+
+function hermesRenameSession(sid, currentTitle) {
+  const titleEl = document.querySelector(`.hermes-session-item[data-sid="${sid}"] .hermes-session-title`);
+  if (!titleEl) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentTitle;
+  input.style.cssText = 'width:100%;font:inherit;background:var(--bg1);color:var(--fg);border:1px solid var(--accent);border-radius:3px;padding:1px 4px;outline:none;';
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = async () => {
+    const newTitle = input.value.trim() || currentTitle;
+    const s = hermesSessions.find(x => x.id === sid);
+    if (s) s.title = newTitle;
+    renderSessionList();
+    try {
+      await fetch(`/api/hermes/sessions/${sid}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: newTitle}),
+      });
+    } catch(e) { console.error('Rename failed:', e); }
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = currentTitle; input.blur(); }
+  });
 }
 
 // ── WebSocket connection per session ──
@@ -2882,6 +2934,32 @@ function updateSessionTitle(sid, title) {
   }
 }
 
+// ── LLM model selector ──
+
+async function hermesRefreshModels() {
+  const sel = document.getElementById('hermes-llm-model');
+  const port = document.getElementById('hermes-llm-port').value;
+  sel.innerHTML = '<option value="">Loading...</option>';
+  try {
+    const resp = await fetch('/api/llm/models?port=' + port);
+    const data = await resp.json();
+    sel.innerHTML = '';
+    if (!data.models || data.models.length === 0) {
+      sel.innerHTML = '<option value="">(no models)</option>';
+      return;
+    }
+    data.models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.id.length > 30 ? m.id.slice(0, 28) + '…' : m.id;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    sel.innerHTML = '<option value="">(offline)</option>';
+  }
+}
+hermesRefreshModels();
+
 // ── Send messages ──
 
 function sendHermesMsg(text) {
@@ -2909,6 +2987,10 @@ function sendHermesMsg(text) {
       edr: document.getElementById('hermes-edr').value,
       malware_type: document.getElementById('hermes-type').value,
       format: document.getElementById('hermes-format').value,
+      llm_port: document.getElementById('hermes-llm-port').value,
+      llm_model: document.getElementById('hermes-llm-model').value,
+      variant_count: parseInt(document.getElementById('hermes-variants').value) || 1,
+      blind_mode: document.getElementById('hermes-blind').checked,
     }
   }));
   chatInput.value = '';

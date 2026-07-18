@@ -47,10 +47,10 @@ python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
                                    ▼
 ┌──────────────┐   ┌──────────────────────────────┐   ┌──────────────┐
 │ Recipe YAML  │──▶│     Chunk Assembler          │──▶│  Obfuscation │
-│ (176 recipes)│   │ - dependency resolution      │   │  - light     │
+│ (294 recipes)│   │ - dependency resolution      │   │  - light     │
 │              │   │ - template variable subst    │   │  - heavy     │
 │ Variant      │   │ - resource injection         │   │  - max (LLM) │
-│ Groups (51)  │   │ - Rich header injection      │   └──────┬───────┘
+│ Groups (50)  │   │ - Rich header injection      │   └──────┬───────┘
 │ --randomize  │   │ - PE timestamp stomping      │          │
 └──────────────┘   └──────────────────────────────┘          ▼
                                                     ┌──────────────┐
@@ -75,11 +75,16 @@ python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
 
 | Metric | Value |
 |---|---|
-| Total code chunks | 335 across 16 categories |
-| Evasion chunks | 110 |
-| Recipes | 176 |
-| Variant groups | 51 (199 interchangeable chunks) |
-| Unique binary combinations | 7.7 × 10²⁶ per recipe |
+| Total code chunks | 409 across PE, JScript, VBScript, Batch |
+| PE chunks | 255 (evasion: 110, collectors: 42, arch: 26, exfil: 22, commands: 13, process: 9, api_resolve: 7, persist: 7, c2: 5, core: 5, AD: 9) |
+| JScript chunks | 81 |
+| VBScript chunks | 43 |
+| Batch chunks | 30 |
+| Recipes | 294 |
+| Variant groups | 50 (197 interchangeable chunks) |
+| Behavioral variant groups | 45 — each swap changes runtime behavior EDRs observe |
+| Static variant groups | 2 — change binary signature only (PE metadata, IAT) |
+| Behavioral variants per recipe | ~5.9M (typical 9-group recipe) to ~2.5B (12-group recipe) |
 | Output formats | PE (EXE), DLL, JScript, VBScript, Batch, CPL |
 | Build time | < 5 seconds (assemble + compile) |
 | Hermes agent tools | 23 |
@@ -108,11 +113,21 @@ The core innovation. Pre-written, pre-tested C code fragments assembled into com
 | `core/` | 5 | Shared utilities: emit_buffer, run_cmd, file_ops |
 | `ad/` | 3 | AD infrastructure: LDAP bind, SID resolve, JSON builder |
 
-### Variant Groups
+### Variant Groups & Behavioral Variants
 
-51 groups of interchangeable chunks in `variants.yaml`. When `--randomize` is passed, the assembler randomly selects one member from each group. Same recipe → structurally different binary every build.
+50 groups of interchangeable chunks in `variants.yaml`. When `--randomize` is passed, the assembler randomly selects one member from each group. Same recipe → behaviorally different binary every build.
 
-Key groups: `syscall_gate` (10 variants), `sleep_obfuscation` (8), `stack_spoofing` (7), `api_resolution` (7), `anti_sandbox` (7), `persistence` (7), `arch_execution` (7), `etw_bypass` (6), `anti_debug` (6), `ppid_spoof` (6).
+**45 behavioral groups** — each swap changes what EDRs observe at runtime (different syscall methods, different sleep mechanisms, different process trees, different API call patterns):
+
+| Category | Groups | Key examples |
+|---|---|---|
+| **Evasion (25 groups)** | syscall_gate (10), sleep_obfuscation (8), stack_spoofing (7), api_resolution (7), anti_sandbox (7), arch_execution (7), injection_threadless (7), persistence (7), etw_bypass (6), anti_debug (6), ppid_spoof (6), arch_callback (6), env_keying (4), memory_evasion (4), control_flow (4), uac_bypass (4), execution_timing (3), net_transport (3), process_evasion (3), net_evasion (3), amsi_bypass (2), injection_callback (2), self_cleanup (2), injection_thread (4) | Swapping `hells_gate` ↔ `tartarus_gate` changes the syscall invocation mechanism; swapping `sleep_ekko` ↔ `sleep_foliage` changes the ROP chain used during encrypted sleep |
+| **Functional (16 groups)** | system_info (4), keylogger_hook (4), exfil_http_lolbin (5), processes (3), exfil_tcp (3), exfil_http_api (3), exfil_dns (3), cmd_sysinfo (2), cmd_processes (2), cmd_netinfo (2), screenshot (2), env_vars (2), clipboard (2), netinfo (2), active_windows (2), exfil_file (2) | Swapping `exfil/curl_lolbin` ↔ `exfil/bitsadmin_lolbin` changes the child process EDR sees; swapping `collectors/system_info` ↔ `collectors/system_info_lolbin` changes API calls vs process spawns |
+| **JScript evasion (4 groups)** | js_delivery (5), js_anti_analysis (4), js_execution_timing (4), js_string_protection (2) | Swapping `wsf_wrapper` ↔ `hta_wrapper` changes the delivery container and execution engine |
+
+**2 static groups** — change binary signature without altering runtime behavior: `pe_metadata` (6: entropy pad, rich header, timestomp, checksum, debug dir, code cave), `iat_manipulation` (3: IAT pad, resource spoof, section merge).
+
+**Combinatorial scale**: A typical PE infostealer recipe touching 9 variant groups yields **~5.9 million** unique behavioral variants. A heavier backdoor recipe touching 12 groups yields **~2.5 billion**. Each `--randomize` build is a detection-distinct binary.
 
 ### Recipe Format
 
@@ -292,7 +307,7 @@ python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
 |---|---|
 | `templates/chunks/assembler.py` | Core assembler — recipe parsing, dependency resolution, compilation |
 | `templates/chunks/obfuscate.py` | Post-assembly obfuscation (4 levels) |
-| `templates/chunks/variants.yaml` | Variant group definitions (51 groups) |
+| `templates/chunks/variants.yaml` | Variant group definitions (50 groups, 197 chunks) |
 | `evasion_passes.py` | Source-level evasion transforms |
 | `cli.py` | CLI entry point |
 | `hermes/tools.py` | Hermes tool implementations (23 tools) |

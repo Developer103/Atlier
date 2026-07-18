@@ -1239,8 +1239,9 @@ Framework 2 is an alternative path where a local LLM (Qwen 35B) generates the C 
 | JScript | 30 FUDs | 30 | Primary CS bypass format |
 
 ### Framework Stats
-- 112+ evasion chunks, 31+ arch chunks, 135 recipes
-- 51 variant groups, 202+ slots
+- 409 total chunks (PE: 255, JScript: 81, VBScript: 43, Batch: 30), 294 recipes
+- 50 variant groups (45 behavioral + 2 static + 3 singleton), 197 interchangeable chunks
+- ~5.9M behavioral variants per typical 9-group recipe, ~2.5B per 12-group recipe
 - 2 compilers (MinGW + Zig CC)
 - 4 output formats (C/PE, JScript, VBScript, Batch)
 - Shellcode pipeline (--format shellcode)

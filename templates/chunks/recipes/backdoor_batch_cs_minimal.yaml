@@ -1,0 +1,14 @@
+name: backdoor_batch_cs_minimal
+format: batch
+description: Minimal batch backdoor for CrowdStrike - fast execution with just system info and processes
+core:
+- core/output
+collectors:
+- collectors/system_info
+- collectors/processes
+exfil: exfil/curl_lolbin
+arch: arch/sequential
+evasion: []
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

