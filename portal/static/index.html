@@ -2872,6 +2872,7 @@ function hermesConnectSession(sid) {
         addChatMsg('tool', args, '\u{1F527} ' + (msg.name || '?'), skipScroll);
         if (!hermesReplaying) {
           hermesStatusText.textContent = 'Hermes — ' + (msg.name || 'tool');
+          setHermesRunning(true);  // Show stop button during tool execution
         }
       } else if (msg.type === 'tool_result') {
         addChatMsg('tool', msg.result || '', '✅ ' + (msg.name || '?'), skipScroll);

