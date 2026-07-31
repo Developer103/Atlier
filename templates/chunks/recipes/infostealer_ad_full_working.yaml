@@ -1,0 +1,31 @@
+name: infostealer_ad_full_working
+description: Full AD recon (SharpHound-like) with CrowdStrike bypass
+
+core:
+- ad/json_builder
+- ad/ldap_client
+- ad/sid_resolver
+- ad_collectors/ad_domains
+
+collectors:
+# AD recon (SharpHound-like)
+- ad_collectors/ad_users
+- ad_collectors/ad_groups
+- ad_collectors/ad_computers
+- ad_collectors/ad_ous
+- ad_collectors/ad_gpos
+
+resources: true
+
+evasion:
+- evasion/behavioral_pacing
+- evasion/sleep_jitter
+
+arch: arch/ad_recon
+
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'
+  LDAP_USER: "{{LDAP_USER}}"
+  LDAP_DOMAIN: "{{LDAP_DOMAIN}}"
+  LDAP_PASS: "{{LDAP_PASS}}"

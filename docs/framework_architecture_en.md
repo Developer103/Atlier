@@ -1,8 +1,8 @@
-# Malware Generation Framework — Architecture Document
+# Atelier — Architecture Document
 
 ## 1. Overview
 
-The Malware Generation Framework is a deterministic, chunk-based malware generation platform designed for authorized red team operations and EDR evasion research. It assembles pre-verified C source code chunks into complete malware binaries via declarative YAML recipes, applies polymorphic obfuscation, and validates the output against live enterprise EDR products.
+The Atelier is a deterministic, chunk-based malware generation platform designed for authorized red team operations and EDR evasion research. It assembles pre-verified C source code chunks into complete malware binaries via declarative YAML recipes, applies polymorphic obfuscation, and validates the output against live enterprise EDR products.
 
 ### Key Numbers
 
@@ -500,18 +500,18 @@ python3 templates/chunks/assembler.py templates/chunks/recipes/<recipe>.yaml \
 
 ```bash
 # Build from recipe (creates timestamped package in results/)
-python -m malware_gen_framework chunk --recipe infostealer_full --compile
+python -m atelier chunk --recipe infostealer_full --compile
 
 # Build + randomize + obfuscate
-python -m malware_gen_framework chunk --recipe infostealer_full --compile \
+python -m atelier chunk --recipe infostealer_full --compile \
     --randomize --obfuscate heavy
 
 # Build + deploy + test on VM
-python -m malware_gen_framework chunk --recipe infostealer_full --compile \
+python -m atelier chunk --recipe infostealer_full --compile \
     --randomize --obfuscate heavy --test
 
 # Launch web portal
-python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
+python -m atelier portal --port 7070 --host 0.0.0.0
 ```
 
 ### Hermes Autonomous Campaign

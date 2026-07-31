@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from malware_gen_framework.evasion_passes import (
+from atelier.evasion_passes import (
     _mutate_source,
     _encrypt_string_literals,
     _obfuscate_api_calls,
@@ -15,7 +15,7 @@ from malware_gen_framework.evasion_passes import (
     _inject_process_injection,
     _ensure_exfil_substance,
 )
-from malware_gen_framework.code_analysis import _brace_deficit
+from atelier.code_analysis import _brace_deficit
 
 
 MINIMAL_SOURCE = (

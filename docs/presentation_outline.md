@@ -1,4 +1,4 @@
-# On-Demand Malware Generation Framework
+# On-Demand Atelier
 
 ---
 
@@ -128,7 +128,7 @@ target:
 ```
 
 ```bash
-$ python3 -m malware_gen_framework run --spec spec.yaml --output results/
+$ python3 -m atelier run --spec spec.yaml --output results/
 ```
 
 ```

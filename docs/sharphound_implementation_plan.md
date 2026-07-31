@@ -1,6 +1,6 @@
 # SharpHound Chunk Framework Implementation & Validation Plan
 
-Reimplementation of SharpHound's AD reconnaissance capabilities as pure C chunks for the malware_gen_framework chunk assembler. Replaces the infostealer malware type with domain-aware AD enumeration that outputs BloodHound-compatible JSON.
+Reimplementation of SharpHound's AD reconnaissance capabilities as pure C chunks for the atelier chunk assembler. Replaces the infostealer malware type with domain-aware AD enumeration that outputs BloodHound-compatible JSON.
 
 Reference: [docs/sharphound_analysis.md](sharphound_analysis.md)
 

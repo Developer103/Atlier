@@ -109,8 +109,8 @@ def test_mingw_compile_shellcode(mingw_available):
 
 def test_verify_standalone_passes(mingw_available):
     import asyncio
-    from malware_gen_framework.verifier import verify_standalone
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.verifier import verify_standalone
+    from atelier.target_spec import TargetEnvironmentSpec
 
     source = (
         '#include <windows.h>\n'
@@ -138,8 +138,8 @@ def test_verify_standalone_passes(mingw_available):
 
 def test_verify_standalone_fails_bad_source(mingw_available):
     import asyncio
-    from malware_gen_framework.verifier import verify_standalone
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.verifier import verify_standalone
+    from atelier.target_spec import TargetEnvironmentSpec
 
     source = "this is not valid C code at all"
     spec = TargetEnvironmentSpec(

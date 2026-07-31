@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from malware_gen_framework.evasion_passes import (
+from atelier.evasion_passes import (
     _mutate_source,
     _encrypt_string_literals,
     _obfuscate_api_calls,
@@ -18,7 +18,7 @@ from malware_gen_framework.evasion_passes import (
     _inject_seh_in_main,
     _inject_process_injection,
 )
-from malware_gen_framework.code_analysis import _brace_deficit
+from atelier.code_analysis import _brace_deficit
 
 
 RANSOMWARE_SOURCE = (
@@ -177,7 +177,7 @@ def test_amsi_etw_then_compile(mingw_available):
 
 def test_evasion_chain_preserves_function_count(mingw_available):
     """The evasion chain should add functions, not lose any."""
-    from malware_gen_framework.code_analysis import _brace_deficit
+    from atelier.code_analysis import _brace_deficit
 
     src = RANSOMWARE_SOURCE
     original_count = src.count("static ") + src.count("int main")

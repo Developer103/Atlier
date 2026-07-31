@@ -3,13 +3,13 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "malware-gen-framework"
+name = "atelier"
 version = "0.1.0"
-description = "Malware-on-demand framework — generate undetectable malware for target environments"
+description = "Atelier — deterministic, chunk-assembled polymorphic malware generation with autonomous EDR evasion"
 requires-python = ">=3.10"
 
 [[project.authors]]
 name = ""
 
 [tool.setuptools]
-package-dir = {"malware_gen_framework" = "."}
+package-dir = {"atelier" = "."}

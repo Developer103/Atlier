@@ -303,7 +303,7 @@ Per-category: injection_coverage, persistence_coverage, evasion_coverage, etc.
 - **Atomic Red Team**: Pre-built test cases mapped to MITRE ATT&CK
 - **Caldera**: Automated adversary emulation
 - **Infection Monkey**: Automated breach and attack simulation
-- **Our framework**: `python3 -m malware_gen_framework chunk --recipe <name> --compile --test` for each recipe
+- **Our framework**: `python3 -m atelier chunk --recipe <name> --compile --test` for each recipe
 
 ### Iterative gap discovery
 1. Run all recipes against EDR

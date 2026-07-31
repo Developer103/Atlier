@@ -131,7 +131,7 @@ def _compile_source(source_text, tmpdir, extra_flags=None):
 @requires_mingw
 def test_generate_ransomware():
     """Generate ransomware source from spec, verify it compiles."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -165,7 +165,7 @@ def test_generate_ransomware():
 @requires_mingw
 def test_generate_infostealer():
     """Generate infostealer source from spec, verify it compiles and has C2 code."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="info stealer")
@@ -201,7 +201,7 @@ def test_generate_keylogger():
     Keylogger is the hardest type for local LLMs — compilation is checked but
     not required to pass (the compile-fix loop handles that in real runs).
     """
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="keylogger")
@@ -241,7 +241,7 @@ def test_generate_keylogger():
 @requires_mingw
 def test_generate_dll_output():
     """Generate DLL-format output, verify it compiles as a shared library."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware", output_format="dll")
@@ -267,7 +267,7 @@ def test_generate_dll_output():
 @requires_llm
 def test_generate_produces_plan():
     """Verify that generation produces a MalwarePlan with components."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -292,7 +292,7 @@ def test_generate_produces_plan():
 @requires_llm
 def test_generate_writes_report():
     """Verify that the pipeline writes a pipeline_report.txt."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -322,7 +322,7 @@ def test_generate_writes_report():
 @requires_mingw
 def test_generate_with_compile_loop():
     """Generate + local compile-fix loop. Tests the auto-fix-on-compile-error path."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -359,7 +359,7 @@ def test_verify_existing_source_in_vm():
     if not src_file.exists():
         pytest.skip("results/malware_source.c not found")
 
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="info stealer")
@@ -391,7 +391,7 @@ def test_verify_existing_source_in_vm():
 @requires_mingw
 def test_full_pipeline_generate_and_verify():
     """Full pipeline: generate ransomware → compile → deploy to VM → verify."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -423,7 +423,7 @@ def test_full_pipeline_generate_and_verify():
 @requires_mingw
 def test_full_pipeline_infostealer_with_verify():
     """Full pipeline for infostealer: generate → deploy → verify C2 exfiltration."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="info stealer")
@@ -462,7 +462,7 @@ def test_cli_generate_command():
         output_dir = Path(tmpdir) / "output"
 
         ret = subprocess.run(
-            [sys.executable, "-m", "malware_gen_framework", "generate",
+            [sys.executable, "-m", "atelier", "generate",
              "--spec", spec_path, "--output", str(output_dir)],
             capture_output=True, text=True, timeout=2400,
             cwd=str(PROJECT_ROOT.parent),
@@ -485,7 +485,7 @@ def test_cli_run_command():
         output_dir = Path(tmpdir) / "output"
 
         ret = subprocess.run(
-            [sys.executable, "-m", "malware_gen_framework", "run",
+            [sys.executable, "-m", "atelier", "run",
              "--spec", spec_path, "--output", str(output_dir),
              "--use-existing-vm", "--vm-port", "10022",
              "--loop", "--max-iters", "2"],
@@ -507,7 +507,7 @@ def test_cli_run_command():
 @requires_mingw
 def test_checkpoint_save_and_resume():
     """Generate with 1 iteration, verify checkpoint is saved, then resume."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -554,7 +554,7 @@ def test_checkpoint_save_and_resume():
 @requires_mingw
 def test_generated_source_has_evasion():
     """Generated source should include evasion passes (string encryption, IAT obfuscation)."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -593,8 +593,8 @@ def test_generated_source_has_evasion():
 @requires_mingw
 def test_generated_source_no_guardrail_refusal():
     """LLM should not produce a guardrail refusal as the source code."""
-    from malware_gen_framework.pipeline import MalwarePipeline
-    from malware_gen_framework.code_analysis import _is_guardrail_refusal
+    from atelier.pipeline import MalwarePipeline
+    from atelier.code_analysis import _is_guardrail_refusal
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -622,7 +622,7 @@ def test_generated_source_no_guardrail_refusal():
 @pytest.mark.e2e
 def test_spec_parsing_valid():
     """Parse a valid spec through the pipeline's spec loader."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -637,7 +637,7 @@ def test_spec_parsing_valid():
 @pytest.mark.e2e
 def test_spec_edr_normalization():
     """EDR aliases should be normalized in parsed spec."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_file = Path(tmpdir) / "spec.yaml"
@@ -659,8 +659,8 @@ def test_spec_edr_normalization():
 @pytest.mark.e2e
 def test_spec_behavior_auto_injection():
     """Pipeline should auto-inject behavior spec for known malware types."""
-    from malware_gen_framework.spec_parser import parse_target_spec
-    from malware_gen_framework.pipeline import _generate_behavior_spec
+    from atelier.spec_parser import parse_target_spec
+    from atelier.pipeline import _generate_behavior_spec
 
     bspec = _generate_behavior_spec("info stealer", "10.0.2.2", 9001)
     assert "INFOSTEALER" in bspec
@@ -687,7 +687,7 @@ def test_spec_invalid_malware_type_cli():
             "source_language: c\n"
         )
         ret = subprocess.run(
-            [sys.executable, "-m", "malware_gen_framework", "generate",
+            [sys.executable, "-m", "atelier", "generate",
              "--spec", str(spec_file), "--output", str(tmpdir)],
             capture_output=True, text=True, timeout=30,
             cwd=str(PROJECT_ROOT.parent),
@@ -699,7 +699,7 @@ def test_spec_invalid_malware_type_cli():
 def test_spec_missing_file_cli():
     """CLI should fail cleanly when spec file doesn't exist."""
     ret = subprocess.run(
-        [sys.executable, "-m", "malware_gen_framework", "generate",
+        [sys.executable, "-m", "atelier", "generate",
          "--spec", "/nonexistent/spec.yaml", "--output", "/tmp/test_out"],
         capture_output=True, text=True, timeout=30,
         cwd=str(PROJECT_ROOT.parent),
@@ -711,7 +711,7 @@ def test_spec_missing_file_cli():
 def test_cli_clean_command():
     """CLI clean command should run without error."""
     ret = subprocess.run(
-        [sys.executable, "-m", "malware_gen_framework", "clean"],
+        [sys.executable, "-m", "atelier", "clean"],
         capture_output=True, text=True, timeout=30,
         cwd=str(PROJECT_ROOT.parent),
     )
@@ -725,10 +725,10 @@ def test_cli_clean_command():
 @pytest.mark.e2e
 def test_db_query_returns_results():
     """DBQueryEngine should return results for a Windows target query."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     try:
-        from malware_gen_framework.db_query_engine import DBQueryEngine
+        from atelier.db_query_engine import DBQueryEngine
         db = DBQueryEngine()
     except Exception as e:
         pytest.skip(f"ChromaDB not available: {e}")
@@ -745,9 +745,9 @@ def test_db_query_returns_results():
 def test_context_building_produces_techniques():
     """ContextBuilder should produce ranked techniques from DB results."""
     try:
-        from malware_gen_framework.db_query_engine import DBQueryEngine
-        from malware_gen_framework.context_builder import ContextBuilder
-        from malware_gen_framework.spec_parser import parse_target_spec
+        from atelier.db_query_engine import DBQueryEngine
+        from atelier.context_builder import ContextBuilder
+        from atelier.spec_parser import parse_target_spec
     except Exception as e:
         pytest.skip(f"Required modules not available: {e}")
 
@@ -771,7 +771,7 @@ def test_context_building_produces_techniques():
 @pytest.mark.e2e
 def test_edr_config_resolution():
     """Pipeline EDR config resolver should return configs for all builtin EDRs."""
-    from malware_gen_framework.pipeline import _resolve_edr_configs
+    from atelier.pipeline import _resolve_edr_configs
 
     configs = _resolve_edr_configs(["defender"])
     assert len(configs) >= 1
@@ -793,7 +793,7 @@ def test_edr_config_resolution():
 @requires_mingw
 def test_generate_rat():
     """Generate RAT/backdoor source, verify it compiles and has C2 code."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_file = Path(tmpdir) / "spec.yaml"
@@ -838,7 +838,7 @@ def test_generate_rat():
 @requires_mingw
 def test_generate_with_behavior_override():
     """Generate with explicit behavior_spec override, verify key markers present."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     custom_behavior = (
         "Create a simple file dropper: drop a .txt file to C:\\Users\\vmuser\\Desktop "
@@ -889,7 +889,7 @@ def test_generate_with_behavior_override():
 @requires_mingw
 def test_generate_multiple_edrs():
     """Generate with multiple EDRs in spec, verify evasion techniques present."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_file = Path(tmpdir) / "spec.yaml"
@@ -930,7 +930,7 @@ def test_generate_multiple_edrs():
 @requires_mingw
 def test_generate_custom_gates():
     """Generate with custom gates in spec, verify source compiles."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_file = Path(tmpdir) / "spec.yaml"
@@ -973,7 +973,7 @@ def test_generate_custom_gates():
 @requires_llm
 def test_pipeline_result_fields():
     """Verify PipelineResult has all expected fields populated after generation."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -1006,8 +1006,8 @@ def test_pipeline_result_fields():
 @requires_mingw
 def test_evasion_chain_on_generated_source():
     """Apply full evasion chain to generated source and verify it still compiles."""
-    from malware_gen_framework.pipeline import MalwarePipeline
-    from malware_gen_framework.evasion_passes import (
+    from atelier.pipeline import MalwarePipeline
+    from atelier.evasion_passes import (
         _encrypt_string_literals,
         _mutate_source,
     )
@@ -1042,7 +1042,7 @@ def test_evasion_chain_on_generated_source():
 @requires_mingw
 def test_generate_report_content():
     """Verify pipeline report contains expected sections."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="info stealer")
@@ -1073,7 +1073,7 @@ def test_generate_report_content():
 @requires_mingw
 def test_generate_plan_component_coverage():
     """Generated plan should have components covering key malware functions."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(Path(tmpdir) / "spec.yaml", malware_type="ransomware")
@@ -1108,7 +1108,7 @@ def test_generate_plan_component_coverage():
 @requires_mingw
 def test_generate_shellcode_output():
     """Generate shellcode-format output, verify .bin file produced."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(
@@ -1169,7 +1169,7 @@ def test_generate_shellcode_output():
 @requires_gcc
 def test_generate_linux_ransomware():
     """Generate ransomware for Linux, compile with native gcc."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(
@@ -1241,7 +1241,7 @@ def test_generate_linux_ransomware():
 @requires_rustc
 def test_generate_rust_ransomware():
     """Generate ransomware in Rust, verify it produces valid Rust source."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(
@@ -1299,7 +1299,7 @@ def test_generate_rust_ransomware():
 @requires_go
 def test_generate_go_ransomware():
     """Generate ransomware in Go, verify it produces valid Go source."""
-    from malware_gen_framework.pipeline import MalwarePipeline
+    from atelier.pipeline import MalwarePipeline
 
     with tempfile.TemporaryDirectory() as tmpdir:
         spec_path = _write_spec(

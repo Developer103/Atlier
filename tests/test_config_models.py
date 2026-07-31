@@ -14,27 +14,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # ---------------------------------------------------------------------------
 
 def test_builtin_edrs_all_present():
-    from malware_gen_framework.config_models import BUILTIN_EDRS
+    from atelier.config_models import BUILTIN_EDRS
     expected = {"defender", "wazuh", "elastic", "openedr", "velociraptor"}
     assert set(BUILTIN_EDRS.keys()) == expected
 
 
 def test_get_edr_config_known():
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     cfg = get_edr_config("defender")
     assert cfg.name == "defender"
     assert "Get-WinEvent" in cfg.alert_query
 
 
 def test_get_edr_config_unknown():
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     cfg = get_edr_config("totally_unknown")
     assert cfg.name == "totally_unknown"
     assert cfg.detection_method == "ssh_command"
 
 
 def test_edr_config_defaults():
-    from malware_gen_framework.config_models import EDRConfig
+    from atelier.config_models import EDRConfig
     cfg = EDRConfig(name="test")
     assert cfg.detection_method == "ssh_command"
     assert cfg.alert_query == ""
@@ -42,17 +42,17 @@ def test_edr_config_defaults():
 
 
 def test_wazuh_has_rest_api():
-    from malware_gen_framework.config_models import BUILTIN_EDRS
+    from atelier.config_models import BUILTIN_EDRS
     assert BUILTIN_EDRS["wazuh"].detection_method == "rest_api"
 
 
 def test_elastic_has_elasticsearch():
-    from malware_gen_framework.config_models import BUILTIN_EDRS
+    from atelier.config_models import BUILTIN_EDRS
     assert BUILTIN_EDRS["elastic"].detection_method == "elasticsearch"
 
 
 def test_openedr_has_log_file():
-    from malware_gen_framework.config_models import BUILTIN_EDRS
+    from atelier.config_models import BUILTIN_EDRS
     assert BUILTIN_EDRS["openedr"].detection_method == "log_file"
 
 
@@ -61,31 +61,31 @@ def test_openedr_has_log_file():
 # ---------------------------------------------------------------------------
 
 def test_output_format_exe():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", output_format="exe")
     assert spec.output_format == "exe"
 
 
 def test_output_format_dll():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", output_format="DLL")
     assert spec.output_format == "dll"
 
 
 def test_output_format_sc_to_shellcode():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", output_format="sc")
     assert spec.output_format == "shellcode"
 
 
 def test_output_format_bin_to_shellcode():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", output_format="bin")
     assert spec.output_format == "shellcode"
 
 
 def test_output_format_invalid_defaults_exe():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", output_format="junk")
     assert spec.output_format == "exe"
 
@@ -95,13 +95,13 @@ def test_output_format_invalid_defaults_exe():
 # ---------------------------------------------------------------------------
 
 def test_os_details_default_empty():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11")
     assert spec.os_details == ""
 
 
 def test_os_details_set():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", os_details="25H2")
     assert spec.os_details == "25H2"
 
@@ -111,7 +111,7 @@ def test_os_details_set():
 # ---------------------------------------------------------------------------
 
 def test_edrs_normalized_lowercase():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11", edrs=["CrowdStrike", "Sentinel One"])
     assert "crowdstrike" in spec.edrs
     assert "sentinel_one" in spec.edrs
@@ -122,7 +122,7 @@ def test_edrs_normalized_lowercase():
 # ---------------------------------------------------------------------------
 
 def test_c2_defaults():
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(os_platform="windows", os_version="windows-11")
     assert spec.c2_address == "10.0.2.2"
     assert spec.c2_port == 9001
@@ -133,7 +133,7 @@ def test_c2_defaults():
 # ---------------------------------------------------------------------------
 
 def test_parse_spec_from_yaml(tmp_spec_yaml):
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
     spec = parse_target_spec(spec_path=tmp_spec_yaml)
     assert spec.os_platform.value == "windows"
     assert spec.os_version == "windows-11"
@@ -141,13 +141,13 @@ def test_parse_spec_from_yaml(tmp_spec_yaml):
 
 
 def test_parse_spec_overrides(tmp_spec_yaml):
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
     spec = parse_target_spec(spec_path=tmp_spec_yaml, os_version="windows-10")
     assert spec.os_version == "windows-10"
 
 
 def test_parse_spec_auto_detect_platform():
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("os_version: windows-11\nmalware_type: ransomware\n")
         spec_path = f.name
@@ -159,7 +159,7 @@ def test_parse_spec_auto_detect_platform():
 
 
 def test_parse_spec_json():
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump({
             "os_platform": "linux",
@@ -181,7 +181,7 @@ def test_parse_spec_json():
 # ---------------------------------------------------------------------------
 
 def test_checkpoint_save_load():
-    from malware_gen_framework.checkpoint import CheckpointManager, CheckpointState
+    from atelier.checkpoint import CheckpointManager, CheckpointState
     with tempfile.TemporaryDirectory() as tmpdir:
         mgr = CheckpointManager(Path(tmpdir))
         state = CheckpointState(
@@ -206,7 +206,7 @@ def test_checkpoint_save_load():
 
 
 def test_checkpoint_clear():
-    from malware_gen_framework.checkpoint import CheckpointManager, CheckpointState
+    from atelier.checkpoint import CheckpointManager, CheckpointState
     with tempfile.TemporaryDirectory() as tmpdir:
         mgr = CheckpointManager(Path(tmpdir))
         state = CheckpointState(
@@ -220,7 +220,7 @@ def test_checkpoint_clear():
 
 
 def test_checkpoint_has_none():
-    from malware_gen_framework.checkpoint import CheckpointManager
+    from atelier.checkpoint import CheckpointManager
     with tempfile.TemporaryDirectory() as tmpdir:
         mgr = CheckpointManager(Path(tmpdir))
         assert not mgr.has_checkpoint()
@@ -231,7 +231,7 @@ def test_checkpoint_has_none():
 # ---------------------------------------------------------------------------
 
 def test_source_extension():
-    from malware_gen_framework.code_processor import source_extension
+    from atelier.code_processor import source_extension
     assert source_extension("c") == ".c"
     assert source_extension("rust") == ".rs"
     assert source_extension("go") == ".go"
@@ -239,13 +239,13 @@ def test_source_extension():
 
 
 def test_source_filename():
-    from malware_gen_framework.code_processor import source_filename
+    from atelier.code_processor import source_filename
     assert source_filename("c") == "malware_source.c"
     assert source_filename("rust") == "malware_source.rs"
 
 
 def test_output_filename():
-    from malware_gen_framework.code_processor import output_filename
+    from atelier.code_processor import output_filename
     assert output_filename("exe") == "malware_source.exe"
     assert output_filename("dll") == "malware_source.dll"
     assert output_filename("shellcode") == "malware_source.bin"
@@ -256,22 +256,22 @@ def test_output_filename():
 # ---------------------------------------------------------------------------
 
 def test_strip_thinking():
-    from malware_gen_framework.llm_client import _strip_thinking
+    from atelier.llm_client import _strip_thinking
     assert _strip_thinking("<think>reasoning here</think>code output") == "code output"
 
 
 def test_strip_thinking_empty():
-    from malware_gen_framework.llm_client import _strip_thinking
+    from atelier.llm_client import _strip_thinking
     assert _strip_thinking("") == ""
 
 
 def test_strip_thinking_no_tags():
-    from malware_gen_framework.llm_client import _strip_thinking
+    from atelier.llm_client import _strip_thinking
     assert _strip_thinking("plain text") == "plain text"
 
 
 def test_strip_thinking_multiline():
-    from malware_gen_framework.llm_client import _strip_thinking
+    from atelier.llm_client import _strip_thinking
     text = "<think>\nline1\nline2\n</think>\nresult"
     assert _strip_thinking(text) == "result"
 
@@ -281,7 +281,7 @@ def test_strip_thinking_multiline():
 # ---------------------------------------------------------------------------
 
 def test_llm_label():
-    from malware_gen_framework.llm_client import _llm_label
+    from atelier.llm_client import _llm_label
     assert _llm_label("http://localhost:11235") == "Blackwell"
     assert _llm_label("http://localhost:11234") == "Blackwell-alt"
     assert _llm_label("http://localhost:1234") == "local"
@@ -293,7 +293,7 @@ def test_llm_label():
 # ---------------------------------------------------------------------------
 
 def test_failure_mode_enum():
-    from malware_gen_framework.loop_controller import FailureMode
+    from atelier.loop_controller import FailureMode
     assert FailureMode.DETECTED is not None
     assert FailureMode.COMPILATION_FAILED is not None
     assert FailureMode.EXECUTION_CRASHED is not None
@@ -304,7 +304,7 @@ def test_failure_mode_enum():
 # ---------------------------------------------------------------------------
 
 def test_validation_check_negate():
-    from malware_gen_framework.verifier import ValidationCheck
+    from atelier.verifier import ValidationCheck
     check = ValidationCheck(description="no console", command="echo test", success_pattern="error", negate=True)
     assert check.negate is True
     assert check.description == "no console"

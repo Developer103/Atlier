@@ -109,7 +109,7 @@ def obfuscate(source: str, level: str = "heavy", llm_url: str = None) -> str:
             logger.info("Skipping API obfuscation (CHUNK_API_HASH present)")
 
     if level == "max":
-        from malware_gen_framework.llm_client import _discover_llm_url
+        from atelier.llm_client import _discover_llm_url
         url = llm_url or os.environ.get("LLM_URL", "") or _discover_llm_url()
         model = os.environ.get("LLM_MODEL", "")
         source = _llm_obfuscate(source, url, model=model)

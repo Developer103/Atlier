@@ -55,7 +55,22 @@ def classify_failure(
                 "check_command_handler_implementation",
             )
 
-    if c2_bytes > 100 and binary_exists and not defender_detections and not cs_detections:
+    # Only SUCCESS if binary still exists AND no detections
+    # BEHAVIORAL = data exfiltrated but binary quarantined or detections triggered
+    if c2_bytes > 100:
+        if not binary_exists:
+            return FailureResult(
+                FailureType.BEHAVIORAL,
+                "Data exfiltrated but binary was quarantined post-execution",
+                "change_runtime_behavior",
+            )
+        if defender_detections or cs_detections:
+            return FailureResult(
+                FailureType.BEHAVIORAL,
+                "Data exfiltrated but post-execution detection triggered",
+                "change_runtime_behavior",
+            )
+        # True success: data + binary exists + no detections
         return FailureResult(FailureType.SUCCESS, "All checks passed", "none")
 
     if is_backdoor and c2_bytes == 0 and backdoor_beacons == 0 and binary_exists:

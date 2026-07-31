@@ -1,5 +1,5 @@
-"""CLI entry point — allows running as ``python -m malware_gen_framework``."""
+"""CLI entry point — allows running as ``python -m atelier``."""
 import sys
-from malware_gen_framework.cli import main
+from atelier.cli import main
 
 sys.exit(main() or 0)

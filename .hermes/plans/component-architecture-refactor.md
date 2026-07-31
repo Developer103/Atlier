@@ -60,7 +60,7 @@ llm:
 ## File Structure Changes
 
 ```
-malware_gen_framework/
+atelier/
 ├── pipeline.py                  # Updated orchestrator (uses new phases)
 ├── generation_engine.py         # New: ComponentGenerator + AssemblyEngine
 │   ├── component_generator.py   # Phase 2b: generates individual components

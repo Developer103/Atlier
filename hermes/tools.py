@@ -2028,6 +2028,9 @@ class ToolExecutor:
         else:
             await asyncio.sleep(5)
 
+        # Wait a bit for EDR post-execution analysis to complete
+        await asyncio.sleep(3)
+
         binary_check, _, _ = await self._ssh_exec(
             f'dir "C:\\Users\\{self.vm_user}\\Desktop\\{binary_name}"',
             timeout=10,
@@ -2036,6 +2039,20 @@ class ToolExecutor:
             binary_name.lower() in binary_check.lower()
             and "File Not Found" not in binary_check
         )
+
+        # Recheck binary after a delay to catch post-execution quarantine
+        if binary_exists:
+            await asyncio.sleep(5)
+            recheck, _, _ = await self._ssh_exec(
+                f'dir "C:\\Users\\{self.vm_user}\\Desktop\\{binary_name}"',
+                timeout=10,
+            )
+            binary_exists = (
+                binary_name.lower() in recheck.lower()
+                and "File Not Found" not in recheck
+            )
+            if not binary_exists:
+                logger.info("Binary was quarantined during post-execution analysis")
 
         c2_report = await self.tool_check_c2_data(port=c2_port)
         c2_bytes = 0

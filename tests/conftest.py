@@ -1,4 +1,4 @@
-"""Shared fixtures and marker configuration for the malware_gen_framework test suite."""
+"""Shared fixtures and marker configuration for the atelier test suite."""
 
 import asyncio
 import shutil
@@ -142,7 +142,7 @@ def sample_spec_dict():
 
 @pytest.fixture
 def parsed_spec(sample_spec_dict):
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     return TargetEnvironmentSpec(**sample_spec_dict)
 
 

@@ -13,7 +13,7 @@ Tests cover:
   - Pipeline integration (Phase 6)
 
 Run: python3 -m pytest tests/test_framework.py -v
-Or:  cd /home/kei/llm_vault/malware_gen_framework && python3 -m pytest tests/test_framework.py -v
+Or:  cd /home/kei/llm_vault/atelier && python3 -m pytest tests/test_framework.py -v
 """
 
 import asyncio
@@ -47,7 +47,7 @@ def _async(f):
 
 def test_vm_provision_config_defaults():
     """VMProvisionConfig should have reasonable defaults."""
-    from malware_gen_framework.config_models import VMProvisionConfig, TargetOS
+    from atelier.config_models import VMProvisionConfig, TargetOS
 
     cfg = VMProvisionConfig(os_type=TargetOS.UBUNTU_24_04)
     assert cfg.resources.CPU_cores == 4
@@ -57,7 +57,7 @@ def test_vm_provision_config_defaults():
 
 def test_vm_provision_config_compute_paths():
     """compute_paths should fill in derived paths."""
-    from malware_gen_framework.config_models import VMProvisionConfig, TargetOS
+    from atelier.config_models import VMProvisionConfig, TargetOS
 
     with tempfile.TemporaryDirectory() as tmpdir:
         cfg = VMProvisionConfig(
@@ -74,7 +74,7 @@ def test_vm_provision_config_compute_paths():
 
 def test_target_os_enum():
     """TargetOS enum should have expected members."""
-    from malware_gen_framework.config_models import TargetOS
+    from atelier.config_models import TargetOS
 
     assert hasattr(TargetOS, "UBUNTU_24_04")
     assert hasattr(TargetOS, "WINDOWS_11")
@@ -90,7 +90,7 @@ def test_cloud_init_iso_creation():
     if shutil.which("genisoimage") is None:
         pytest.skip("genisoimage not installed")
 
-    from malware_gen_framework.linux_provisioner import CloudInitProvisioner
+    from atelier.linux_provisioner import CloudInitProvisioner
 
     with tempfile.TemporaryDirectory() as tmpdir:
         prov = CloudInitProvisioner()
@@ -105,7 +105,7 @@ def test_autounattend_iso_creation():
     if shutil.which("genisoimage") is None:
         pytest.skip("genisoimage not installed")
 
-    from malware_gen_framework.windows_provisioner import WindowsProvisioner
+    from atelier.windows_provisioner import WindowsProvisioner
 
     with tempfile.TemporaryDirectory() as tmpdir:
         prov = WindowsProvisioner()
@@ -120,7 +120,7 @@ def test_autounattend_iso_creation():
 
 def test_package_imports():
     """All package-level imports should resolve."""
-    from malware_gen_framework import (
+    from atelier import (
         ProvisionEngine, VMProvisionConfig, TargetOS,
         DBQueryEngine, ContextBuilder, PromptTemplates,
         GenerationEngine, EvasionSelector, ExploitSelector, CompilerSelector,
@@ -135,7 +135,7 @@ def test_package_imports():
 
 def test_db_models_dataclasses():
     """All DB dataclasses should instantiate correctly."""
-    from malware_gen_framework.db_models import (
+    from atelier.db_models import (
         MalwareTechnique, PoC, CTIFinding, QueryResult, TargetEnvironmentSpec as DBSpec,
     )
 
@@ -160,7 +160,7 @@ def test_db_models_dataclasses():
 
 def test_parse_target_spec_yaml():
     """parse_target_spec should load and validate a YAML spec."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("""
@@ -188,7 +188,7 @@ installed_compilers:
 
 def test_parse_target_spec_json():
     """parse_target_spec should load and validate a JSON spec."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump({
@@ -208,7 +208,7 @@ def test_parse_target_spec_json():
 
 def test_parse_target_spec_overrides():
     """parse_target_spec overrides should take precedence over file values."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("os_version: ubuntu-22.04\n")
@@ -223,7 +223,7 @@ def test_parse_target_spec_overrides():
 
 def test_parse_target_spec_auto_detect_platform():
     """Platform should auto-detect from version string if not specified."""
-    from malware_gen_framework.spec_parser import parse_target_spec
+    from atelier.spec_parser import parse_target_spec
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("os_version: debian-bookworm\n")
@@ -242,9 +242,9 @@ def test_parse_target_spec_auto_detect_platform():
 
 def test_context_builder_ranking():
     """ContextBuilder should rank techniques by relevance."""
-    from malware_gen_framework.context_builder import ContextBuilder, RankedTechnique
-    from malware_gen_framework.db_models import MalwareTechnique, QueryResult, PoC, CTIFinding
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.context_builder import ContextBuilder, RankedTechnique
+    from atelier.db_models import MalwareTechnique, QueryResult, PoC, CTIFinding
+    from atelier.target_spec import TargetEnvironmentSpec
 
     builder = ContextBuilder()
 
@@ -272,9 +272,9 @@ def test_context_builder_ranking():
 
 def test_prompt_templates_render():
     """PromptTemplates should render a non-empty prompt string."""
-    from malware_gen_framework.prompt_templates import PromptTemplates
-    from malware_gen_framework.context_builder import ContextBlock, RankedTechnique, RankedPoC
-    from malware_gen_framework.db_models import MalwareTechnique, PoC
+    from atelier.prompt_templates import PromptTemplates
+    from atelier.context_builder import ContextBlock, RankedTechnique, RankedPoC
+    from atelier.db_models import MalwareTechnique, PoC
 
     templates = PromptTemplates()
 
@@ -299,9 +299,9 @@ def test_prompt_templates_render():
 
 def test_evasion_selector_mock():
     """EvasionSelector should return ranked techniques from mocked DB."""
-    from malware_gen_framework.evasion_selector import EvasionSelector
-    from malware_gen_framework.db_models import MalwareTechnique, QueryResult, PoC, CTIFinding
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.evasion_selector import EvasionSelector
+    from atelier.db_models import MalwareTechnique, QueryResult, PoC, CTIFinding
+    from atelier.target_spec import TargetEnvironmentSpec
 
     selector = EvasionSelector()
 
@@ -329,8 +329,8 @@ def test_evasion_selector_mock():
 
 def test_exploit_selector_mock():
     """ExploitSelector should return ranked exploits from mocked DB."""
-    from malware_gen_framework.exploit_selector import ExploitSelector, ExploitSelection
-    from malware_gen_framework.db_models import PoC
+    from atelier.exploit_selector import ExploitSelector, ExploitSelection
+    from atelier.db_models import PoC
 
     selector = ExploitSelector()
     mock_db = MagicMock()
@@ -340,7 +340,7 @@ def test_exploit_selector_mock():
 
     selector._db = mock_db
 
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.target_spec import TargetEnvironmentSpec
     spec = TargetEnvironmentSpec(
         os_platform="linux", os_version="ubuntu-24.04", edrs=[], installed_compilers=[]
     )
@@ -355,8 +355,8 @@ def test_exploit_selector_mock():
 
 def test_compiler_selector():
     """CompilerSelector should produce valid build instructions."""
-    from malware_gen_framework.compiler_selector import CompilerSelector
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.compiler_selector import CompilerSelector
+    from atelier.target_spec import TargetEnvironmentSpec
 
     selector = CompilerSelector()
     spec = TargetEnvironmentSpec(
@@ -375,9 +375,9 @@ def test_compiler_selector():
 
 def test_generation_engine_mock():
     """GenerationEngine should build a prompt and call the mocked LLM."""
-    from malware_gen_framework.generation_engine import GenerationEngine, SubprocessLLMClient
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
-    from malware_gen_framework.db_models import MalwareTechnique, PoC, CTIFinding, QueryResult
+    from atelier.generation_engine import GenerationEngine, SubprocessLLMClient
+    from atelier.target_spec import TargetEnvironmentSpec
+    from atelier.db_models import MalwareTechnique, PoC, CTIFinding, QueryResult
 
     # Mock DB — query_unified is async, so use AsyncMock
     mock_db = MagicMock()
@@ -412,7 +412,7 @@ def test_generation_engine_mock():
 
 def test_loop_controller_iteration_record():
     """IterationRecord should be constructible."""
-    from malware_gen_framework.loop_controller import IterationRecord, FailureMode
+    from atelier.loop_controller import IterationRecord, FailureMode
 
     rec = IterationRecord(
         iteration=1, source_code_hash="abc", context_hash="xyz",
@@ -425,7 +425,7 @@ def test_loop_controller_iteration_record():
 
 def test_loop_controller_stuck_detection():
     """LoopController should detect stuck context hashes."""
-    from malware_gen_framework.loop_controller import LoopController
+    from atelier.loop_controller import LoopController
 
     ctrl = LoopController(stick_threshold=2)
     # Same hash repeated — should be detected as stuck after threshold
@@ -435,7 +435,7 @@ def test_loop_controller_stuck_detection():
 
 def test_loop_result_summary():
     """LoopResult.summary() should produce readable output."""
-    from malware_gen_framework.loop_controller import LoopResult, IterationRecord, FailureMode
+    from atelier.loop_controller import LoopResult, IterationRecord, FailureMode
 
     records = [
         IterationRecord(iteration=1, source_code_hash="", context_hash="", failure_mode=None, detection_score="none", alerts_count=0, build_time_sec=1.0, execution_exit_code=0),
@@ -458,8 +458,8 @@ def test_loop_result_summary():
 
 def test_verifier_standalone():
     """verify_standalone should compile a simple C program."""
-    from malware_gen_framework.verifier import verify_standalone, DetectionLevel, BehaviourCheck
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.verifier import verify_standalone, DetectionLevel, BehaviourCheck
+    from atelier.target_spec import TargetEnvironmentSpec
 
     source = "#include <stdio.h>\nint main(){printf(\"hello\");return 0;}"
 
@@ -480,7 +480,7 @@ def test_verifier_standalone():
 
 def test_cli_parser():
     """CLI parser should have all expected subcommands."""
-    from malware_gen_framework.cli import build_parser
+    from atelier.cli import build_parser
 
     parser = build_parser()
 
@@ -496,7 +496,7 @@ def test_cli_parser():
 
 def test_pipeline_result():
     """PipelineResult should produce a summary."""
-    from malware_gen_framework.pipeline import PipelineResult
+    from atelier.pipeline import PipelineResult
 
     result = PipelineResult(
         target_spec=MagicMock(os_platform=MagicMock(value="linux"), os_version="ubuntu-24.04"),
@@ -538,7 +538,7 @@ def test_compile_check():
 
 def test_import_all():
     """All module imports should resolve."""
-    from malware_gen_framework import (
+    from atelier import (
         ProvisionEngine, VMProvisionConfig, TargetOS,
         DBQueryEngine, ContextBuilder, PromptTemplates,
         GenerationEngine, EvasionSelector, ExploitSelector, CompilerSelector,

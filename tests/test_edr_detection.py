@@ -92,7 +92,7 @@ def _path_exists_on_vm(path):
 
 def _install_edr_agent(edr_name):
     """Install an EDR agent on the VM using the config's install_command."""
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     edr_cfg = get_edr_config(edr_name)
     install_cmd = edr_cfg.install_command
     if not install_cmd:
@@ -230,7 +230,7 @@ def test_edr_defender_e2e():
 
         _ssh_cmd(f'del "{remote_path}" 2>NUL')
 
-        from malware_gen_framework.edr_rule_extractor import ScanResult
+        from atelier.edr_rule_extractor import ScanResult
         result = ScanResult(
             detected=True,
             threat_name="Virus:DOS/EICAR_Test_File",
@@ -268,7 +268,7 @@ def test_edr_openedr_detection_query():
     )
     assert log_out, "edrsvc log directory is empty"
 
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     edr_cfg = get_edr_config("openedr")
     assert edr_cfg.detection_method == "log_file"
     assert "edrsvc" in edr_cfg.detection_api
@@ -316,7 +316,7 @@ def test_edr_wazuh_detection_query():
         data = json.loads(ret.stdout)
         assert "data" in data or "error" in data
 
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     edr_cfg = get_edr_config("wazuh")
     assert edr_cfg.detection_method == "rest_api"
     assert "55000" in edr_cfg.detection_api
@@ -349,7 +349,7 @@ def test_edr_velociraptor_detection_query():
         if not _service_running("Velociraptor"):
             pytest.skip("Velociraptor client installed but service not running")
 
-    from malware_gen_framework.config_models import get_edr_config
+    from atelier.config_models import get_edr_config
     edr_cfg = get_edr_config("velociraptor")
     assert edr_cfg.detection_method == "rest_api"
     assert "8889" in edr_cfg.detection_api
@@ -361,7 +361,7 @@ def test_edr_velociraptor_detection_query():
 
 def test_defender_scan_result_dataclass():
     """ScanResult and DefenderSignature dataclasses work correctly."""
-    from malware_gen_framework.edr_rule_extractor import ScanResult, DefenderSignature
+    from atelier.edr_rule_extractor import ScanResult, DefenderSignature
 
     clean = ScanResult()
     assert not clean.detected
@@ -388,7 +388,7 @@ def test_defender_scan_result_dataclass():
 
 def test_defender_severity_mapping():
     """Severity ID to string mapping covers known values."""
-    from malware_gen_framework.edr_rule_extractor import _severity_id_to_str
+    from atelier.edr_rule_extractor import _severity_id_to_str
 
     assert _severity_id_to_str("1") == "low"
     assert _severity_id_to_str("2") == "medium"
@@ -403,7 +403,7 @@ def test_defender_severity_mapping():
 
 def test_iteration_state_with_detection():
     """IterationState records detection history and renders context for LLM."""
-    from malware_gen_framework.iteration_state import IterationState
+    from atelier.iteration_state import IterationState
 
     state = IterationState()
     state.record_attempt(
@@ -440,8 +440,8 @@ def test_iteration_state_with_detection():
 
 def test_evasion_selector_retry_with_detections():
     """select_evasions_for_retry boosts techniques based on detection categories."""
-    from malware_gen_framework.evasion_selector import EvasionSelector
-    from malware_gen_framework.target_spec import TargetEnvironmentSpec
+    from atelier.evasion_selector import EvasionSelector
+    from atelier.target_spec import TargetEnvironmentSpec
 
     selector = EvasionSelector()
     spec = TargetEnvironmentSpec(
@@ -475,7 +475,7 @@ def test_provision_install_edr_on_existing_vm():
     if not _vm_ssh_available():
         pytest.skip("VM not reachable via SSH")
 
-    from malware_gen_framework.provision_engine import VMInstance
+    from atelier.provision_engine import VMInstance
 
     vm = VMInstance(qemu=None, vm_user="vmuser", vm_pass="vmuser123", ssh_port=10022)
     vm.status = "running"

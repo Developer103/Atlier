@@ -1,4 +1,4 @@
-# Malware Generation Framework - Operational Knowledge
+# Atelier - Operational Knowledge
 
 Hard-won lessons from framework runs. Read this before starting any new malgen iteration.
 
@@ -387,7 +387,7 @@ The `_WINDOWS_CHUNK_HEADER` zero-child-process rule (lines 387-398) and the pipe
 
 ### LLM Pipeline v2 — Elastic Test (2026-07-04)
 
-Ran the full LLM pipeline (`python3 -m malware_gen_framework generate`) with Elastic-hardened templates. Results:
+Ran the full LLM pipeline (`python3 -m atelier generate`) with Elastic-hardened templates. Results:
 
 **Evasion: PASS.** The LLM-generated binary produced 0 Elastic alerts and 0 Defender detections. The zero-child-process rule in `_WINDOWS_CHUNK_HEADER` and the fixed `_WINDOWS_HEADERS_BLOCK` (no WiFi/netsh reference) worked — the LLM produced code with zero LOLBin calls, dynamic API resolution via LoadLibraryA/GetProcAddress, and XOR-encrypted strings.
 

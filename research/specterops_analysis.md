@@ -1,4 +1,4 @@
-# SpecterOps "Day Shift" vs malware_gen_framework — Gap Analysis & Implementation Roadmap
+# SpecterOps "Day Shift" vs atelier — Gap Analysis & Implementation Roadmap
 
 *Source: Adam Chester (xpn), SpecterOps — "LLM-Driven EDR Evasion" (2025/2026)*
 *Analysis date: 2026-06-30*

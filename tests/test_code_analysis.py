@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from malware_gen_framework.code_analysis import (
+from atelier.code_analysis import (
     _brace_deficit,
     _autoclose_braces,
     _is_guardrail_refusal,
