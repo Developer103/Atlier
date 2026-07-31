@@ -755,87 +755,112 @@ class Hermes:
             return {"mode": "validate", "edr": self.target["edr"],
                     "error": "No PASS recipes found for this EDR", "results": []}
 
-        logger.info("Found %d unique proven recipes to validate", len(unique_targets))
-        self._emit("validation_start", {"total": len(unique_targets)})
+        variant_count = self.config.get("variant_count", 1)
+        total_tests = len(unique_targets) * variant_count
+        logger.info("Found %d unique proven recipes to validate (%d variants each = %d total)",
+                    len(unique_targets), variant_count, total_tests)
+        self._emit("validation_start", {"total": total_tests})
 
         results = []
-        for i, entry in enumerate(unique_targets):
+        test_num = 0
+        for entry in unique_targets:
             recipe = entry["recipe"]
             fmt = entry.get("format", "pe_resources")
             is_jscript = fmt == "jscript" or recipe.startswith("js_")
 
-            logger.info("[%d/%d] Testing recipe: %s (%s)", i + 1, len(unique_targets), recipe, fmt)
-            self._emit("validation_progress", {
-                "current": i + 1, "total": len(unique_targets),
-                "recipe": recipe, "format": fmt,
-            })
+            for var_idx in range(variant_count):
+                test_num += 1
+                variant_label = f"{recipe}" if variant_count == 1 else f"{recipe} (v{var_idx + 1})"
 
-            result_entry = {
-                "recipe": recipe, "format": fmt,
-                "verdict": None, "c2_bytes": 0,
-                "binary_exists": False, "failure_analysis": None,
-            }
+                logger.info("[%d/%d] Testing: %s (%s)", test_num, total_tests, variant_label, fmt)
+                self._emit("validation_progress", {
+                    "current": test_num, "total": total_tests,
+                    "recipe": variant_label, "format": fmt, "step": "starting",
+                })
 
-            try:
-                assemble_result = await self.tools.tool_assemble(recipe, compile=not is_jscript)
-                if assemble_result.startswith("ERROR"):
-                    result_entry["verdict"] = "BUILD_ERROR"
-                    result_entry["failure_analysis"] = assemble_result
-                    results.append(result_entry)
-                    continue
+                result_entry = {
+                    "recipe": recipe, "variant": var_idx + 1, "format": fmt,
+                    "verdict": None, "c2_bytes": 0,
+                    "binary_exists": False, "failure_analysis": None,
+                }
 
-                import re
-                if is_jscript:
-                    m = re.search(r'Assembled JScript:\s*(\S+)', assemble_result)
-                else:
-                    m = re.search(r'Assembled and compiled:\s*(\S+)', assemble_result)
-                if not m:
-                    result_entry["verdict"] = "BUILD_ERROR"
-                    result_entry["failure_analysis"] = f"Could not parse output path: {assemble_result[:200]}"
-                    results.append(result_entry)
-                    continue
-                binary_path = m.group(1)
-                binary_name = Path(binary_path).name
+                try:
+                    self._emit("validation_step", {"recipe": variant_label, "step": "assembling"})
+                    use_randomize = variant_count > 1
+                    assemble_result = await self.tools.tool_assemble(recipe, compile=not is_jscript, randomize=use_randomize)
+                    if assemble_result.startswith("ERROR"):
+                        result_entry["verdict"] = "BUILD_ERROR"
+                        result_entry["failure_analysis"] = assemble_result
+                        self._emit("validation_step", {"recipe": variant_label, "step": "build_failed", "error": assemble_result[:100]})
+                        results.append(result_entry)
+                        continue
 
-                await self.tools.tool_start_c2_listener(port=9001, protocol="auto")
-                await self.tools.tool_deploy_to_vm(local_path=binary_path, execute=True,
-                                                    execute_via="cscript" if is_jscript else "direct")
-                await asyncio.sleep(15)
+                    import re
+                    if is_jscript:
+                        m = re.search(r'Assembled JScript:\s*(\S+)', assemble_result)
+                    else:
+                        m = re.search(r'Assembled and compiled:\s*(\S+)', assemble_result)
+                    if not m:
+                        result_entry["verdict"] = "BUILD_ERROR"
+                        result_entry["failure_analysis"] = f"Could not parse output path: {assemble_result[:200]}"
+                        self._emit("validation_step", {"recipe": variant_label, "step": "build_failed", "error": "no output path"})
+                        results.append(result_entry)
+                        continue
+                    binary_path = m.group(1)
+                    binary_name = Path(binary_path).name
+                    self._emit("validation_step", {"recipe": variant_label, "step": "compiled", "binary": binary_name})
 
-                analysis = await self.tools.tool_analyze_results(binary_name, c2_port=9001)
+                    self._emit("validation_step", {"recipe": variant_label, "step": "starting_c2"})
+                    await self.tools.tool_start_c2_listener(port=9001, protocol="auto")
 
-                verdict_m = re.search(r'Verdict:\s*(\S+)', analysis)
-                c2_m = re.search(r'C2 data received:\s*(\d+)', analysis)
-                exists_m = re.search(r'Binary exists on VM:\s*(True|False)', analysis)
+                    self._emit("validation_step", {"recipe": variant_label, "step": "deploying"})
+                    await self.tools.tool_deploy_to_vm(local_path=binary_path, execute=True,
+                                                        execute_via="cscript" if is_jscript else "direct")
 
-                verdict = verdict_m.group(1) if verdict_m else "UNKNOWN"
-                c2_bytes = int(c2_m.group(1)) if c2_m else 0
-                binary_exists = exists_m.group(1) == "True" if exists_m else False
+                    self._emit("validation_step", {"recipe": variant_label, "step": "waiting_c2", "seconds": 15})
+                    await asyncio.sleep(15)
 
-                is_pass = verdict == "SUCCESS" and binary_exists and c2_bytes > 0
-                result_entry["verdict"] = "PASS" if is_pass else f"FAIL_{verdict}"
-                result_entry["c2_bytes"] = c2_bytes
-                result_entry["binary_exists"] = binary_exists
+                    self._emit("validation_step", {"recipe": variant_label, "step": "analyzing"})
+                    analysis = await self.tools.tool_analyze_results(binary_name, c2_port=9001)
 
-                if not is_pass:
-                    fa = await self.tools.tool_analyze_detection(
-                        verdict=verdict, binary_exists=binary_exists,
-                        c2_bytes=c2_bytes,
-                    )
-                    result_entry["failure_analysis"] = fa
+                    verdict_m = re.search(r'Verdict:\s*(\S+)', analysis)
+                    c2_m = re.search(r'C2 data received:\s*(\d+)', analysis)
+                    exists_m = re.search(r'Binary exists on VM:\s*(True|False)', analysis)
 
-            except Exception as e:
-                logger.exception("Error testing recipe %s", recipe)
-                result_entry["verdict"] = "ERROR"
-                result_entry["failure_analysis"] = str(e)
+                    verdict = verdict_m.group(1) if verdict_m else "UNKNOWN"
+                    c2_bytes = int(c2_m.group(1)) if c2_m else 0
+                    binary_exists = exists_m.group(1) == "True" if exists_m else False
 
-            results.append(result_entry)
+                    is_pass = verdict == "SUCCESS" and binary_exists and c2_bytes > 0
+                    result_entry["verdict"] = "PASS" if is_pass else f"FAIL_{verdict}"
+                    result_entry["c2_bytes"] = c2_bytes
+                    result_entry["binary_exists"] = binary_exists
 
-            try:
-                await self.tools.tool_cleanup_vm()
-            except Exception:
-                pass
-            await asyncio.sleep(2)
+                    self._emit("validation_result", {
+                        "recipe": variant_label, "verdict": result_entry["verdict"],
+                        "c2_bytes": c2_bytes, "binary_exists": binary_exists,
+                    })
+
+                    if not is_pass:
+                        fa = await self.tools.tool_analyze_detection(
+                            verdict=verdict, binary_exists=binary_exists,
+                            c2_bytes=c2_bytes,
+                        )
+                        result_entry["failure_analysis"] = fa
+
+                except Exception as e:
+                    logger.exception("Error testing recipe %s", variant_label)
+                    result_entry["verdict"] = "ERROR"
+                    self._emit("validation_result", {"recipe": variant_label, "verdict": "ERROR", "error": str(e)})
+                    result_entry["failure_analysis"] = str(e)
+
+                results.append(result_entry)
+
+                try:
+                    await self.tools.tool_cleanup_vm()
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
 
         still_pass = [r for r in results if r["verdict"] == "PASS"]
         newly_failed = [r for r in results if r["verdict"] and r["verdict"] != "PASS"]

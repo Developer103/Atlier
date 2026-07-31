@@ -107,8 +107,8 @@ You have NO access to prior results, proven recipes, or operational knowledge. Y
 Follow this cycle repeatedly until success or round limit:
 
 1. **Recon** (round 1 only) — scan_target to fingerprint the VM (OS, EDR, AV, network, LOLBins)
-2. **Plan** — use list_chunks to discover available chunks for your format. Then create_recipe from scratch using ONLY chunks you found in list_chunks. Do NOT guess chunk names — if it's not in list_chunks output, it doesn't exist. You may also use list_recipes to see examples of how recipes are structured, but your goal is to BUILD your own, not just pick one off the shelf.
-3. **Build** — assemble a recipe. For PE format, always compile.
+2. **Plan** — use list_chunks to discover available chunks for your format. Use query_corpus to research evasion techniques (e.g. "indirect syscall unhooking", "ETW bypass"). Check recipe_status for any recipes you plan to base your work on. Then create_recipe from scratch using ONLY chunks you found in list_chunks. Do NOT guess chunk names — if it's not in list_chunks output, it doesn't exist. You may also use list_recipes to see examples — [PROVEN] recipes are known to work, avoid [BURNED] ones.
+3. **Build** — assemble a recipe. For PE format, always compile. Note: new/mutated recipes are STAGED until validation passes.
 4. **Deploy** — start_c2_listener FIRST (use protocol="auto"), then deploy_to_vm with execute=true.
 5. **Analyze** — ALWAYS call analyze_results (NOT check_c2_data) to get a pass/fail verdict. It checks C2 data, EDR events, and binary status all at once.
 6. **Adapt on failure** — this is the most important step:
@@ -392,7 +392,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "list_recipes",
-            "description": "List available assembler recipes, optionally filtered by format and/or malware type.",
+            "description": "List available assembler recipes, optionally filtered by format and/or malware type. Shows [PROVEN], [BURNED], or [FAIL_*] tags for tested recipes.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -406,6 +406,23 @@ TOOL_DEFINITIONS = [
                     },
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recipe_status",
+            "description": "Check the detailed status of a specific recipe: PROVEN (passed), BURNED (3+ consecutive failures), UNTESTED, or STAGED (awaiting validation). Shows full history with pass/fail counts and dates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "recipe": {
+                        "type": "string",
+                        "description": "Recipe name to check (with or without .yaml extension)",
+                    },
+                },
+                "required": ["recipe"],
             },
         },
     },
@@ -466,6 +483,37 @@ TOOL_DEFINITIONS = [
                     },
                 },
                 "required": ["edr"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_corpus",
+            "description": "Query the malware corpus (ChromaDB) for real-world evasion techniques and code samples. Use this to research techniques before creating/mutating recipes. Contains 24K+ technique docs from VX-API, malware samples, and security research.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query, e.g. 'indirect syscall ntdll unhooking', 'ETW bypass patch', 'sleep obfuscation encryption'",
+                    },
+                    "collection": {
+                        "type": "string",
+                        "enum": ["malware_techniques", "poc_exploits"],
+                        "description": "Collection to search: malware_techniques (evasion/techniques) or poc_exploits (CVE exploits)",
+                    },
+                    "n_results": {
+                        "type": "integer",
+                        "description": "Number of results (default 3, max 10)",
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": ["c_cpp", "powershell", "csharp", "python", ""],
+                        "description": "Filter by code language (default c_cpp, empty for all)",
+                    },
+                },
+                "required": ["query"],
             },
         },
     },
@@ -886,10 +934,21 @@ INNOVATION_TOOL_DEFINITIONS = [
 ]
 
 
+def _load_quick_reference() -> str:
+    """Load the quick reference file if it exists."""
+    import os
+    ref_path = os.path.join(os.path.dirname(__file__), "QUICK_REFERENCE.md")
+    if os.path.exists(ref_path):
+        with open(ref_path, "r") as f:
+            return f.read()
+    return ""
+
+
 def build_system_prompt(
     target_spec: dict,
     strategy_summary: str,
     knowledge_summary: str,
+    custom_instructions: str = "",
 ) -> str:
     mtype = target_spec.get('malware_type', 'infostealer')
     fmt = target_spec.get('preferred_format', '')
@@ -915,6 +974,13 @@ def build_system_prompt(
         parts.append(f"## Knowledge Base\n{knowledge_summary}\n")
 
     parts.append(OPERATIONAL_KNOWLEDGE)
+
+    quick_ref = _load_quick_reference()
+    if quick_ref:
+        parts.append(f"## Quick Reference (valid chunk names)\n{quick_ref}\n")
+
+    if custom_instructions:
+        parts.append(f"## User Custom Instructions\n{custom_instructions}\n")
 
     if target_spec.get("mode") == "evade":
         recipes = target_spec.get("recipes", [])

@@ -75,13 +75,13 @@ python -m atelier portal --port 7070 --host 0.0.0.0
 
 | Metric | Value |
 |---|---|
-| Total code chunks | 409 across PE, JScript, VBScript, Batch |
-| PE chunks | 255 (evasion: 110, collectors: 42, arch: 26, exfil: 22, commands: 13, process: 9, api_resolve: 7, persist: 7, c2: 5, core: 5, AD: 9) |
+| Total code chunks | 440+ across PE, JScript, VBScript, Batch |
+| PE chunks | 287 (evasion: 110, collectors: 42, arch: 26, exfil: 28, commands: 18, process: 9, api_resolve: 7, persist: 7, c2: 5, core: 5, AD: 9, privesc: 7, lateral: 6, injection: 8) |
 | JScript chunks | 81 |
 | VBScript chunks | 43 |
 | Batch chunks | 30 |
-| Recipes | 294 |
-| Variant groups | 50 (197 interchangeable chunks) |
+| Recipes | 490+ |
+| Variant groups | 65+ (300+ interchangeable chunks) |
 | Behavioral variant groups | 45 — each swap changes runtime behavior EDRs observe |
 | Static variant groups | 2 — change binary signature only (PE metadata, IAT) |
 | Behavioral variants per recipe | ~5.9M (typical 9-group recipe) to ~2.5B (12-group recipe) |
@@ -102,28 +102,32 @@ The core innovation. Pre-written, pre-tested C code fragments assembled into com
 |---|---|---|
 | `evasion/` | 110 | ETW bypass, syscall gates, sleep obfuscation, stack spoofing, anti-debug, anti-sandbox, PPID spoof, unhooking, etc. |
 | `collectors/` | 42 | System info, processes, browser data, credentials, screenshots, cloud creds, crypto wallets, SSH keys |
+| `exfil/` | 28 | TCP, HTTP, HTTPS, DNS, LOLBin pipes, named pipe |
 | `arch/` | 26 | Execution architecture: sequential, threaded, fiber, callback, APC, staged, backdoor |
-| `exfil/` | 22 | TCP, HTTP, HTTPS, DNS, LOLBin pipes, named pipe |
-| `commands/` | 13 | Backdoor command handlers (sysinfo, processes, fileread, exec, screenshot, registry, etc.) |
+| `commands/` | 18 | Backdoor command handlers (sysinfo, processes, fileread, exec, screenshot, registry, getsystem, uac_bypass, token, inject, lateral) |
 | `process/` | 9 | PPID spoof (6 parents), process ghosting, masquerade |
+| `injection/` | 8 | Process hollowing, DLL inject, APC inject, threadless inject, atom bombing |
+| `privesc/` | 7 | UAC bypasses (fodhelper, eventvwr, sdclt), token manipulation, getsystem |
 | `api_resolve/` | 7 | DJB2, FNV-1a, CRC32, ROR13, PEB walk, indirect import, API set redirect |
 | `persist/` | 7 | Registry Run, schtask, startup folder, COM hijack, service, WMI event |
 | `ad_collectors/` | 6 | AD reconnaissance: users, groups, computers, OUs, GPOs, SPNs |
+| `lateral/` | 6 | WMI exec, PsExec, WinRM, schtasks, DCOM, SMB |
 | `c2/` | 5 | TCP beacon (TLV), WinHTTP beacon, DNS C2, dead drop, named pipe |
 | `core/` | 5 | Shared utilities: emit_buffer, run_cmd, file_ops |
 | `ad/` | 3 | AD infrastructure: LDAP bind, SID resolve, JSON builder |
 
 ### Variant Groups & Behavioral Variants
 
-50 groups of interchangeable chunks in `variants.yaml`. When `--randomize` is passed, the assembler randomly selects one member from each group. Same recipe → behaviorally different binary every build.
+65+ groups of interchangeable chunks in `variants.yaml`. When `--randomize` is passed, the assembler randomly selects one member from each group. Same recipe → behaviorally different binary every build.
 
-**45 behavioral groups** — each swap changes what EDRs observe at runtime (different syscall methods, different sleep mechanisms, different process trees, different API call patterns):
+**Behavioral groups** — each swap changes what EDRs observe at runtime:
 
 | Category | Groups | Key examples |
 |---|---|---|
-| **Evasion (25 groups)** | syscall_gate (10), sleep_obfuscation (8), stack_spoofing (7), api_resolution (7), anti_sandbox (7), arch_execution (7), injection_threadless (7), persistence (7), etw_bypass (6), anti_debug (6), ppid_spoof (6), arch_callback (6), env_keying (4), memory_evasion (4), control_flow (4), uac_bypass (4), execution_timing (3), net_transport (3), process_evasion (3), net_evasion (3), amsi_bypass (2), injection_callback (2), self_cleanup (2), injection_thread (4) | Swapping `hells_gate` ↔ `tartarus_gate` changes the syscall invocation mechanism; swapping `sleep_ekko` ↔ `sleep_foliage` changes the ROP chain used during encrypted sleep |
-| **Functional (16 groups)** | system_info (4), keylogger_hook (4), exfil_http_lolbin (5), processes (3), exfil_tcp (3), exfil_http_api (3), exfil_dns (3), cmd_sysinfo (2), cmd_processes (2), cmd_netinfo (2), screenshot (2), env_vars (2), clipboard (2), netinfo (2), active_windows (2), exfil_file (2) | Swapping `exfil/curl_lolbin` ↔ `exfil/bitsadmin_lolbin` changes the child process EDR sees; swapping `collectors/system_info` ↔ `collectors/system_info_lolbin` changes API calls vs process spawns |
-| **JScript evasion (4 groups)** | js_delivery (5), js_anti_analysis (4), js_execution_timing (4), js_string_protection (2) | Swapping `wsf_wrapper` ↔ `hta_wrapper` changes the delivery container and execution engine |
+| **Evasion (25+ groups)** | syscall_gate (10), sleep_obfuscation (8), stack_spoofing (7), api_resolution (7), anti_sandbox (7), arch_execution (7), injection_threadless (7), persistence (7), etw_bypass (6), anti_debug (6), ppid_spoof (6), env_keying (4), uac_bypass (4), control_flow (4), amsi_bypass (2), self_cleanup (2) | Swapping `hells_gate` ↔ `tartarus_gate` changes the syscall invocation mechanism |
+| **Functional (16 groups)** | system_info (4), keylogger_hook (4), exfil_http_lolbin (5), processes (3), exfil_tcp (3), exfil_dns (3), screenshot (2), env_vars (2), clipboard (2), netinfo (2) | Swapping `exfil/curl_lolbin` ↔ `exfil/bitsadmin_lolbin` changes the child process EDR sees |
+| **Post-exploitation (10 groups)** | uac_bypass (4), token_manipulation (2), getsystem (1), lateral_wmi (1), lateral_service (3), lateral_dcom (1), injection_classic (2), injection_apc (1), injection_advanced (5) | UAC bypasses, token theft, WMI/PsExec lateral movement, process injection |
+| **JScript/VBScript/Batch** | 20+ groups for anti-analysis, timing, string obfuscation, delivery containers | Multi-format evasion |
 
 **2 static groups** — change binary signature without altering runtime behavior: `pe_metadata` (6: entropy pad, rich header, timestomp, checksum, debug dir, code cave), `iat_manipulation` (3: IAT pad, resource spoof, section merge).
 

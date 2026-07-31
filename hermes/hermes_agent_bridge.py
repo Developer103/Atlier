@@ -28,8 +28,10 @@ _TOOL_METHOD_MAP = {
     "scan_target": "tool_scan_target",
     "list_edr_events": "tool_list_edr_events",
     "list_recipes": "tool_list_recipes",
+    "recipe_status": "tool_recipe_status",
     "list_chunks": "tool_list_chunks",
     "get_strategy": "tool_get_strategy",
+    "query_corpus": "tool_query_corpus",
     "query_knowledge": "tool_query_knowledge",
     "sweep_matrix": "tool_sweep_matrix",
     "analyze_detection": "tool_analyze_detection",
@@ -174,6 +176,17 @@ def build_system_prompt_for_agent(target: dict, knowledge_md: str = "",
         fmt_hint = BLIND_FORMAT_HINTS.get(preferred_format, "")
         if fmt_hint:
             parts.append(fmt_hint)
+
+    # Add quick reference for valid chunk names
+    from hermes.prompts import _load_quick_reference
+    quick_ref = _load_quick_reference()
+    if quick_ref:
+        parts.append(f"## Quick Reference (valid chunk names)\n{quick_ref}")
+
+    # Add custom instructions from user
+    custom_instructions = (config or {}).get("custom_instructions", "")
+    if custom_instructions:
+        parts.append(f"## User Custom Instructions\n{custom_instructions}")
 
     return "\n\n".join(parts)
 

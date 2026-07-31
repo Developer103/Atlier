@@ -1,0 +1,192 @@
+{
+  "id": "829c0f56bab6",
+  "title": "validate backdoor_cs_tcp_postex_v1 5 variants",
+  "created_at": "2026-07-31T16:43:37.698649",
+  "config": {},
+  "messages": [
+    {
+      "type": "user_message",
+      "content": "validate backdoor_cs_tcp_postex_v1 5 variants"
+    },
+    {
+      "type": "assistant_message",
+      "content": "Starting validation against crowdstrike..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "Testing 5 recipe(s)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "[1/5] backdoor_cs_tcp_postex_v1 (v1) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v1)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Compiled: payload.exe"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Starting C2 listener..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Deploying to VM..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Waiting 15s for C2..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Analyzing results..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "Validation stopped."
+    },
+    {
+      "type": "user_message",
+      "content": "validate backdoor_cs_tcp_postex_v1 5 variants"
+    },
+    {
+      "type": "assistant_message",
+      "content": "Starting validation against crowdstrike..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "Testing 5 recipe(s)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "[1/5] backdoor_cs_tcp_postex_v1 (v1) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v1)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Compiled: payload.exe"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Starting C2 listener..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Deploying to VM..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Waiting 15s for C2..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Analyzing results..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  \u2717 backdoor_cs_tcp_postex_v1 (v1): FAIL_UNKNOWN (0 bytes, binary=GONE)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "[2/5] backdoor_cs_tcp_postex_v1 (v2) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v2)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Compiled: payload.exe"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Starting C2 listener..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Deploying to VM..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Waiting 15s for C2..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Analyzing results..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  \u2717 backdoor_cs_tcp_postex_v1 (v2): FAIL_UNKNOWN (0 bytes, binary=GONE)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "[3/5] backdoor_cs_tcp_postex_v1 (v3) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v3)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> BUILD FAILED: ERROR: Compilation failed even without obfuscation\nAssembled: /home/kei/llm_vault/atelier/results/ch"
+    },
+    {
+      "type": "assistant_message",
+      "content": "[4/5] backdoor_cs_tcp_postex_v1 (v4) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v4)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> BUILD FAILED: no output path"
+    },
+    {
+      "type": "assistant_message",
+      "content": "[5/5] backdoor_cs_tcp_postex_v1 (v5) (pe_resources)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Assembling backdoor_cs_tcp_postex_v1 (v5)..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Compiled: payload.exe"
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Starting C2 listener..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Deploying to VM..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Waiting 15s for C2..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  -> Analyzing results..."
+    },
+    {
+      "type": "assistant_message",
+      "content": "  \u2717 backdoor_cs_tcp_postex_v1 (v5): FAIL_UNKNOWN (0 bytes, binary=GONE)"
+    },
+    {
+      "type": "assistant_message",
+      "content": "Done: 0/5 passed"
+    },
+    {
+      "type": "assistant_message",
+      "content": "\n=== Validation Complete ===\nPassed: 0/5\nFailed: 5"
+    }
+  ]
+}

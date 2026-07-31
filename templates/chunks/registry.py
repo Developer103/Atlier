@@ -15,14 +15,63 @@ import yaml
 CHUNKS_DIR = Path(__file__).parent
 REGISTRY_PATH = CHUNKS_DIR / "chunk_registry.yaml"
 
+TRACKED_CATEGORIES = [
+    "collectors", "ad_collectors", "exfil", "evasion", "core",
+    "arch", "api_resolve", "c2", "commands", "persist", "process", "ad",
+    "privesc", "lateral", "injection"
+]
 
-def load_registry() -> dict:
-    """Load the chunk registry. Returns empty structure if not found."""
+
+def discover_chunks() -> list[str]:
+    """Discover all .c chunk files on disk."""
+    chunks = []
+    for category in TRACKED_CATEGORIES:
+        cat_dir = CHUNKS_DIR / category
+        if cat_dir.is_dir():
+            for f in cat_dir.glob("*.c"):
+                chunks.append(f"{category}/{f.stem}")
+    return sorted(chunks)
+
+
+def sync_registry(registry: dict | None = None) -> tuple[dict, list[str]]:
+    """
+    Sync registry with chunks on disk. Auto-adds new chunks.
+    Returns (updated_registry, list of newly added chunk refs).
+    """
+    if registry is None:
+        registry = load_registry()
+
+    on_disk = set(discover_chunks())
+    in_registry = set(registry.get("chunks", {}).keys())
+
+    new_chunks = on_disk - in_registry
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    for chunk_ref in new_chunks:
+        registry.setdefault("chunks", {})[chunk_ref] = {
+            "status": "enabled",
+            "tags": ["new"],
+            "created_at": today,
+        }
+
+    if new_chunks:
+        save_registry(registry)
+
+    return registry, sorted(new_chunks)
+
+
+def load_registry(auto_sync: bool = True) -> dict:
+    """Load the chunk registry. Auto-syncs with disk by default."""
     if not REGISTRY_PATH.exists():
-        return {"version": 1, "chunks": {}}
-    with open(REGISTRY_PATH) as f:
-        data = yaml.safe_load(f)
-    return data or {"version": 1, "chunks": {}}
+        registry = {"version": 1, "chunks": {}}
+    else:
+        with open(REGISTRY_PATH) as f:
+            registry = yaml.safe_load(f) or {"version": 1, "chunks": {}}
+
+    if auto_sync:
+        registry, _ = sync_registry(registry)
+
+    return registry
 
 
 def save_registry(registry: dict) -> None:

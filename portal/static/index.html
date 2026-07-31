@@ -524,7 +524,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
         <span id="hermes-status-text">Hermes — disconnected</span>
         <div style="flex:1"></div>
         <span id="hermes-round" style="font-family:var(--mono)"></span>
-        <button id="hermes-stop-btn" style="display:none;padding:2px 10px;font-size:11px;background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">&#9632; Stop</button>
+        <button id="hermes-stop-btn" onclick="hermesStopJob()" style="display:none;padding:2px 10px;font-size:11px;background:var(--red);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">&#9632; Stop</button>
       </div>
       <div class="hermes-config" id="hermes-config">
         <label>LLM:
@@ -569,6 +569,11 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
         <label style="cursor:pointer" title="Hide past success recipes — discover from scratch">
           <input type="checkbox" id="hermes-blind"> Blind
         </label>
+      </div>
+      <div style="padding:4px 8px">
+        <textarea id="hermes-custom-instructions" rows="2"
+          placeholder="Custom instructions (e.g., use more than 10 variant groups, prioritize LOLBin exfil...)"
+          style="font-size:11px;width:100%;resize:vertical;background:var(--bg2);border:1px solid var(--border);color:var(--fg);border-radius:4px;padding:6px"></textarea>
       </div>
       <div class="chat-messages" id="chat-messages">
         <div class="chat-msg system">Hermes orchestrator ready. Select or create a session to begin.</div>
@@ -2654,10 +2659,6 @@ function buildChunksForm(area) {
         <label>Category</label>
         <select id="validate-category" style="font-size:11px">
           <option value="">-- Select category --</option>
-          <option value="collectors">collectors</option>
-          <option value="ad_collectors">ad_collectors</option>
-          <option value="evasion">evasion</option>
-          <option value="exfil">exfil</option>
         </select>
       </div>
       <div class="field">
@@ -2683,14 +2684,11 @@ function buildChunksForm(area) {
     <div class="sec">
       <div class="sec-hdr" style="color:var(--cyan)">EXPAND / CREATE NEW</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px">
-        Create new chunks with LLM assistance. Uses ChromaDB for reference code.
+        Create new chunks with LLM assistance. Researches ChromaDB corpus + web (GitHub) for reference code first.
       </div>
       <div class="field">
         <label>Chunk type</label>
         <select id="expand-type" style="font-size:11px">
-          <option value="collector">collector</option>
-          <option value="evasion">evasion</option>
-          <option value="exfil">exfil</option>
         </select>
       </div>
       <div class="field">
@@ -2724,11 +2722,6 @@ function buildChunksForm(area) {
       <div style="margin-bottom:6px">
         <select id="chunk-category-filter" onchange="filterChunks()" style="font-size:11px;padding:3px 6px">
           <option value="all">All Categories</option>
-          <option value="collectors">collectors</option>
-          <option value="ad_collectors">ad_collectors</option>
-          <option value="evasion">evasion</option>
-          <option value="exfil">exfil</option>
-          <option value="core">core</option>
         </select>
       </div>
       <div id="chunk-list" style="font-size:11px;max-height:250px;overflow-y:auto"></div>
@@ -2741,12 +2734,66 @@ async function refreshChunkRegistry() {
   try {
     const r = await fetch('/api/chunk/registry');
     chunksData = await r.json();
+    populateCategoryDropdowns();
     renderChunkStats();
     renderChunkDisabled();
     renderChunkNew();
     renderChunkList();
   } catch(e) {
     document.getElementById('chunk-stats').innerHTML = '<span style="color:var(--red)">Failed to load registry</span>';
+  }
+}
+
+function populateCategoryDropdowns() {
+  if (!chunksData || !chunksData.chunks_by_category) return;
+  const categories = Object.keys(chunksData.chunks_by_category).sort();
+
+  // Validate dropdown (with "select" placeholder)
+  const validateSel = document.getElementById('validate-category');
+  if (validateSel) {
+    validateSel.innerHTML = '<option value="">-- Select category --</option>';
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      validateSel.appendChild(opt);
+    });
+  }
+
+  // Expand dropdown (only categories where we can create chunks)
+  const expandSel = document.getElementById('expand-type');
+  if (expandSel) {
+    expandSel.innerHTML = '';
+    const expandableTypes = ['collectors', 'evasion', 'exfil', 'privesc', 'lateral', 'injection'];
+    // Map display names to what expand.py expects
+    const typeMap = {
+      'collectors': 'collector',
+      'evasion': 'evasion',
+      'exfil': 'exfil',
+      'privesc': 'privesc',
+      'lateral': 'lateral',
+      'injection': 'injection'
+    };
+    expandableTypes.forEach(cat => {
+      if (categories.includes(cat)) {
+        const opt = document.createElement('option');
+        opt.value = typeMap[cat] || cat;
+        opt.textContent = cat;
+        expandSel.appendChild(opt);
+      }
+    });
+  }
+
+  // Filter dropdown (with "all" option)
+  const filterSel = document.getElementById('chunk-category-filter');
+  if (filterSel) {
+    filterSel.innerHTML = '<option value="all">All Categories</option>';
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      filterSel.appendChild(opt);
+    });
   }
 }
 
@@ -2962,9 +3009,21 @@ let hermesActiveSessionId = null;
 let hermesSessions = [];
 let hermesReplaying = false;
 let hermesStreamDiv = null;
+let hermesActiveJobId = null;
 
-function setHermesRunning(running) {
+function setHermesRunning(running, jobId) {
   hermesStopBtn.style.display = running ? '' : 'none';
+  if (jobId) hermesActiveJobId = jobId;
+  if (!running) hermesActiveJobId = null;
+}
+
+async function hermesStopJob() {
+  if (hermesActiveJobId) {
+    addChatMsg('system', 'Stopping job #' + hermesActiveJobId + '...');
+    await fetch('/api/jobs/' + hermesActiveJobId + '/kill', {method: 'POST'});
+    setHermesRunning(false);
+    addChatMsg('system', 'Job stopped.');
+  }
 }
 
 function addChatMsg(role, text, toolName, skipScroll) {
@@ -3327,6 +3386,7 @@ function sendHermesMsg(text) {
       llm_model: document.getElementById('hermes-llm-model').value,
       variant_count: parseInt(document.getElementById('hermes-variants').value) || 1,
       blind_mode: document.getElementById('hermes-blind').checked,
+      custom_instructions: document.getElementById('hermes-custom-instructions')?.value?.trim() || '',
     }
   }));
   chatInput.value = '';
@@ -3394,40 +3454,28 @@ function hermesAutoRun() {
   const edr = document.getElementById('hermes-edr').value;
   const type = document.getElementById('hermes-type').value;
   const fmt = document.getElementById('hermes-format').value;
+  const customInstructions = document.getElementById('hermes-custom-instructions')?.value?.trim() || '';
   const fmtStr = fmt === 'auto' ? '' : ' using ' + fmt + ' format';
-  sendHermesMsg('Run autonomous campaign: ' + type + ' against ' + edr + fmtStr + '. Build, deploy, test, and iterate until success.');
+  let prompt = 'Run autonomous campaign: ' + type + ' against ' + edr + fmtStr + '. Build, deploy, test, and iterate until success.';
+  if (customInstructions) {
+    prompt += ' Additional requirements: ' + customInstructions;
+  }
+  sendHermesMsg(prompt);
 }
 
 async function hermesValidate() {
-  const edr = document.getElementById('hermes-edr').value;
   const recipesInput = prompt('Recipe names to validate (comma-separated, leave empty for all proven PASS recipes):');
   if (recipesInput === null) return;
 
-  const recipes = recipesInput.trim() ? recipesInput.split(',').map(r => r.trim()).filter(Boolean) : null;
+  const variantsInput = prompt('Number of variants per recipe (default: 1):', '1');
+  if (variantsInput === null) return;
+  const variantCount = parseInt(variantsInput) || 1;
 
-  addChatMsg('system', 'Starting recipe validation against ' + edr + '...');
-  try {
-    const r = await fetch('/api/hermes/validate', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({edr, recipes}),
-    });
-    const data = await r.json();
-    if (data.error) {
-      addChatMsg('system', 'Error: ' + data.error);
-      return;
-    }
-    addChatMsg('system', 'Validation job started (#' + data.job_id + '). Streaming output below.');
-    hermesChat.classList.remove('active');
-    document.getElementById('term-wrap').style.display = '';
-    document.getElementById('jobs-bar').style.display = '';
-    const rp = document.getElementById('res-pane'); if (rp) rp.style.display = '';
-    addChip(data.job_id, 'running', data.cmd_str);
-    openJob(data.job_id, data.cmd_str, true);
-    hermesWatchValidation(data.job_id);
-  } catch(e) {
-    addChatMsg('system', 'Failed to start validation: ' + e);
-  }
+  const recipes = recipesInput.trim() || 'all';
+  const variantStr = variantCount > 1 ? ` ${variantCount} variants` : '';
+
+  // Send as a chat message so it persists in session
+  sendHermesMsg(`validate ${recipes}${variantStr}`);
 }
 
 function hermesWatchValidation(jobId) {

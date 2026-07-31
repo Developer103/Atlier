@@ -3,6 +3,6 @@ revision = 3
 requires-python = ">=3.10"
 
 [[package]]
-name = "malware-gen-framework"
+name = "atelier"
 version = "0.1.0"
 source = { editable = "." }

@@ -542,3 +542,47 @@ groups:
   # ── Batch junk code ──
   bat_junk_code:
     - batch/evasion/junk_code
+
+  # ── Privilege Escalation ──
+  uac_bypass:
+    - privesc/uac_fodhelper
+    - privesc/uac_eventvwr
+    - privesc/uac_computerdefaults
+    - privesc/uac_sdclt
+
+  token_manipulation:
+    - privesc/token_steal
+    - privesc/token_impersonate
+
+  getsystem:
+    - privesc/getsystem_pipe
+
+  # ── Lateral Movement ──
+  lateral_wmi:
+    - lateral/wmi_exec
+
+  lateral_service:
+    - lateral/psexec_manual
+    - lateral/schtasks_exec
+    - lateral/smb_exec
+
+  lateral_winrm:
+    - lateral/winrm_exec
+
+  lateral_dcom:
+    - lateral/dcom_mmc
+
+  # ── Process Injection ──
+  injection_classic:
+    - injection/dll_inject
+    - injection/process_hollow
+
+  injection_apc:
+    - injection/apc_inject
+
+  injection_advanced:
+    - injection/threadless_inject
+    - injection/thread_hijack
+    - injection/cascade_inject
+    - injection/atom_bombing
+    - injection/phantom_dll

